@@ -8,6 +8,7 @@ import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { InstallPromptDialog } from "./components/InstallPromptDialog";
 import { useOnboarding } from "./contexts/OnboardingContext";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import TimeTracking from "./pages/TimeTracking";
@@ -44,6 +45,47 @@ function AppContent() {
       }
     };
     ensureProfile();
+  }, []);
+
+  // Realtime listener for in-app notifications (popup)
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupNotifications = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel("user-notifications")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const notification = payload.new as {
+              title: string;
+              message: string;
+              type: string;
+            };
+            toast({
+              title: notification.title,
+              description: notification.message,
+              duration: 8000,
+            });
+          }
+        )
+        .subscribe();
+    };
+
+    setupNotifications();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

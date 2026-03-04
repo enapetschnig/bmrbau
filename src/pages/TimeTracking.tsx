@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { Clock, Plus, AlertTriangle, CheckCircle2, Calendar, Sun, Trash2, Users } from "lucide-react";
+import { Clock, Plus, AlertTriangle, CheckCircle2, Calendar, Sun, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 import { PageHeader } from "@/components/PageHeader";
 import { format, startOfWeek } from "date-fns";
 import { de } from "date-fns/locale";
@@ -51,7 +50,6 @@ interface TimeBlock {
   endTime: string;
   pauseStart: string;
   pauseEnd: string;
-  selectedEmployees: string[];
   manualHours: string;
 }
 
@@ -64,7 +62,6 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   endTime,
   pauseStart,
   pauseEnd,
-  selectedEmployees: [],
   manualHours: "",
 });
 
@@ -270,13 +267,6 @@ const TimeTracking = () => {
   // Remove a time block
   const removeBlock = (blockId: string) => {
     setTimeBlocks(prev => prev.filter(block => block.id !== blockId));
-  };
-
-  // Update selected employees for a block
-  const updateBlockEmployees = (blockId: string, employees: string[]) => {
-    setTimeBlocks(prev => prev.map(block =>
-      block.id === blockId ? { ...block, selectedEmployees: employees } : block
-    ));
   };
 
   // Calculate pause minutes for a block
@@ -592,8 +582,7 @@ const TimeTracking = () => {
       const blockHours = calculateBlockHours(block);
       const pauseMinutes = calculateBlockPauseMinutes(block);
 
-      // Prepare main entry for current user
-      const mainEntry = {
+      const { error: insertError } = await supabase.from("time_entries").insert({
         user_id: user.id,
         datum: selectedDate,
         project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
@@ -607,51 +596,19 @@ const TimeTracking = () => {
         location_type: block.locationType,
         notizen: null,
         week_type: null,
-      };
+      });
 
-      // Prepare team entries
-      const teamEntries = block.selectedEmployees.map(workerId => ({
-        user_id: workerId,
-        datum: selectedDate,
-        project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
-        taetigkeit: block.taetigkeit,
-        stunden: blockHours,
-        start_time: block.startTime,
-        end_time: block.endTime,
-        pause_minutes: pauseMinutes,
-        pause_start: block.pauseStart || null,
-        pause_end: block.pauseEnd || null,
-        location_type: block.locationType,
-        notizen: null,
-        week_type: null,
-      }));
-
-      // Call Edge Function to create entries (bypasses RLS for team members)
-      const { data: result, error: functionError } = await supabase.functions.invoke(
-        "create-team-time-entries",
-        {
-          body: {
-            mainEntry,
-            teamEntries,
-            createWorkerLinks: true,
-          },
-        }
-      );
-
-      if (functionError || !result?.success) {
+      if (insertError) {
         hasError = true;
-        console.error("Error creating time entries:", functionError || result?.error);
+        console.error("Error creating time entry:", insertError);
         continue;
       }
 
-      totalEntriesCreated += result.totalCreated || 1;
+      totalEntriesCreated += 1;
     }
 
     if (!hasError) {
-      const teamInfo = timeBlocks.some(b => b.selectedEmployees.length > 0)
-        ? ` (inkl. Team-Mitglieder)`
-        : "";
-      toast({ title: "Erfolg", description: `${totalEntriesCreated} Eintrag/Einträge gespeichert${teamInfo}` });
+      toast({ title: "Erfolg", description: `${totalEntriesCreated} Eintrag/Einträge gespeichert` });
       
       // Refresh existing entries
       await fetchExistingDayEntries(selectedDate);
@@ -930,18 +887,6 @@ const TimeTracking = () => {
                           <Sun className="w-3 h-3 mr-1" />
                           Regelarbeitszeit einfüllen
                         </Button>
-
-                        {/* Multi-employee selection */}
-                        <div className="border-t pt-3">
-                          <MultiEmployeeSelect
-                            selectedEmployees={block.selectedEmployees}
-                            onSelectionChange={(employees) => updateBlockEmployees(block.id, employees)}
-                            date={selectedDate}
-                            startTime={block.startTime}
-                            endTime={block.endTime}
-                            label="Weitere Mitarbeiter (optional)"
-                          />
-                        </div>
 
                         {/* Block hours */}
                         <div className="bg-muted/50 rounded px-3 py-2 flex items-center justify-between text-sm">

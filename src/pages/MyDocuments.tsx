@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, Upload, Download, Eye, Trash2 } from "lucide-react";
+import { FileText, Camera, Upload, Download, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { FileViewer } from "@/components/FileViewer";
 
@@ -88,6 +88,23 @@ export default function MyDocuments() {
     } else {
       toast({ title: "Erfolg", description: "Dokument hochgeladen" });
       await fetchDocuments(userId, type, type === "lohnzettel" ? setPayslips : setSickNotes);
+
+      // Notify admins when employee uploads a sick note
+      if (type === "krankmeldung") {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("vorname, nachname")
+          .eq("id", userId)
+          .single();
+        const uploaderName = profile
+          ? `${profile.vorname} ${profile.nachname}`.trim() || "Mitarbeiter"
+          : "Mitarbeiter";
+        await supabase.rpc("notify_admins_sick_note", {
+          p_uploader_id: userId,
+          p_uploader_name: uploaderName,
+          p_file_name: file.name,
+        });
+      }
     }
 
     setUploading(false);
@@ -186,14 +203,31 @@ export default function MyDocuments() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Label htmlFor="sicknote-upload">Krankmeldung auswählen</Label>
-                  <Input
-                    id="sicknote-upload"
-                    type="file"
-                    onChange={(e) => handleUpload("krankmeldung", e.target.files?.[0] || null)}
-                    disabled={uploading}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                  />
+                  <Label>Krankmeldung hochladen</Label>
+                  <div className="flex flex-col gap-2">
+                    {/* Camera capture (mobile) */}
+                    <label htmlFor="sicknote-camera" className={`flex items-center justify-center gap-2 h-11 px-4 rounded-md border-2 border-dashed border-primary/50 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors text-sm font-medium ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Camera className="w-5 h-5 text-primary" />
+                      Foto aufnehmen
+                      <input
+                        id="sicknote-camera"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="sr-only"
+                        onChange={(e) => handleUpload("krankmeldung", e.target.files?.[0] || null)}
+                        disabled={uploading}
+                      />
+                    </label>
+                    {/* File picker */}
+                    <Input
+                      id="sicknote-upload"
+                      type="file"
+                      onChange={(e) => handleUpload("krankmeldung", e.target.files?.[0] || null)}
+                      disabled={uploading}
+                      accept=".pdf,.jpg,.jpeg,.png"
+                    />
+                  </div>
                   {uploading && <p className="text-sm text-muted-foreground">Lädt hoch...</p>}
                 </div>
               </CardContent>

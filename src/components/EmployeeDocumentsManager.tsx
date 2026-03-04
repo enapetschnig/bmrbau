@@ -111,6 +111,19 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
 
       toast({ title: "Erfolg", description: `${files.length} Dokument(e) hochgeladen` });
       fetchDocuments();
+
+      // Notify employee when admin uploads a payslip
+      if (type === "lohnzettel") {
+        const targetUserId = userId || employeeId;
+        const firstName = files[0].name;
+        await supabase.from("notifications").insert({
+          user_id: targetUserId,
+          type: "lohnzettel_upload",
+          title: "Neuer Lohnzettel verfügbar",
+          message: `Ein neuer Lohnzettel wurde für Sie hochgeladen.`,
+          metadata: { file_name: firstName, count: files.length },
+        });
+      }
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } finally {

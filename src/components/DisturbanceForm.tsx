@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 
 type MaterialEntry = {
   id: string;
@@ -54,7 +53,6 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
     notizen: "",
   });
 
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [materials, setMaterials] = useState<MaterialEntry[]>([]);
 
   useEffect(() => {
@@ -71,8 +69,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         beschreibung: editData.beschreibung,
         notizen: editData.notizen || "",
       });
-      // Load existing workers and materials when editing
-      loadExistingWorkers(editData.id);
+      // Load existing materials when editing
       loadExistingMaterials(editData.id);
     } else {
       // Reset form for new entry
@@ -88,23 +85,9 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         beschreibung: "",
         notizen: "",
       });
-      setSelectedEmployees([]);
       setMaterials([]);
     }
   }, [editData, open]);
-
-  const loadExistingWorkers = async (disturbanceId: string) => {
-    const { data } = await supabase
-      .from("disturbance_workers")
-      .select("user_id, is_main")
-      .eq("disturbance_id", disturbanceId);
-    
-    if (data) {
-      // Only load non-main workers (main is the creator)
-      const additionalWorkers = data.filter(w => !w.is_main).map(w => w.user_id);
-      setSelectedEmployees(additionalWorkers);
-    }
-  };
 
   const loadExistingMaterials = async (disturbanceId: string) => {
     const { data } = await supabase
@@ -204,10 +187,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
       // Update time entries for all workers
       await updateTimeEntriesForAllWorkers(editData.id, user.id, stunden);
-      
-      // Update workers
-      await updateDisturbanceWorkers(editData.id, user.id, selectedEmployees);
-      
+
       // Update materials
       await updateMaterials(editData.id, user.id);
 
@@ -226,8 +206,8 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         return;
       }
 
-      // Prepare main entry for current user
-      const mainEntry = {
+      // Create time entry for current user
+      await supabase.from("time_entries").insert({
         user_id: user.id,
         datum: formData.datum,
         start_time: formData.startTime,
@@ -238,37 +218,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         disturbance_id: newDisturbance.id,
         taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
         location_type: "baustelle",
-      };
-
-      // Prepare team entries for additional workers
-      const teamEntries = selectedEmployees.map(workerId => ({
-        user_id: workerId,
-        datum: formData.datum,
-        start_time: formData.startTime,
-        end_time: formData.endTime,
-        pause_minutes: formData.pauseMinutes,
-        stunden,
-        project_id: null,
-        disturbance_id: newDisturbance.id,
-        taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
-        location_type: "baustelle",
-      }));
-
-      // Call Edge Function to create time entries (bypasses RLS for team members)
-      const { data: timeResult, error: timeError } = await supabase.functions.invoke(
-        "create-team-time-entries",
-        {
-          body: {
-            mainEntry,
-            teamEntries,
-            createWorkerLinks: false, // Disturbances use disturbance_workers instead
-          },
-        }
-      );
-
-      if (timeError || !timeResult?.success) {
-        console.error("Time entry creation failed:", timeError || timeResult?.error);
-      }
+      });
 
       // Add main worker entry
       await supabase.from("disturbance_workers").insert({
@@ -276,15 +226,6 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         user_id: user.id,
         is_main: true,
       });
-
-      // Add worker entries for additional workers
-      for (const workerId of selectedEmployees) {
-        await supabase.from("disturbance_workers").insert({
-          disturbance_id: newDisturbance.id,
-          user_id: workerId,
-          is_main: false,
-        });
-      }
 
       // Create materials
       const validMaterials = materials.filter(m => m.material.trim());
@@ -328,99 +269,6 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       .eq("disturbance_id", disturbanceId);
   };
 
-  const updateDisturbanceWorkers = async (disturbanceId: string, mainUserId: string, newWorkerIds: string[]) => {
-    // Get current workers
-    const { data: currentWorkers } = await supabase
-      .from("disturbance_workers")
-      .select("user_id, is_main")
-      .eq("disturbance_id", disturbanceId);
-
-    const currentNonMainIds = (currentWorkers || [])
-      .filter(w => !w.is_main)
-      .map(w => w.user_id);
-
-    // Workers to add
-    const toAdd = newWorkerIds.filter(id => !currentNonMainIds.includes(id));
-    
-    // Workers to remove
-    const toRemove = currentNonMainIds.filter(id => !newWorkerIds.includes(id));
-
-    // Remove workers and their time entries
-    for (const workerId of toRemove) {
-      await supabase
-        .from("time_entries")
-        .delete()
-        .eq("disturbance_id", disturbanceId)
-        .eq("user_id", workerId);
-      
-      await supabase
-        .from("disturbance_workers")
-        .delete()
-        .eq("disturbance_id", disturbanceId)
-        .eq("user_id", workerId);
-    }
-
-    // Add new workers via Edge Function (bypasses RLS)
-    if (toAdd.length > 0) {
-      const stunden = calculateHours();
-      
-      // Get current user for main entry validation
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      // Create time entries for new workers via Edge Function
-      // Use skipMainEntry=true since the main user already has their entry
-      const teamEntries = toAdd.map(workerId => ({
-        user_id: workerId,
-        datum: formData.datum,
-        start_time: formData.startTime,
-        end_time: formData.endTime,
-        pause_minutes: formData.pauseMinutes,
-        stunden,
-        project_id: null,
-        disturbance_id: disturbanceId,
-        taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
-        location_type: "baustelle",
-      }));
-
-      const { error: timeError } = await supabase.functions.invoke(
-        "create-team-time-entries",
-        {
-          body: {
-            mainEntry: {
-              user_id: currentUser.id,
-              datum: formData.datum,
-              start_time: formData.startTime,
-              end_time: formData.endTime,
-              pause_minutes: formData.pauseMinutes,
-              stunden,
-            project_id: null,
-            disturbance_id: disturbanceId,
-            taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
-            location_type: "baustelle",
-          },
-          teamEntries,
-            createWorkerLinks: false,
-            skipMainEntry: true, // Don't create duplicate main entry
-          },
-        }
-      );
-
-      if (timeError) {
-        console.error("Error creating time entries for workers:", timeError);
-      }
-
-      // Add disturbance_workers entries
-      for (const workerId of toAdd) {
-        await supabase.from("disturbance_workers").insert({
-          disturbance_id: disturbanceId,
-          user_id: workerId,
-          is_main: false,
-        });
-      }
-    }
-  };
-
   const updateMaterials = async (disturbanceId: string, userId: string) => {
     // Delete existing materials
     await supabase
@@ -451,7 +299,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             {editData ? "Regiebericht bearbeiten" : "Neuen Regiebericht erfassen"}
           </DialogTitle>
           <DialogDescription>
-            Erfassen Sie einen Service-Einsatz beim Kunden. Die Arbeitszeit wird automatisch für alle beteiligten Mitarbeiter gebucht.
+            Erfassen Sie einen Service-Einsatz beim Kunden.
           </DialogDescription>
         </DialogHeader>
 
@@ -567,15 +415,6 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
               </div>
             </div>
           </div>
-
-          {/* Multi-Employee Selection */}
-          <MultiEmployeeSelect
-            selectedEmployees={selectedEmployees}
-            onSelectionChange={setSelectedEmployees}
-            date={formData.datum}
-            startTime={formData.startTime}
-            endTime={formData.endTime}
-          />
 
           {/* Work Description Section */}
           <div className="space-y-4">
