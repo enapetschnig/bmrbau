@@ -534,8 +534,17 @@ export default function Admin() {
 
       if (error) throw error;
 
+      // Keep profiles table in sync (name is displayed throughout the app)
+      if (selectedEmployee.user_id) {
+        await supabase
+          .from("profiles")
+          .update({ vorname: formData.vorname, nachname: formData.nachname })
+          .eq("id", selectedEmployee.user_id);
+      }
+
       toast({ title: "Erfolg", description: "Änderungen gespeichert" });
       fetchEmployees();
+      fetchUsers({ silent: true });
       setSelectedEmployee(null);
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
