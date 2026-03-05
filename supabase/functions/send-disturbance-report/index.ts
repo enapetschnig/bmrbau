@@ -61,7 +61,10 @@ function formatDateShort(dateStr: string): string {
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
     if (!response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -87,17 +90,32 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   const margin = 15;
   const cW = pageW - 2 * margin;
 
-  const BLACK = { r: 20,  g: 20,  b: 20  };
-  const GRAY  = { r: 110, g: 110, b: 110 };
-  const LGRAY = { r: 240, g: 240, b: 240 };
-  const WHITE = { r: 255, g: 255, b: 255 };
-  const GREEN = { r: 35,  g: 105, b: 35  };
+  const BLACK  = { r: 20,  g: 20,  b: 20  };
+  const GRAY   = { r: 110, g: 110, b: 110 };
+  const DGRAY  = { r: 74,  g: 74,  b: 74  }; // #4a4a4a – logo text
+  const MGRAY  = { r: 106, g: 106, b: 106 }; // #6a6a6a – logo subtitle
+  const D1     = { r: 90,  g: 90,  b: 90  }; // #5a5a5a – upper diamond
+  const D2     = { r: 46,  g: 46,  b: 46  }; // #2e2e2e – lower diamond
+  const LGRAY  = { r: 240, g: 240, b: 240 };
+  const WHITE  = { r: 255, g: 255, b: 255 };
+  const GREEN  = { r: 35,  g: 105, b: 35  };
 
   let y = 0;
 
   const setTxt  = (c: {r:number,g:number,b:number}) => doc.setTextColor(c.r, c.g, c.b);
   const setFill = (c: {r:number,g:number,b:number}) => doc.setFillColor(c.r, c.g, c.b);
   const setDraw = (c: {r:number,g:number,b:number}) => doc.setDrawColor(c.r, c.g, c.b);
+
+  // Draw a diamond (rotated square) using polygon
+  function drawDiamond(cx: number, cy: number, hw: number, hh: number, fillColor: {r:number,g:number,b:number}) {
+    setFill(fillColor);
+    setDraw(fillColor);
+    doc.setLineWidth(0);
+    // top → right → bottom → left → close
+    doc.lines([[hw, hh], [-hw, hh], [-hw, -hh]], cx - hw + hw, cy - hh, [1, 1], "F", true);
+    // jsPDF lines: from (cx, cy-hh), vectors to trace the diamond
+    doc.lines([[hw, hh], [-hw, hh], [-hw, -hh]], cx, cy - hh, [1, 1], "F", true);
+  }
 
   function sectionHeader(title: string) {
     doc.setFont("helvetica", "bold");
@@ -132,15 +150,37 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     if (y + needed > pageH - 18) { doc.addPage(); y = 20; }
   }
 
-  // Header
+  // ── Header ──────────────────────────────────────────────────────────────
+  // Green accent bar at top
   setFill(GREEN);
   doc.rect(0, 0, pageW, 2, "F");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  setTxt(GREEN);
-  doc.text("HOLZKNECHT NATURSTEINE", margin, 20);
+  // Logo: two overlapping diamonds + company name
+  const lx = margin; // logo left edge
+  const ly = 10;     // logo top area
 
+  // Upper diamond (lighter gray) – positioned slightly right & up
+  drawDiamond(lx + 8, ly + 6, 5.5, 5.5, D1);
+  // Lower diamond (darker gray) – offset down-left for overlap effect
+  drawDiamond(lx + 5, ly + 11, 5.5, 5.5, D2);
+
+  // Company name to the right of the diamonds
+  const txtX = lx + 17;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  setTxt(DGRAY);
+  doc.text("HOLZKNECHT", txtX, ly + 8);
+  // Separator line under company name
+  setDraw({ r: 122, g: 122, b: 122 });
+  doc.setLineWidth(0.3);
+  doc.line(txtX, ly + 10, txtX + 42, ly + 10);
+  // Subtitle
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  setTxt(MGRAY);
+  doc.text("Natursteine", txtX, ly + 16);
+
+  // Document title on the right
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   setTxt(BLACK);
@@ -150,6 +190,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   setTxt(GRAY);
   doc.text(formatDate(disturbance.datum), pageW - margin, 21, { align: "right" });
 
+  // Separator
   setDraw({ r: 180, g: 180, b: 180 });
   doc.setLineWidth(0.3);
   doc.line(margin, 33, margin + cW, 33);
@@ -159,7 +200,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   const col2x = margin + cW / 2 + 3;
   const colW  = cW / 2 - 5;
 
-  // Kundendaten
+  // ── Kundendaten ──────────────────────────────────────────────────────────
   sectionHeader("Kundendaten");
   fieldLabel("Name");
   const nameLines = fieldValue(disturbance.kunde_name, margin, colW);
@@ -172,26 +213,37 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   }
   y += 5;
 
-  // Einsatzdaten
-  checkPage(45);
+  // ── Einsatzdaten ─────────────────────────────────────────────────────────
+  checkPage(55);
   sectionHeader("Einsatzdaten");
   const st = disturbance.start_time.slice(0, 5);
   const et = disturbance.end_time.slice(0, 5);
+
+  // Row 1: Datum | Arbeitszeit
   fieldLabel("Datum"); fieldValue(formatDate(disturbance.datum), margin, colW);
   fieldLabel("Arbeitszeit", col2x); fieldValue(`${st} – ${et} Uhr`, col2x, colW);
   y += 9;
-  if (disturbance.pause_minutes > 0) { fieldLabel("Pause"); fieldValue(`${disturbance.pause_minutes} Minuten`, margin, colW); }
-  setDraw(BLACK); doc.setLineWidth(0.5);
-  doc.rect(col2x - 2, y - 5, colW + 2, 14, "S");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); setTxt(GRAY);
-  doc.text("GESAMTSTUNDEN", col2x, y);
-  doc.setFontSize(13); setTxt(BLACK);
-  doc.text(`${disturbance.stunden.toFixed(2)} h`, col2x, y + 7);
-  y += 14;
-  fieldLabel("Mitarbeiter"); fieldValue(technicians.join(", "), margin, cW);
-  y += 10;
 
-  // Durchgeführte Arbeiten
+  // Row 2: Pause (left) | Mitarbeiter (right)
+  if (disturbance.pause_minutes > 0) {
+    fieldLabel("Pause"); fieldValue(`${disturbance.pause_minutes} Minuten`, margin, colW);
+  }
+  fieldLabel("Mitarbeiter", col2x); fieldValue(technicians.join(", "), col2x, colW);
+  y += 9;
+
+  // Row 3: Gesamtstunden – prominently below, full width
+  y += 2;
+  setFill({ r: 235, g: 245, b: 235 }); // light green tint
+  setDraw(GREEN);
+  doc.setLineWidth(0.6);
+  doc.rect(margin, y - 3, cW, 16, "FD");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7); setTxt(GREEN);
+  doc.text("GESAMTSTUNDEN", margin + 4, y + 1);
+  doc.setFontSize(15); setTxt({ r: 25, g: 90, b: 25 });
+  doc.text(`${disturbance.stunden.toFixed(2)} h`, margin + 4, y + 10);
+  y += 20;
+
+  // ── Durchgeführte Arbeiten ────────────────────────────────────────────────
   checkPage(40);
   sectionHeader("Durchgeführte Arbeiten");
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); setTxt(BLACK);
@@ -211,7 +263,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     doc.text(nLines, margin, y); y += nLines.length * 4.8 + 6;
   }
 
-  // Materialien
+  // ── Materialien ───────────────────────────────────────────────────────────
   if (materials && materials.length > 0) {
     checkPage(30); y += 4;
     sectionHeader("Verwendete Materialien");
@@ -237,7 +289,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     doc.line(margin, y, margin + cW, y); y += 6;
   }
 
-  // Fotos
+  // ── Fotos ─────────────────────────────────────────────────────────────────
   if (photos && photos.length > 0 && photoImages.some(img => img !== null)) {
     doc.addPage(); y = 20;
     sectionHeader("Fotos");
@@ -261,25 +313,33 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     y += imgH + 14;
   }
 
-  // Unterschrift
-  checkPage(65); y += 6;
+  // ── Kundenunterschrift ────────────────────────────────────────────────────
+  checkPage(70); y += 6;
   sectionHeader("Kundenunterschrift");
-  setFill(WHITE); setDraw({ r: 160, g: 160, b: 160 }); doc.setLineWidth(0.3);
-  doc.rect(margin, y - 2, cW, 38, "FD");
+
+  // White signature box with gray border
+  setFill(WHITE); setDraw({ r: 160, g: 160, b: 160 }); doc.setLineWidth(0.4);
+  doc.rect(margin, y - 2, cW, 40, "FD");
+
   if (disturbance.unterschrift_kunde) {
     try {
-      doc.addImage(disturbance.unterschrift_kunde, "PNG", margin + 2, y, cW - 4, 33);
-    } catch {
+      // Strip the data URL prefix – pass raw base64 to avoid Deno rendering issues
+      const sig = disturbance.unterschrift_kunde;
+      const b64 = sig.startsWith("data:") ? sig.split(",")[1] : sig;
+      doc.addImage(b64, "PNG", margin + 4, y, cW - 8, 35);
+    } catch (imgErr) {
+      console.error("Signature image error:", imgErr instanceof Error ? imgErr.message : String(imgErr));
       doc.setFont("helvetica", "italic"); doc.setFontSize(9); setTxt(GRAY);
-      doc.text("[Unterschrift vorhanden]", margin + 5, y + 16);
+      doc.text("[Unterschrift vorhanden]", margin + 5, y + 18);
     }
   }
-  y += 42;
+  y += 45;
+
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); setTxt(GRAY);
   doc.text(`Datum: ${new Date().toLocaleDateString("de-AT")}`, margin, y); y += 5;
   doc.text(doc.splitTextToSize("Der Kunde bestätigt mit seiner Unterschrift die ordnungsgemäße Durchführung der oben angeführten Arbeiten.", cW), margin, y);
 
-  // Footer
+  // ── Footer on every page ──────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);

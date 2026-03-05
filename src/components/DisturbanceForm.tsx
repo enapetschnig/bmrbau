@@ -155,6 +155,39 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       return;
     }
 
+    // Check for overlapping time entries on the same day
+    const toMin = (t: string) => { const [h, m] = t.slice(0, 5).split(":").map(Number); return h * 60 + m; };
+    const newStart = toMin(formData.startTime);
+    const newEnd   = toMin(formData.endTime);
+
+    let overlapQuery = supabase
+      .from("time_entries")
+      .select("id, start_time, end_time, taetigkeit, disturbance_id")
+      .eq("user_id", user.id)
+      .eq("datum", formData.datum);
+
+    if (editData) {
+      // Exclude time entries belonging to the disturbance being edited
+      overlapQuery = overlapQuery.or(`disturbance_id.is.null,disturbance_id.neq.${editData.id}`);
+    }
+
+    const { data: existingEntries } = await overlapQuery;
+    const conflict = existingEntries?.find(e => {
+      const s = toMin(e.start_time);
+      const en = toMin(e.end_time);
+      return newStart < en && newEnd > s;
+    });
+
+    if (conflict) {
+      toast({
+        variant: "destructive",
+        title: "Zeitüberschneidung",
+        description: `Es existiert bereits ein Eintrag von ${conflict.start_time.slice(0, 5)} bis ${conflict.end_time.slice(0, 5)} Uhr an diesem Tag.`,
+      });
+      setSaving(false);
+      return;
+    }
+
     const stunden = calculateHours();
 
     const disturbanceData = {

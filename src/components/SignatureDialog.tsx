@@ -176,17 +176,11 @@ export const SignatureDialog = ({
       });
 
       if (sendError) {
-        let detail = (sendError as { message?: string })?.message || String(sendError);
-        try {
-          // FunctionsHttpError stores the actual response in .context
-          const body = await (sendError as { context?: Response })?.context?.json();
-          if (body?.error) detail = body.error;
-        } catch { /* ignore */ }
-        console.error("Email send error:", sendError, "Detail:", detail);
-        // Still mark as success since signature was saved
+        console.error("Email send error (Unterschrift gespeichert):", sendError);
+        // Signature was already saved – email may still have been sent despite the client-side error
         toast({
           title: "Unterschrift gespeichert",
-          description: `E-Mail Fehler: ${detail}`,
+          description: "E-Mail wurde möglicherweise trotzdem gesendet – bitte Postfach prüfen.",
         });
       } else {
         toast({
