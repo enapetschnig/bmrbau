@@ -30,8 +30,8 @@ export function PageHeader({ title, showBackButton = true, backPath }: PageHeade
             </Button>
           )}
           <img 
-            src="/holzknecht-logo.jpg"
-            alt="Holzknecht Natursteine"
+            src="/schafferhofer-logo.svg"
+            alt="Schafferhofer Bau"
             className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain" 
             onClick={() => navigate("/")}
           />

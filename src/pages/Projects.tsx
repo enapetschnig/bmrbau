@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, FolderOpen, Plus, FileText, Image, Package, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home } from "lucide-react";
+import { ArrowLeft, FolderOpen, Plus, FileText, Image, Package, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,12 @@ type Project = {
   beschreibung: string | null;
   adresse: string | null;
   plz: string | null;
+  bauherr: string | null;
+  bauherr_kontakt: string | null;
+  bauleiter: string | null;
+  budget: number | null;
+  start_datum: string | null;
+  end_datum: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -47,6 +54,12 @@ const Projects = () => {
     beschreibung: "",
     adresse: "",
     plz: "",
+    bauherr: "",
+    bauherr_kontakt: "",
+    bauleiter: "",
+    budget: "",
+    start_datum: "",
+    end_datum: "",
   });
   const [quickUploadProject, setQuickUploadProject] = useState<{
     projectId: string;
@@ -60,10 +73,51 @@ const Projects = () => {
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
+  // Material dialog state
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [materialCatalog, setMaterialCatalog] = useState<{ id: string; name: string; einheit: string }[]>([]);
+  const [materialDialogProject, setMaterialDialogProject] = useState<string | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState("");
+  const [customMaterial, setCustomMaterial] = useState("");
+  const [newMenge, setNewMenge] = useState("");
+  const [submittingMaterial, setSubmittingMaterial] = useState(false);
+
+  const fetchMaterialCatalog = async () => {
+    const { data } = await supabase.from("materials").select("id, name, einheit").order("name");
+    if (data) setMaterialCatalog(data);
+  };
+
+  const handleAddMaterial = async () => {
+    const materialName = selectedMaterial === "__custom__" ? customMaterial.trim() : selectedMaterial;
+    if (!materialDialogProject || !currentUserId || !materialName) return;
+
+    setSubmittingMaterial(true);
+    const { error } = await supabase.from("material_entries").insert({
+      project_id: materialDialogProject,
+      user_id: currentUserId,
+      material: materialName,
+      menge: newMenge.trim() || null,
+    });
+
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: "Material konnte nicht gespeichert werden" });
+    } else {
+      toast({ title: "Gespeichert", description: "Material wurde hinzugefügt" });
+      setMaterialDialogProject(null);
+      setSelectedMaterial("");
+      setCustomMaterial("");
+      setNewMenge("");
+    }
+    setSubmittingMaterial(false);
+  };
 
   useEffect(() => {
     checkAdminStatus();
     fetchProjects();
+    fetchFavorites();
+    fetchMaterialCatalog();
 
     // Realtime subscription
     const channel = supabase
@@ -82,7 +136,7 @@ const Projects = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Base role only determines admin actions (no overrides)
+    setCurrentUserId(user.id);
 
     const { data } = await supabase
       .from("user_roles")
@@ -91,6 +145,31 @@ const Projects = () => {
       .single();
 
     setIsAdmin(data?.role === "administrator");
+  };
+
+  const fetchFavorites = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("project_favorites")
+      .select("project_id")
+      .eq("user_id", user.id);
+    if (data) setFavoriteIds(new Set(data.map(f => f.project_id)));
+  };
+
+  const toggleFavorite = async (projectId: string) => {
+    if (!currentUserId) return;
+    if (favoriteIds.has(projectId)) {
+      await supabase.from("project_favorites").delete().eq("user_id", currentUserId).eq("project_id", projectId);
+      setFavoriteIds(prev => { const next = new Set(prev); next.delete(projectId); return next; });
+    } else {
+      if (favoriteIds.size >= 3) {
+        toast({ variant: "destructive", title: "Maximum erreicht", description: "Du kannst max. 3 Favoriten haben." });
+        return;
+      }
+      await supabase.from("project_favorites").insert({ user_id: currentUserId, project_id: projectId });
+      setFavoriteIds(prev => new Set(prev).add(projectId));
+    }
   };
 
   const fetchProjects = async () => {
@@ -161,6 +240,12 @@ const Projects = () => {
         beschreibung: newProject.beschreibung.trim() || null,
         adresse: newProject.adresse.trim() || null,
         plz: newProject.plz.trim(),
+        bauherr: newProject.bauherr.trim() || null,
+        bauherr_kontakt: newProject.bauherr_kontakt.trim() || null,
+        bauleiter: newProject.bauleiter.trim() || null,
+        budget: newProject.budget ? parseFloat(newProject.budget) : null,
+        start_datum: newProject.start_datum || null,
+        end_datum: newProject.end_datum || null,
       });
 
     if (error) {
@@ -174,7 +259,7 @@ const Projects = () => {
         title: "Erfolg",
         description: "Projekt wurde erstellt",
       });
-      setNewProject({ name: "", beschreibung: "", adresse: "", plz: "" });
+      setNewProject({ name: "", beschreibung: "", adresse: "", plz: "", bauherr: "", bauherr_kontakt: "", bauleiter: "", budget: "", start_datum: "", end_datum: "" });
       setShowNewDialog(false);
       fetchProjects();
     }
@@ -370,8 +455,8 @@ const Projects = () => {
                 <Home className="h-5 w-5" />
               </Button>
               <img 
-                src="/holzknecht-logo.jpg"
-                alt="Holzknecht Natursteine"
+                src="/schafferhofer-logo.svg"
+                alt="Schafferhofer Bau"
                 className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain"
                 onClick={() => navigate("/")}
               />
@@ -431,6 +516,61 @@ const Projects = () => {
                       className="min-h-20"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Bauherr</Label>
+                      <Input
+                        value={newProject.bauherr}
+                        onChange={(e) => setNewProject({ ...newProject, bauherr: e.target.value })}
+                        placeholder="Name des Bauherrn"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Bauherr Kontakt</Label>
+                      <Input
+                        value={newProject.bauherr_kontakt}
+                        onChange={(e) => setNewProject({ ...newProject, bauherr_kontakt: e.target.value })}
+                        placeholder="Tel / Email"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Bauleiter</Label>
+                      <Input
+                        value={newProject.bauleiter}
+                        onChange={(e) => setNewProject({ ...newProject, bauleiter: e.target.value })}
+                        placeholder="Name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Budget (EUR)</Label>
+                      <Input
+                        type="number"
+                        value={newProject.budget}
+                        onChange={(e) => setNewProject({ ...newProject, budget: e.target.value })}
+                        placeholder="z.B. 150000"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Startdatum</Label>
+                      <Input
+                        type="date"
+                        value={newProject.start_datum}
+                        onChange={(e) => setNewProject({ ...newProject, start_datum: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Enddatum</Label>
+                      <Input
+                        type="date"
+                        value={newProject.end_datum}
+                        onChange={(e) => setNewProject({ ...newProject, end_datum: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <Button onClick={handleCreateProject} className="w-full">
                     Projekt erstellen
                   </Button>
@@ -479,8 +619,15 @@ const Projects = () => {
                 return (
                   project.name.toLowerCase().includes(query) ||
                   project.adresse?.toLowerCase().includes(query) ||
-                  project.beschreibung?.toLowerCase().includes(query)
+                  project.beschreibung?.toLowerCase().includes(query) ||
+                  project.bauherr?.toLowerCase().includes(query) ||
+                  project.bauleiter?.toLowerCase().includes(query)
                 );
+              })
+              .sort((a, b) => {
+                const aFav = favoriteIds.has(a.id) ? 0 : 1;
+                const bFav = favoriteIds.has(b.id) ? 0 : 1;
+                return aFav - bFav;
               })
               .map((project) => (
             <Card 
@@ -502,16 +649,42 @@ const Projects = () => {
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
                       {project.adresse && (
-                        <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
+                        <CardDescription className="text-xs sm:text-sm">
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.adresse + (project.plz ? `, ${project.plz}` : ''))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+                          >
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {project.adresse}
+                          </a>
+                        </CardDescription>
+                      )}
+                      {(project.bauherr || project.bauleiter) && (
+                        <div className="text-xs text-muted-foreground mt-0.5 flex gap-3">
+                          {project.bauherr && <span>Bauherr: {project.bauherr}</span>}
+                          {project.bauleiter && <span>Bauleiter: {project.bauleiter}</span>}
+                        </div>
                       )}
                     </div>
                   </div>
-                  <Badge 
-                    variant={project.status === "aktiv" ? "default" : "secondary"}
-                    className="self-start sm:self-center whitespace-nowrap"
-                  >
-                    {project.status === "aktiv" ? "Aktiv" : "Geschlossen"}
-                  </Badge>
+                  <div className="flex items-center gap-2 self-start sm:self-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(project.id); }}
+                      className="p-1 hover:scale-110 transition-transform"
+                      title={favoriteIds.has(project.id) ? "Favorit entfernen" : "Als Favorit markieren"}
+                    >
+                      <Star className={`h-5 w-5 ${favoriteIds.has(project.id) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+                    </button>
+                    <Badge
+                      variant={project.status === "aktiv" ? "default" : "secondary"}
+                      className="whitespace-nowrap"
+                    >
+                      {project.status === "aktiv" ? "Aktiv" : "Geschlossen"}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 sm:pt-6">
@@ -613,7 +786,20 @@ const Projects = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <div 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2 mt-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMaterialDialogProject(project.id);
+                  }}
+                >
+                  <Package className="w-4 h-4" />
+                  + Material hinzufügen
+                </Button>
+
+                <div
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t mt-3"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -848,6 +1034,75 @@ const Projects = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Material Dialog */}
+      <Dialog open={!!materialDialogProject} onOpenChange={(open) => { if (!open) { setMaterialDialogProject(null); setSelectedMaterial(""); setCustomMaterial(""); setNewMenge(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Material hinzufügen
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Material</Label>
+              <Select value={selectedMaterial} onValueChange={(val) => { setSelectedMaterial(val); if (val !== "__custom__") setCustomMaterial(""); }}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Material auswählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {materialCatalog.map(c => (
+                    <SelectItem key={c.id} value={c.name} className="text-base py-3">
+                      {c.name} ({c.einheit})
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom__" className="text-base py-3 font-medium">
+                    Anderes Material...
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {selectedMaterial === "__custom__" && (
+                <Input
+                  placeholder="Material eingeben"
+                  value={customMaterial}
+                  onChange={(e) => setCustomMaterial(e.target.value)}
+                  autoFocus
+                  className="h-12 text-base"
+                />
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Menge</Label>
+              <Input
+                placeholder={(() => {
+                  const item = materialCatalog.find(c => c.name === selectedMaterial);
+                  return item ? `z.B. 10 ${item.einheit}` : "z.B. 10 Stück";
+                })()}
+                value={newMenge}
+                onChange={(e) => setNewMenge(e.target.value)}
+                className="h-12 text-base"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                className="flex-1 h-12 text-base"
+                onClick={handleAddMaterial}
+                disabled={submittingMaterial || !(selectedMaterial === "__custom__" ? customMaterial.trim() : selectedMaterial)}
+              >
+                {submittingMaterial ? "Speichert..." : "Speichern"}
+              </Button>
+              <Button
+                className="flex-1 h-12 text-base"
+                variant="outline"
+                onClick={() => { setMaterialDialogProject(null); setSelectedMaterial(""); setCustomMaterial(""); setNewMenge(""); }}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

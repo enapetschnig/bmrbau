@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, Zap, Receipt } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, Zap, Receipt, Bell, X, CloudRain, ClipboardList, Scale, Wrench, CalendarDays, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -22,6 +22,15 @@ type Project = {
   name: string;
   status: string;
   updated_at: string;
+};
+
+type Notification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
 };
 
 type RecentTimeEntry = {
@@ -48,7 +57,35 @@ export default function Index() {
   const [recentEntries, setRecentEntries] = useState<RecentTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [missingHoursDate, setMissingHoursDate] = useState<string | null>(null);
   const { handleRestartInstallGuide } = useOnboarding();
+
+  const checkMissingHours = async (userId: string) => {
+    const today = new Date();
+    let checkDate = new Date(today);
+    // If Monday, check Friday; otherwise check yesterday
+    if (today.getDay() === 1) {
+      checkDate.setDate(checkDate.getDate() - 3); // Friday
+    } else if (today.getDay() === 0) {
+      return; // Sunday — don't check
+    } else if (today.getDay() === 6) {
+      checkDate.setDate(checkDate.getDate() - 1); // Saturday checks Friday
+    } else {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    const dateStr = checkDate.toISOString().split("T")[0];
+
+    const { count } = await supabase
+      .from("time_entries")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("datum", dateStr);
+
+    if (count === 0) {
+      setMissingHoursDate(dateStr);
+    }
+  };
 
   const fetchProjects = async () => {
     const { data } = await supabase
@@ -63,11 +100,22 @@ export default function Index() {
     }
   };
 
+  const fetchNotifications = async (userId: string) => {
+    const { data } = await supabase
+      .from("notifications")
+      .select("id, type, title, message, is_read, created_at")
+      .eq("user_id", userId)
+      .eq("is_read", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (data) setNotifications(data);
+  };
+
   const fetchRecentEntries = async (userId: string, role: string | null) => {
     // For admins, fetch all entries. For employees, only their own
     let query = supabase
       .from("time_entries")
-      .select("id, datum, stunden, taetigkeit, disturbance_id, projects(name)")
+      .select("id, datum, stunden, taetigkeit, disturbance_id, projects(name), profiles:user_id(vorname, nachname)")
       .order("datum", { ascending: false })
       .limit(5);
 
@@ -122,6 +170,8 @@ export default function Index() {
     await Promise.all([
       fetchProjects(),
       fetchRecentEntries(userId, role),
+      fetchNotifications(userId),
+      checkMissingHours(userId),
     ]);
 
     setLoading(false);
@@ -205,6 +255,14 @@ export default function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
+  const handleDismissNotification = async (notificationId: string) => {
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", notificationId);
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: "local" });
     navigate("/auth");
@@ -232,7 +290,7 @@ export default function Index() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-md">
-          <img src="/holzknecht-logo.jpg" alt="Holzknecht Natursteine" className="h-20 mx-auto" />
+          <img src="/schafferhofer-logo.svg" alt="Schafferhofer Bau" className="h-20 mx-auto" />
           <h1 className="text-xl font-bold">Konto deaktiviert</h1>
           <p className="text-muted-foreground">Ihr Konto wurde deaktiviert. Bitte wenden Sie sich an den Administrator.</p>
           <Button variant="outline" onClick={() => supabase.auth.signOut()}>Abmelden</Button>
@@ -250,7 +308,7 @@ export default function Index() {
         <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex justify-between items-center gap-3">
             <div className="flex items-center gap-2 sm:gap-3">
-              <img src="/holzknecht-logo.jpg" alt="Holzknecht Natursteine" className="h-10 sm:h-14 w-auto" />
+              <img src="/schafferhofer-logo.svg" alt="Schafferhofer Bau" className="h-10 sm:h-14 w-auto" />
               <div className="hidden sm:block h-8 w-px bg-border" />
               <div className="flex flex-col">
                 <span className="text-xs sm:text-sm text-muted-foreground">Hallo</span>
@@ -301,6 +359,57 @@ export default function Index() {
               : "Zeiterfassung und Projektdokumentation"}
           </p>
         </div>
+
+        {/* Notifications Banner */}
+        {notifications.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {notifications.map((notif) => (
+              <div
+                key={notif.id}
+                className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 cursor-pointer"
+                onClick={() => {
+                  handleDismissNotification(notif.id);
+                  if (notif.type === "krankmeldung_upload") navigate("/admin");
+                  if (notif.type === "lohnzettel_upload") navigate("/my-documents");
+                }}
+              >
+                <Bell className="h-5 w-5 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">{notif.title}</p>
+                  <p className="text-xs text-muted-foreground truncate">{notif.message}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 h-8 w-8 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDismissNotification(notif.id);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Missing Hours Reminder */}
+        {missingHoursDate && (
+          <div
+            className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 cursor-pointer"
+            onClick={() => navigate(`/time-tracking?date=${missingHoursDate}`)}
+          >
+            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-sm text-yellow-800 dark:text-yellow-200">Stunden nicht erfasst</p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                Du hast am {new Date(missingHoursDate).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })} keine Stunden erfasst — jetzt nachtragen?
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-yellow-600 shrink-0" />
+          </div>
+        )}
 
         {/* Main Actions Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
@@ -380,6 +489,44 @@ export default function Index() {
             </CardContent>
           </Card>
 
+          {/* Schlechtwetter - Für alle */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => navigate("/bad-weather")}
+          >
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <CloudRain className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-lg sm:text-xl">Schlechtwetter</CardTitle>
+              <CardDescription className="text-sm">
+                Schlechtwettertage dokumentieren
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" size="sm" variant="outline">Schlechtwetter öffnen</Button>
+            </CardContent>
+          </Card>
+
+
+          {/* Tagesberichte - Für alle */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => navigate("/daily-reports")}
+          >
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <ClipboardList className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-lg sm:text-xl">Tagesberichte</CardTitle>
+              <CardDescription className="text-sm">
+                Tages- & Zwischenberichte erstellen
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" size="sm" variant="outline">Berichte öffnen</Button>
+            </CardContent>
+          </Card>
 
           {/* Meine Dokumente - Für Mitarbeiter */}
           {!isAdmin && (
@@ -403,6 +550,25 @@ export default function Index() {
           )}
 
 
+          {/* Dokumentenbibliothek - Für alle */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => navigate("/documents")}
+          >
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <BookOpen className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-lg sm:text-xl">Dokumentenbibliothek</CardTitle>
+              <CardDescription className="text-sm">
+                Gesetze, Richtlinien & Vorschriften
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" size="sm" variant="outline">Bibliothek öffnen</Button>
+            </CardContent>
+          </Card>
+
           {/* Admin: Stundenauswertung */}
           {isAdmin && (
             <Card 
@@ -424,10 +590,94 @@ export default function Index() {
             </Card>
           )}
 
+          {/* Admin: Arbeitszeitaufzeichnung */}
+          {isAdmin && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/legal-work-time")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Scale className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Arbeitszeitaufzeichnung</CardTitle>
+                <CardDescription className="text-sm">
+                  Gesetzliche Aufzeichnung gemäß § 26 AZG
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Aufzeichnung öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Admin: Plantafel */}
+          {isAdmin && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/schedule")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <CalendarDays className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Plantafel</CardTitle>
+                <CardDescription className="text-sm">
+                  Mitarbeiter-Einsatzplanung pro Woche
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Plantafel öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Admin: Geräteverwaltung */}
+          {isAdmin && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/equipment")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Wrench className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Geräteverwaltung</CardTitle>
+                <CardDescription className="text-sm">
+                  Geräte, Werkzeuge & Inventar
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Geräte öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Admin: Rechnungen */}
+          {isAdmin && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/invoices")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Receipt className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Rechnungen</CardTitle>
+                <CardDescription className="text-sm">
+                  Rechnungen & Angebote verwalten
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Rechnungen öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Admin: Mitarbeiter */}
           {isAdmin && (
-            <Card 
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/admin")}
             >
               <CardHeader className="space-y-2 pb-3">
@@ -472,6 +722,11 @@ export default function Index() {
                           {entry.projects?.name || (entry.disturbance_id ? "Regiebericht" : "Unbekanntes Projekt")}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">{entry.taetigkeit}</p>
+                        {entry.profiles && (
+                          <p className="text-xs text-muted-foreground">
+                            von {entry.profiles.vorname} {entry.profiles.nachname}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right ml-3 shrink-0">
                         <p className="font-bold">{entry.stunden} h</p>

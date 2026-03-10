@@ -13,9 +13,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, User, FileText, Clock, Mail, Phone, MapPin, FileSpreadsheet, Shirt } from "lucide-react";
 import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
+import { DEFAULT_SCHEDULE, LEHRLING_SCHEDULE, type WeekSchedule } from "@/lib/workingHours";
 
 interface Employee {
   id: string;
@@ -40,7 +42,21 @@ interface Employee {
   kleidungsgroesse: string | null;
   schuhgroesse: string | null;
   notizen: string | null;
+  kategorie: string | null;
+  regelarbeitszeit: any | null;
+  wochen_soll_stunden: number | null;
+  is_external: boolean | null;
 }
+
+const KATEGORIE_LABELS: Record<string, string> = {
+  lehrling: "Lehrling",
+  facharbeiter: "Facharbeiter",
+  vorarbeiter: "Vorarbeiter",
+  extern: "Extern",
+};
+
+const DAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const DAY_KEYS: (keyof WeekSchedule)[] = ["mo", "di", "mi", "do", "fr", "sa", "so"];
 
 export default function Employees() {
   const navigate = useNavigate();
@@ -189,7 +205,14 @@ export default function Employees() {
                 </Avatar>
                 {emp.vorname} {emp.nachname}
               </CardTitle>
-              <CardDescription>{emp.position || "Mitarbeiter"}</CardDescription>
+              <CardDescription className="flex items-center gap-2">
+                {emp.position || "Mitarbeiter"}
+                {emp.kategorie && (
+                  <Badge variant={emp.kategorie === "extern" ? "outline" : "secondary"} className="text-xs">
+                    {KATEGORIE_LABELS[emp.kategorie] || emp.kategorie}
+                  </Badge>
+                )}
+              </CardDescription>
             </CardHeader>
 
             <CardContent>
@@ -376,6 +399,33 @@ export default function Employees() {
                         </Select>
                       </div>
                       <div>
+                        <Label>Kategorie</Label>
+                        <Select
+                          value={formData.kategorie || "facharbeiter"}
+                          onValueChange={(v) => {
+                            const updates: Partial<Employee> = { kategorie: v, is_external: v === "extern" };
+                            if (v === "lehrling") {
+                              updates.regelarbeitszeit = LEHRLING_SCHEDULE;
+                              updates.wochen_soll_stunden = 39;
+                            } else if (v === "facharbeiter" || v === "vorarbeiter") {
+                              updates.regelarbeitszeit = DEFAULT_SCHEDULE;
+                              updates.wochen_soll_stunden = 39;
+                            }
+                            setFormData({ ...formData, ...updates });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lehrling">Lehrling</SelectItem>
+                            <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
+                            <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
+                            <SelectItem value="extern">Extern</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
                         <Label>Stundenlohn (€)</Label>
                         <Input
                           type="number"
@@ -388,6 +438,70 @@ export default function Employees() {
                       </div>
                     </div>
                   </div>
+
+                  <Separator />
+
+                  {/* Regelarbeitszeit */}
+                  {formData.kategorie !== "extern" && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Regelarbeitszeit</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Wochensoll: {formData.wochen_soll_stunden || 39}h
+                    </p>
+                    <div className="grid grid-cols-7 gap-2">
+                      {DAY_KEYS.map((key, idx) => {
+                        const schedule = (formData.regelarbeitszeit as WeekSchedule) || DEFAULT_SCHEDULE;
+                        const day = schedule[key] || { start: null, end: null, pause: 0, hours: 0 };
+                        return (
+                          <div key={key} className="space-y-1 text-center">
+                            <Label className="text-xs font-bold">{DAY_LABELS[idx]}</Label>
+                            <Input
+                              type="time"
+                              value={day.start || ""}
+                              onChange={(e) => {
+                                const newSchedule = { ...schedule };
+                                newSchedule[key] = { ...day, start: e.target.value || null };
+                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
+                              }}
+                              className="h-8 text-xs px-1"
+                              placeholder="--:--"
+                            />
+                            <Input
+                              type="time"
+                              value={day.end || ""}
+                              onChange={(e) => {
+                                const newSchedule = { ...schedule };
+                                newSchedule[key] = { ...day, end: e.target.value || null };
+                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
+                              }}
+                              className="h-8 text-xs px-1"
+                              placeholder="--:--"
+                            />
+                            <Input
+                              type="number"
+                              min="0"
+                              max="24"
+                              step="0.5"
+                              value={day.hours}
+                              onChange={(e) => {
+                                const newSchedule = { ...schedule };
+                                const hours = parseFloat(e.target.value) || 0;
+                                newSchedule[key] = { ...day, hours };
+                                const total = Object.values(newSchedule).reduce((s, d) => s + (d?.hours ?? 0), 0);
+                                setFormData({ ...formData, regelarbeitszeit: newSchedule, wochen_soll_stunden: total });
+                              }}
+                              className="h-8 text-xs px-1"
+                              placeholder="h"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Von / Bis / Stunden pro Tag
+                    </p>
+                  </div>
+                  )}
 
                   <Separator />
 

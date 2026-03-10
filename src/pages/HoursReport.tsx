@@ -3,15 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, AlertTriangle, Pencil, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Warehouse, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, Save } from "lucide-react";
 import { format, isSameDay, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
@@ -23,7 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getNormalWorkingHours } from "@/lib/workingHours";
+import { getNormalWorkingHours, type WeekSchedule, DEFAULT_SCHEDULE } from "@/lib/workingHours";
 
 interface TimeEntry {
   id: string;
@@ -40,6 +38,11 @@ interface TimeEntry {
   taetigkeit: string;
   week_type?: string | null;
   disturbance_id?: string | null;
+  kilometer?: number | null;
+  km_beschreibung?: string | null;
+  zeit_typ?: string | null;
+  diaeten_typ?: string | null;
+  diaeten_betrag?: number | null;
 }
 
 interface Profile {
@@ -54,6 +57,17 @@ interface Project {
   plz?: string;
 }
 
+interface ReportExtra {
+  id: string;
+  user_id: string;
+  monat: number;
+  jahr: number;
+  bezeichnung: string;
+  betrag: number | null;
+}
+
+const EXTRA_SUGGESTIONS = ["Reinigungspauschale", "Werkzeugpauschale", "Schmutzzulage", "Fahrtkostenpauschale"];
+
 const monthNames = [
   "Jänner", "Februar", "März", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -62,18 +76,26 @@ const monthNames = [
 export default function HoursReport() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [month, setMonth] = useState(() => {
+    const p = searchParams.get("month");
+    return p ? parseInt(p) : new Date().getMonth() + 1;
+  });
+  const [year, setYear] = useState(() => {
+    const p = searchParams.get("year");
+    return p ? parseInt(p) : new Date().getFullYear();
+  });
+  const [selectedUserId, setSelectedUserId] = useState<string>(searchParams.get("user") || "");
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [projectList, setProjectList] = useState<Project[]>([]);
+  const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
+  const [reportExtras, setReportExtras] = useState<ReportExtra[]>([]);
+  const [newExtraName, setNewExtraName] = useState("");
+  const [newExtraBetrag, setNewExtraBetrag] = useState("");
+  const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
+  const [editExtraBetrag, setEditExtraBetrag] = useState("");
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -81,14 +103,28 @@ export default function HoursReport() {
     checkAdminStatus();
     fetchProfiles();
     fetchProjects();
-    fetchProjectList();
   }, []);
 
   useEffect(() => {
     if (selectedUserId) {
       fetchTimeEntries();
+      fetchEmployeeSchedule(selectedUserId);
+      fetchReportExtras();
     }
   }, [month, year, selectedUserId]);
+
+  const fetchEmployeeSchedule = async (userId: string) => {
+    const { data } = await supabase
+      .from("employees")
+      .select("regelarbeitszeit")
+      .eq("user_id", userId)
+      .single();
+    if (data?.regelarbeitszeit) {
+      setEmployeeSchedule(data.regelarbeitszeit as unknown as WeekSchedule);
+    } else {
+      setEmployeeSchedule(null);
+    }
+  };
 
   const checkAdminStatus = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -158,65 +194,73 @@ export default function HoursReport() {
     setLoading(false);
   };
 
-  const fetchProjectList = async () => {
+
+  const fetchReportExtras = async () => {
+    if (!selectedUserId) return;
     const { data } = await supabase
-      .from("projects")
-      .select("id, name, plz")
-      .eq("status", "aktiv")
-      .order("name");
-    if (data) setProjectList(data as Project[]);
+      .from("report_extras")
+      .select("id, user_id, monat, jahr, bezeichnung, betrag")
+      .eq("user_id", selectedUserId)
+      .eq("monat", month)
+      .eq("jahr", year)
+      .order("bezeichnung");
+    setReportExtras((data as ReportExtra[]) || []);
   };
 
-  const handleUpdateEntry = async () => {
-    if (!editingEntry || savingEdit) return;
-    setSavingEdit(true);
+  const handleAddExtra = async () => {
+    if (!newExtraName.trim() || !selectedUserId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-    const pauseMinutes = editingEntry.pause_minutes || 0;
-    let calculatedHours = 0;
-    if (editingEntry.start_time && editingEntry.end_time) {
-      const toMinCalc = (t: string) => {
-        const [h, m] = t.substring(0, 5).split(":").map(Number);
-        return h * 60 + m;
-      };
-      const totalMinutes = toMinCalc(editingEntry.end_time) - toMinCalc(editingEntry.start_time) - pauseMinutes;
-      calculatedHours = Math.max(0, totalMinutes / 60);
-    }
-
-    const { error } = await supabase
-      .from("time_entries")
-      .update({
-        taetigkeit: editingEntry.taetigkeit,
-        start_time: editingEntry.start_time,
-        end_time: editingEntry.end_time,
-        pause_minutes: pauseMinutes,
-        stunden: Math.max(0, calculatedHours),
-        project_id: editingEntry.project_id,
-      })
-      .eq("id", editingEntry.id);
+    const { data, error } = await supabase
+      .from("report_extras")
+      .upsert(
+        {
+          user_id: selectedUserId,
+          monat: month,
+          jahr: year,
+          bezeichnung: newExtraName.trim(),
+          betrag: newExtraBetrag ? parseFloat(newExtraBetrag) : null,
+          created_by: user.id,
+        },
+        { onConflict: "user_id,jahr,monat,bezeichnung" }
+      )
+      .select()
+      .single();
 
     if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: "Eintrag konnte nicht aktualisiert werden" });
-    } else {
-      toast({ title: "Erfolg", description: "Eintrag wurde aktualisiert" });
-      setShowEditDialog(false);
-      setEditingEntry(null);
-      fetchTimeEntries();
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else if (data) {
+      setReportExtras(prev => {
+        const exists = prev.find(e => e.id === (data as ReportExtra).id);
+        if (exists) return prev.map(e => e.id === exists.id ? (data as ReportExtra) : e);
+        return [...prev, data as ReportExtra];
+      });
+      setNewExtraName("");
+      setNewExtraBetrag("");
     }
-    setSavingEdit(false);
   };
 
-  const handleDeleteEntry = async (id: string) => {
-    if (!confirm("Möchtest du diesen Eintrag wirklich löschen?")) return;
-    const { error } = await supabase.from("time_entries").delete().eq("id", id);
+  const handleUpdateExtra = async (id: string, betrag: number | null) => {
+    const { error } = await supabase.from("report_extras").update({ betrag }).eq("id", id);
     if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: "Eintrag konnte nicht gelöscht werden" });
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Erfolg", description: "Eintrag wurde gelöscht" });
-      setShowEditDialog(false);
-      setEditingEntry(null);
-      fetchTimeEntries();
+      setReportExtras(prev => prev.map(e => e.id === id ? { ...e, betrag } : e));
+    }
+    setEditingExtraId(null);
+  };
+
+  const handleDeleteExtra = async (id: string) => {
+    const { error } = await supabase.from("report_extras").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      setReportExtras(prev => prev.filter(e => e.id !== id));
     }
   };
+
+  const totalExtras = reportExtras.reduce((sum, e) => sum + (e.betrag || 0), 0);
 
   const generateMonthDays = () => {
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -239,7 +283,7 @@ export default function HoursReport() {
   };
 
   const calculateOvertime = (date: Date, totalHours: number): number => {
-    const normalHours = getNormalWorkingHours(date);
+    const normalHours = getNormalWorkingHours(date, employeeSchedule);
     return Math.max(0, totalHours - normalHours);
   };
 
@@ -286,25 +330,17 @@ export default function HoursReport() {
   };
 
   const calculateLunchBreak = (entry: TimeEntry) => {
-    // Prioritize new pause_start/pause_end fields if available
+    // Pause aus DB-Werten lesen
     if (entry.pause_start && entry.pause_end) {
       return {
         start: entry.pause_start.substring(0, 5),
         end: entry.pause_end.substring(0, 5),
       };
     }
-    
-    // Fallback for old entries with only pause_minutes
-    if (!entry.pause_minutes || entry.pause_minutes === 0) return null;
-
-    const pauseStart = new Date(`2000-01-01T12:00:00`);
-    const pauseEnd = new Date(pauseStart);
-    pauseEnd.setMinutes(pauseEnd.getMinutes() + entry.pause_minutes);
-
-    return {
-      start: format(pauseStart, "HH:mm"),
-      end: format(pauseEnd, "HH:mm"),
-    };
+    if (entry.pause_minutes && entry.pause_minutes > 0) {
+      return { start: "Pause", end: `${entry.pause_minutes} Min.` };
+    }
+    return null;
   };
 
   const monthDays = generateMonthDays();
@@ -323,6 +359,9 @@ export default function HoursReport() {
     const entryDate = parseISO(entry.datum);
     return sum + calculateOvertime(entryDate, entry.stunden);
   }, 0);
+  const totalKilometer = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.kilometer || 0), 0);
+  const totalKmGeld = Math.round(totalKilometer * 0.42 * 100) / 100;
+  const totalDiaeten = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.diaeten_betrag || 0), 0);
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {
     const borderStyle = thick ? "medium" : "thin";
@@ -351,7 +390,7 @@ export default function HoursReport() {
 
     const worksheetData: any[][] = [
       // Firmendaten Header
-      ["Holzknecht Natursteine", "", "", "", "", "", "", "", "", "", "", ""],
+      ["Schafferhofer Bau", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
@@ -397,7 +436,7 @@ export default function HoursReport() {
           const project = projects[entry.project_id];
           
           // Ort-Spalte: Baustelle oder Werkstatt
-          const ortText = entry.location_type === "baustelle" ? "Baustelle" : "Werkstatt";
+          const ortText = entry.location_type === "baustelle" ? "Baustelle" : "Lager";
           
           // Projekt-Spalte: Urlaub/Krankenstand/Weiterbildung, Störung oder Projektname
           const isAbsence = ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag"].includes(entry.taetigkeit);
@@ -439,23 +478,46 @@ export default function HoursReport() {
                 plz,
               ]);
             } else {
-              const actualMorningEnd = lunchBreak?.start || "";
-              const actualAfternoonStart = lunchBreak?.end || "";
-              const actualPauseText = entry.pause_minutes && entry.pause_minutes > 0 && lunchBreak
-                ? `${lunchBreak.start} - ${lunchBreak.end}`
-                : "";
-
-              const overtime = calculateOvertime(dayDate, entry.stunden);
+              const startTime = entry.start_time?.substring(0, 5) || "";
+              const endTime = entry.end_time?.substring(0, 5) || "";
+              const startMin = toMin(entry.start_time);
+              const endMin = toMin(entry.end_time);
+              const pauseMins = entry.pause_minutes || 0;
+              const calculatedHours = Math.max(0, (endMin - startMin - pauseMins) / 60);
+              const overtime = calculateOvertime(dayDate, calculatedHours);
               const overtimeText = overtime > 0 ? overtime.toFixed(2) : "";
+
+              let morningStart = "";
+              let morningEnd = "";
+              let pauseText = "";
+              let afternoonStart = "";
+              let afternoonEnd = "";
+
+              if (lunchBreak) {
+                morningStart = startTime;
+                morningEnd = lunchBreak.start;
+                pauseText = `${lunchBreak.start} - ${lunchBreak.end}`;
+                afternoonStart = lunchBreak.end;
+                afternoonEnd = endTime;
+              } else if (endMin <= 12 * 60) {
+                morningStart = startTime;
+                morningEnd = endTime;
+              } else if (startMin >= 12 * 60) {
+                afternoonStart = startTime;
+                afternoonEnd = endTime;
+              } else {
+                morningStart = startTime;
+                afternoonEnd = endTime;
+              }
 
               worksheetData.push([
                 displayDay,
-                entry.start_time?.substring(0, 5) || "",
-                actualMorningEnd,
-                actualPauseText,
-                actualAfternoonStart,
-                entry.end_time?.substring(0, 5) || "",
-                entry.stunden.toFixed(2),
+                morningStart,
+                morningEnd,
+                pauseText,
+                afternoonStart,
+                afternoonEnd,
+                calculatedHours.toFixed(2),
                 overtimeText,
                 ortText,
                 projektName,
@@ -464,26 +526,45 @@ export default function HoursReport() {
               ]);
             }
           } else {
-            // Export OHNE Überstunden: Regelarbeitszeiten Mo-Fr 08:00-17:00 verwenden
-            const dayOfWeek = dayDate.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const regelarbeitszeit = isWeekend ? 0 : 8;
+            // Export OHNE Überstunden: Tatsächliche Zeiten verwenden
+            const startTime = entry.start_time?.substring(0, 5) || "";
+            const endTime = entry.end_time?.substring(0, 5) || "";
+            const startMin = toMin(entry.start_time);
+            const endMin = toMin(entry.end_time);
+            const pauseMins = lunchBreak ? 60 : 0;
+            const calculatedHours = Math.max(0, (endMin - startMin - pauseMins) / 60);
 
-            // Regelarbeitszeiten: Mo-Fr 08:00-12:00, 13:00-17:00
-            const regelStart = isWeekend ? "" : "08:00";
-            const regelMorningEnd = isWeekend ? "" : "12:00";
-            const regelPause = isWeekend ? "" : "12:00 - 13:00";
-            const regelAfternoonStart = isWeekend ? "" : "13:00";
-            const regelEnd = isWeekend ? "" : "17:00";
-            
+            let morningStart = "";
+            let morningEnd = "";
+            let pauseText = "";
+            let afternoonStart = "";
+            let afternoonEnd = "";
+
+            if (lunchBreak) {
+              morningStart = startTime;
+              morningEnd = lunchBreak.start;
+              pauseText = `${lunchBreak.start} - ${lunchBreak.end}`;
+              afternoonStart = lunchBreak.end;
+              afternoonEnd = endTime;
+            } else if (endMin <= 12 * 60) {
+              morningStart = startTime;
+              morningEnd = endTime;
+            } else if (startMin >= 12 * 60) {
+              afternoonStart = startTime;
+              afternoonEnd = endTime;
+            } else {
+              morningStart = startTime;
+              afternoonEnd = endTime;
+            }
+
             worksheetData.push([
               displayDay,
-              regelStart,
-              regelMorningEnd,
-              regelPause,
-              regelAfternoonStart,
-              regelEnd,
-              regelarbeitszeit.toFixed(2),
+              morningStart,
+              morningEnd,
+              pauseText,
+              afternoonStart,
+              afternoonEnd,
+              calculatedHours.toFixed(2),
               ortText,
               projektName,
               entry.taetigkeit,
@@ -495,7 +576,12 @@ export default function HoursReport() {
 
         // Tagessumme wenn mehrere Einträge am Tag
         if (uniqueDayEntries.length > 1) {
-          const dayTotalHours = uniqueDayEntries.reduce((sum, e) => sum + e.stunden, 0);
+          const dayTotalHours = uniqueDayEntries.reduce((sum, e) => {
+            const s = toMin(e.start_time);
+            const en = toMin(e.end_time);
+            const p = e.pause_minutes || 0;
+            return sum + Math.max(0, (en - s - p) / 60);
+          }, 0);
           const dayTotalOvertime = calculateOvertime(dayDate, dayTotalHours);
           if (includeOvertime) {
             worksheetData.push(["", "", "", "", "", "Tagessumme:", dayTotalHours.toFixed(2), dayTotalOvertime > 0 ? dayTotalOvertime.toFixed(2) : "", "", "", "", ""]);
@@ -523,6 +609,18 @@ export default function HoursReport() {
       return summe;
     };
 
+    // Diverses / Zulagen Block (vor SUMME)
+    if (reportExtras.length > 0) {
+      worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
+      worksheetData.push(["Diverses / Zulagen:", "", "", "", "", "", "", "", "", "", "", ""]);
+      reportExtras.forEach(extra => {
+        worksheetData.push([
+          "", "", "", extra.bezeichnung, "", "", extra.betrag != null ? extra.betrag.toFixed(2) : "", "", "", "", "", "",
+        ]);
+      });
+      worksheetData.push(["", "", "", "", "", "Summe Diverses:", totalExtras.toFixed(2), "", "", "", "", ""]);
+    }
+
     // Summenzeile mit oder ohne Überstunden
     if (includeOvertime) {
       worksheetData.push(["", "", "", "", "", "SUMME", totalHours.toFixed(2), totalOvertime.toFixed(2), "", "", "", ""]);
@@ -530,7 +628,7 @@ export default function HoursReport() {
       const regelarbeitszeitSumme = calculateRegelarbeitszeitSumme();
       worksheetData.push(["", "", "", "", "", "SUMME", regelarbeitszeitSumme.toFixed(2), "", "", "", "", ""]);
     }
-    
+
     // Footer: 1 Leerzeile + Datum/Unterschrift
     worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
     worksheetData.push(["", "Datum:", "", "", "", "Unterschrift:", "", "", "", "", "", ""]);
@@ -744,7 +842,7 @@ export default function HoursReport() {
               {selectedUserId && (
                 <>
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                         <p className="text-2xl font-bold">{totalHours.toFixed(2)} h</p>
@@ -752,6 +850,15 @@ export default function HoursReport() {
                       <div>
                         <p className="text-sm text-muted-foreground">Überstunden</p>
                         <p className="text-2xl font-bold">{totalOvertime.toFixed(2)} h</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Kilometer</p>
+                        <p className="text-2xl font-bold">{totalKilometer.toFixed(0)} km</p>
+                        <p className="text-xs text-muted-foreground">€ {totalKmGeld.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Diäten</p>
+                        <p className="text-2xl font-bold">€ {totalDiaeten.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
@@ -766,6 +873,8 @@ export default function HoursReport() {
                           <TableHead>Nachmittag</TableHead>
                           <TableHead className="text-right">Stunden</TableHead>
                           <TableHead className="text-right">Überstunden</TableHead>
+                          <TableHead className="text-right">km</TableHead>
+                          <TableHead className="text-right">Diäten</TableHead>
                           <TableHead>Ort</TableHead>
                           <TableHead>Projekt</TableHead>
                           <TableHead>Tätigkeit</TableHead>
@@ -775,13 +884,13 @@ export default function HoursReport() {
                       <TableBody>
                         {loading ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center">
+                            <TableCell colSpan={11} className="text-center">
                               Lade...
                             </TableCell>
                           </TableRow>
                         ) : monthDays.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center">
+                            <TableCell colSpan={11} className="text-center">
                               Keine Daten verfügbar
                             </TableCell>
                           </TableRow>
@@ -808,7 +917,7 @@ export default function HoursReport() {
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={8}></TableCell>
+                                  <TableCell colSpan={10}></TableCell>
                                 </TableRow>
                               );
                             }
@@ -818,8 +927,8 @@ export default function HoursReport() {
                               const isOverlapping = overlappingIds.has(entry.id);
                               const overtime = isOverlapping ? 0 : calculateOvertime(day.date, entry.stunden);
                               const project = projects[entry.project_id];
-                              const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🔧" : "";
-                              const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Werkstatt" : "";
+                              const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏭" : "";
+                              const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Lager" : "";
                               const projektName = entry.taetigkeit === "Urlaub" || entry.taetigkeit === "Krankenstand"
                                 ? entry.taetigkeit
                                 : (project?.name || "");
@@ -848,23 +957,44 @@ export default function HoursReport() {
                                   <TableCell>
                                     <div className="flex items-center gap-1">
                                       <span>{entry.start_time?.substring(0, 5)}</span>
-                                      <span>-</span>
-                                      <span>{entry.pause_minutes > 0 ? "12:00" : entry.end_time?.substring(0, 5)}</span>
+                                      {lunchBreak && (
+                                        <>
+                                          <span>-</span>
+                                          <span>{lunchBreak.start}</span>
+                                        </>
+                                      )}
+                                      {!lunchBreak && toMin(entry.end_time) <= 12 * 60 && (
+                                        <>
+                                          <span>-</span>
+                                          <span>{entry.end_time?.substring(0, 5)}</span>
+                                        </>
+                                      )}
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    {entry.pause_minutes > 0 && (
-                                      <span className="text-sm">12:00 - 13:00</span>
+                                    {lunchBreak && (
+                                      <span className="text-sm">{lunchBreak.start} - {lunchBreak.end}</span>
                                     )}
                                   </TableCell>
                                   <TableCell>
-                                    {entry.pause_minutes > 0 && (
+                                    {lunchBreak ? (
                                       <div className="flex items-center gap-1">
-                                        <span>13:00</span>
+                                        <span>{lunchBreak.end}</span>
                                         <span>-</span>
                                         <span>{entry.end_time?.substring(0, 5)}</span>
                                       </div>
-                                    )}
+                                    ) : toMin(entry.start_time) >= 12 * 60 ? (
+                                      <div className="flex items-center gap-1">
+                                        <span>{entry.start_time?.substring(0, 5)}</span>
+                                        <span>-</span>
+                                        <span>{entry.end_time?.substring(0, 5)}</span>
+                                      </div>
+                                    ) : !lunchBreak && toMin(entry.end_time) > 12 * 60 ? (
+                                      <div className="flex items-center gap-1">
+                                        <span>-</span>
+                                        <span>{entry.end_time?.substring(0, 5)}</span>
+                                      </div>
+                                    ) : null}
                                   </TableCell>
                                   <TableCell className="text-right font-medium">
                                     {isOverlapping ? (
@@ -895,6 +1025,12 @@ export default function HoursReport() {
                                       </span>
                                     )}
                                   </TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    {entry.kilometer && entry.kilometer > 0 ? `${entry.kilometer}` : ""}
+                                  </TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    {entry.diaeten_betrag && entry.diaeten_betrag > 0 ? `€ ${entry.diaeten_betrag.toFixed(2)}` : ""}
+                                  </TableCell>
                                   <TableCell>
                                     <span className="flex items-center gap-1">
                                       <span>{ortIcon}</span>
@@ -913,7 +1049,7 @@ export default function HoursReport() {
                                         size="sm"
                                         variant="ghost"
                                         className="h-7 w-7 p-0"
-                                        onClick={() => { setEditingEntry(entry); setShowEditDialog(true); }}
+                                        onClick={() => navigate(`/time-tracking?date=${entry.datum}&user_id=${entry.user_id}&return_month=${month}&return_year=${year}`)}
                                       >
                                         <Pencil className="h-3.5 w-3.5" />
                                       </Button>
@@ -936,11 +1072,114 @@ export default function HoursReport() {
                           <TableCell className="text-right font-bold text-orange-600">
                             {totalOvertime.toFixed(2)} h
                           </TableCell>
+                          <TableCell className="text-right font-bold text-xs">
+                            {totalKilometer > 0 ? `${totalKilometer.toFixed(0)} km` : ""}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-xs">
+                            {totalDiaeten > 0 ? `€ ${totalDiaeten.toFixed(2)}` : ""}
+                          </TableCell>
                           <TableCell colSpan={3}></TableCell>
                         </TableRow>
                       </TableFooter>
                     </Table>
                   </ScrollArea>
+
+                  {/* Diverses / Zulagen */}
+                  <Card className="mt-4">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-base">Diverses / Zulagen</CardTitle>
+                      <CardDescription className="text-xs">Pauschalen und Zulagen für diesen Monat</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {reportExtras.length > 0 && (
+                        <div className="space-y-1.5">
+                          {reportExtras.map(extra => (
+                            <div key={extra.id} className="flex items-center gap-2 bg-muted/30 rounded px-3 py-2">
+                              <span className="text-sm font-medium flex-1">{extra.bezeichnung}</span>
+                              {editingExtraId === extra.id ? (
+                                <>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    className="w-24 h-8 text-sm"
+                                    value={editExtraBetrag}
+                                    onChange={(e) => setEditExtraBetrag(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleUpdateExtra(extra.id, editExtraBetrag ? parseFloat(editExtraBetrag) : null); }}
+                                    autoFocus
+                                  />
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleUpdateExtra(extra.id, editExtraBetrag ? parseFloat(editExtraBetrag) : null)}>
+                                    <Save className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-sm font-medium">{extra.betrag != null ? `€ ${extra.betrag.toFixed(2)}` : "–"}</span>
+                                  {isAdmin && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => { setEditingExtraId(extra.id); setEditExtraBetrag(extra.betrag?.toString() || ""); }}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteExtra(extra.id)}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          ))}
+                          {reportExtras.length > 0 && (
+                            <div className="flex items-center justify-between px-3 py-1.5 border-t">
+                              <span className="text-sm font-bold">Summe Diverses</span>
+                              <span className="text-sm font-bold">€ {totalExtras.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <Input
+                              className="h-9 text-sm"
+                              placeholder="Bezeichnung (z.B. Reinigungspauschale)"
+                              value={newExtraName}
+                              onChange={(e) => setNewExtraName(e.target.value)}
+                              list="extra-suggestions"
+                              onKeyDown={(e) => { if (e.key === "Enter") handleAddExtra(); }}
+                            />
+                            <datalist id="extra-suggestions">
+                              {EXTRA_SUGGESTIONS.filter(s => !reportExtras.some(e => e.bezeichnung === s)).map(s => (
+                                <option key={s} value={s} />
+                              ))}
+                            </datalist>
+                          </div>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="w-24 h-9 text-sm"
+                            placeholder="Betrag"
+                            value={newExtraBetrag}
+                            onChange={(e) => setNewExtraBetrag(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddExtra(); }}
+                          />
+                          <Button variant="outline" size="sm" className="h-9" onClick={handleAddExtra} disabled={!newExtraName.trim()}>
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            Hinzufügen
+                          </Button>
+                        </div>
+                      )}
+
+                      {reportExtras.length === 0 && !isAdmin && (
+                        <p className="text-sm text-muted-foreground text-center py-2">Keine Zulagen vorhanden</p>
+                      )}
+                    </CardContent>
+                  </Card>
                 </>
               )}
             </CardContent>
@@ -952,102 +1191,6 @@ export default function HoursReport() {
         </TabsContent>
       </Tabs>
 
-      {/* Admin Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={(open) => {
-        setShowEditDialog(open);
-        if (!open) setEditingEntry(null);
-      }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Stundeneintrag bearbeiten</DialogTitle>
-            <DialogDescription>
-              {editingEntry && (
-                <>
-                  {profiles[editingEntry.user_id]
-                    ? `${profiles[editingEntry.user_id].vorname} ${profiles[editingEntry.user_id].nachname} – `
-                    : ""}
-                  {format(parseISO(editingEntry.datum), "EEEE, dd. MMMM yyyy", { locale: de })}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {editingEntry && (
-            <div className="space-y-4">
-              <div>
-                <Label>Tätigkeit</Label>
-                <Input
-                  value={editingEntry.taetigkeit}
-                  onChange={(e) => setEditingEntry({ ...editingEntry, taetigkeit: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label>Projekt</Label>
-                <Select
-                  value={editingEntry.project_id || "none"}
-                  onValueChange={(v) => setEditingEntry({ ...editingEntry, project_id: v === "none" ? null : v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Projekt auswählen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Kein Projekt</SelectItem>
-                    {projectList.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}{p.plz ? ` (${p.plz})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Beginn</Label>
-                  <Input
-                    type="time"
-                    value={editingEntry.start_time?.substring(0, 5) || ""}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, start_time: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Ende</Label>
-                  <Input
-                    type="time"
-                    value={editingEntry.end_time?.substring(0, 5) || ""}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, end_time: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label>Pause (Minuten)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editingEntry.pause_minutes || 0}
-                  onChange={(e) => setEditingEntry({ ...editingEntry, pause_minutes: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button onClick={handleUpdateEntry} className="flex-1" disabled={savingEdit}>
-                  {savingEdit ? "Wird gespeichert..." : "Speichern"}
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => editingEntry && handleDeleteEntry(editingEntry.id)}
-                  className="flex-1"
-                  disabled={savingEdit}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Löschen
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -7,18 +7,68 @@ export interface WorkTimePreset {
   totalHours: number;
 }
 
+export interface DaySchedule {
+  start: string | null;
+  end: string | null;
+  pause: number;
+  hours: number;
+}
+
+export interface WeekSchedule {
+  mo: DaySchedule;
+  di: DaySchedule;
+  mi: DaySchedule;
+  do: DaySchedule;
+  fr: DaySchedule;
+  sa: DaySchedule;
+  so: DaySchedule;
+}
+
+// Standard-Regelarbeitszeit für Facharbeiter bei Schafferhofer Bau
+// Mo/Di: 06:30-17:00 (Pause 30min → 10h), Mi/Do: 07:00-17:00 (Pause 30min → 9,5h)
+// Wochenregelarbeitszeit: 39h
+export const DEFAULT_SCHEDULE: WeekSchedule = {
+  mo: { start: "06:30", end: "17:00", pause: 30, hours: 10 },
+  di: { start: "06:30", end: "17:00", pause: 30, hours: 10 },
+  mi: { start: "07:00", end: "17:00", pause: 30, hours: 9.5 },
+  do: { start: "07:00", end: "17:00", pause: 30, hours: 9.5 },
+  fr: { start: null, end: null, pause: 0, hours: 0 },
+  sa: { start: null, end: null, pause: 0, hours: 0 },
+  so: { start: null, end: null, pause: 0, hours: 0 },
+};
+
+// Standard für Lehrlinge (kürzere Arbeitszeiten)
+export const LEHRLING_SCHEDULE: WeekSchedule = {
+  mo: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
+  di: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
+  mi: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
+  do: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
+  fr: { start: "07:00", end: "12:00", pause: 0, hours: 5 },
+  sa: { start: null, end: null, pause: 0, hours: 0 },
+  so: { start: null, end: null, pause: 0, hours: 0 },
+};
+
+const DAY_KEYS: Record<number, keyof WeekSchedule> = {
+  0: "so",
+  1: "mo",
+  2: "di",
+  3: "mi",
+  4: "do",
+  5: "fr",
+  6: "sa",
+};
+
+function getDayKey(date: Date): keyof WeekSchedule {
+  return DAY_KEYS[date.getDay()];
+}
+
 /**
- * Gibt die Normalarbeitszeit für einen Tag zurück
- * Mo-Fr: 8h, Sa-So: 0h
+ * Gibt die Normalarbeitszeit für einen Tag zurück, basierend auf individuellem Zeitplan
  */
-export function getNormalWorkingHours(date: Date): number {
-  const dayOfWeek = date.getDay();
-
-  // Wochenende
-  if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
-
-  // Montag - Freitag: 8 Stunden
-  return 8;
+export function getNormalWorkingHours(date: Date, schedule?: WeekSchedule | null): number {
+  const s = schedule || DEFAULT_SCHEDULE;
+  const dayKey = getDayKey(date);
+  return s[dayKey]?.hours ?? 0;
 }
 
 /**
@@ -30,44 +80,106 @@ export function getFridayOvertime(_date: Date): number {
 
 /**
  * Gibt die tatsächlichen Arbeitsstunden für einen Wochentag zurück
- * Mo-Fr: 8h, Sa-So: 0h
  */
-export function getTotalWorkingHours(date: Date): number {
-  return getNormalWorkingHours(date);
+export function getTotalWorkingHours(date: Date, schedule?: WeekSchedule | null): number {
+  return getNormalWorkingHours(date, schedule);
 }
 
 /**
- * Gibt das Wochensoll zurück: 40 Stunden
+ * Gibt das Wochensoll zurück basierend auf individuellem Zeitplan
  */
-export function getWeeklyTargetHours(): number {
-  return 40;
+export function getWeeklyTargetHours(schedule?: WeekSchedule | null): number {
+  const s = schedule || DEFAULT_SCHEDULE;
+  return Object.values(s).reduce((sum, day) => sum + (day?.hours ?? 0), 0);
 }
 
 /**
- * Gibt Standard-Arbeitszeiten für einen Tag zurück
- * Mo-Fr: 08:00-17:00, Pause 12:00-13:00, 8h
+ * Gibt Standard-Arbeitszeiten für einen Tag zurück basierend auf individuellem Zeitplan
  */
-export function getDefaultWorkTimes(date: Date): WorkTimePreset | null {
-  const dayOfWeek = date.getDay();
+export function getDefaultWorkTimes(date: Date, schedule?: WeekSchedule | null): WorkTimePreset | null {
+  const s = schedule || DEFAULT_SCHEDULE;
+  const dayKey = getDayKey(date);
+  const day = s[dayKey];
 
-  // Wochenende
-  if (dayOfWeek === 0 || dayOfWeek === 6) return null;
+  if (!day || !day.start || !day.end || day.hours === 0) return null;
 
-  // Montag - Freitag: 08:00 - 17:00, Pause 12:00 - 13:00
+  // Pausenzeit berechnen (standardmäßig in der Mitte der Arbeitszeit)
+  const startMinutes = timeToMinutes(day.start);
+  const endMinutes = timeToMinutes(day.end);
+  const midpoint = Math.floor((startMinutes + endMinutes) / 2);
+  const pauseStartMinutes = midpoint - Math.floor(day.pause / 2);
+
   return {
-    startTime: "08:00",
-    endTime: "17:00",
-    pauseStart: "12:00",
-    pauseEnd: "13:00",
-    pauseMinutes: 60,
-    totalHours: 8,
+    startTime: day.start,
+    endTime: day.end,
+    pauseStart: minutesToTime(pauseStartMinutes),
+    pauseEnd: minutesToTime(pauseStartMinutes + day.pause),
+    pauseMinutes: day.pause,
+    totalHours: day.hours,
   };
 }
 
 /**
- * Prüft ob ein Tag ein arbeitsfreier Tag ist (nur Wochenende)
+ * Prüft ob ein Tag ein arbeitsfreier Tag ist basierend auf individuellem Zeitplan
  */
-export function isNonWorkingDay(date: Date): boolean {
-  const dayOfWeek = date.getDay();
-  return dayOfWeek === 0 || dayOfWeek === 6;
+export function isNonWorkingDay(date: Date, schedule?: WeekSchedule | null): boolean {
+  return getNormalWorkingHours(date, schedule) === 0;
+}
+
+/**
+ * Berechnet Überstunden für einen Zeitblock
+ */
+export function calculateOvertime(actualHours: number, date: Date, schedule?: WeekSchedule | null): number {
+  const normalHours = getNormalWorkingHours(date, schedule);
+  return Math.max(0, actualHours - normalHours);
+}
+
+/**
+ * Berechnet Diäten basierend auf Arbeitsstunden
+ * Österreichische Regelung:
+ * - 3-9 Stunden: Tagesgebühr "klein" (derzeit 2,20 EUR pro angefangene Stunde nach 3h)
+ * - Über 9 Stunden: Tagesgebühr "groß" (26,40 EUR pauschal)
+ * - Baustellenanfahrt: einmal täglich (4,40 EUR)
+ */
+export function calculateDiaeten(
+  totalHoursOnDay: number,
+  isConstructionSite: boolean
+): { typ: 'keine' | 'klein' | 'gross' | 'anfahrt'; betrag: number } {
+  let typ: 'keine' | 'klein' | 'gross' | 'anfahrt' = 'keine';
+  let betrag = 0;
+
+  if (totalHoursOnDay > 9) {
+    typ = 'gross';
+    betrag = 26.40;
+  } else if (totalHoursOnDay >= 3) {
+    typ = 'klein';
+    betrag = 2.20 * Math.min(totalHoursOnDay, 9);
+  }
+
+  // Baustellenanfahrt-Pauschale
+  if (isConstructionSite && totalHoursOnDay > 0) {
+    betrag += 4.40;
+    if (typ === 'keine') typ = 'anfahrt';
+  }
+
+  return { typ, betrag: Math.round(betrag * 100) / 100 };
+}
+
+/**
+ * Berechnet Kilometergeld (amtliches Kilometergeld Österreich 2025: 0,42 EUR/km)
+ */
+export function calculateKilometergeld(km: number): number {
+  return Math.round(km * 0.42 * 100) / 100;
+}
+
+// Hilfsfunktionen
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }

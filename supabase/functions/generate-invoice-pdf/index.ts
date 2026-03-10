@@ -90,10 +90,10 @@ serve(async (req) => {
 
 <div class="header">
   <div>
-    <div class="company">Holzknecht Natursteine</div>
+    <div class="company">Schafferhofer Bau</div>
     <div class="company-details">
       Naturstein & Verlegung<br>
-      holzknecht.natursteine@gmail.com
+      office@schafferhoferbau.at
     </div>
   </div>
   <div>
@@ -143,7 +143,7 @@ serve(async (req) => {
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ''}
 
 <div class="footer">
-  Holzknecht Natursteine | holzknecht.natursteine@gmail.com
+  Schafferhofer Bau | office@schafferhoferbau.at
 </div>
 
 </body></html>`;

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { InstallPromptDialog } from "./components/InstallPromptDialog";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useOnboarding } from "./contexts/OnboardingContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -18,7 +19,6 @@ import ProjectOverview from "./pages/ProjectOverview";
 import MyHours from "./pages/MyHours";
 import MyDocuments from "./pages/MyDocuments";
 import Reports from "./pages/Reports";
-import ConstructionSites from "./pages/ConstructionSites";
 import Admin from "./pages/Admin";
 import HoursReport from "./pages/HoursReport";
 import Employees from "./pages/Employees";
@@ -26,6 +26,16 @@ import Notepad from "./pages/Notepad";
 import MaterialList from "./pages/MaterialList";
 import Disturbances from "./pages/Disturbances";
 import DisturbanceDetail from "./pages/DisturbanceDetail";
+import BadWeather from "./pages/BadWeather";
+import DailyReports from "./pages/DailyReports";
+import DailyReportDetail from "./pages/DailyReportDetail";
+import LegalWorkTimeReport from "./pages/LegalWorkTimeReport";
+import EquipmentPage from "./pages/Equipment";
+import EquipmentDetail from "./pages/EquipmentDetail";
+import ScheduleBoard from "./pages/ScheduleBoard";
+import Invoices from "./pages/Invoices";
+import InvoiceDetail from "./pages/InvoiceDetail";
+import DocumentLibrary from "./pages/DocumentLibrary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -101,13 +111,22 @@ function AppContent() {
         <Route path="/my-hours" element={<MyHours />} />
         <Route path="/my-documents" element={<MyDocuments />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/construction-sites" element={<ConstructionSites />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/hours-report" element={<HoursReport />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/notepad" element={<Notepad />} />
         <Route path="/disturbances" element={<Disturbances />} />
         <Route path="/disturbances/:id" element={<DisturbanceDetail />} />
+        <Route path="/bad-weather" element={<BadWeather />} />
+        <Route path="/daily-reports" element={<DailyReports />} />
+        <Route path="/daily-reports/:id" element={<DailyReportDetail />} />
+        <Route path="/legal-work-time" element={<LegalWorkTimeReport />} />
+        <Route path="/equipment" element={<EquipmentPage />} />
+        <Route path="/equipment/:id" element={<EquipmentDetail />} />
+        <Route path="/schedule" element={<ScheduleBoard />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/invoices/:id" element={<InvoiceDetail />} />
+        <Route path="/documents" element={<DocumentLibrary />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 
@@ -121,17 +140,19 @@ function AppContent() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <OnboardingProvider>
-          <AppContent />
-        </OnboardingProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <OnboardingProvider>
+            <AppContent />
+          </OnboardingProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

@@ -169,16 +169,16 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   setTxt(DGRAY);
-  doc.text("HOLZKNECHT", txtX, ly + 8);
+  doc.text("SCHAFFERHOFER BAU", txtX, ly + 8);
   // Separator line under company name
-  setDraw({ r: 122, g: 122, b: 122 });
+  setDraw({ r: 216, g: 11, b: 5 });
   doc.setLineWidth(0.3);
-  doc.line(txtX, ly + 10, txtX + 42, ly + 10);
+  doc.line(txtX, ly + 10, txtX + 58, ly + 10);
   // Subtitle
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   setTxt(MGRAY);
-  doc.text("Natursteine", txtX, ly + 16);
+  doc.text("Häuser fürs Leben", txtX, ly + 16);
 
   // Document title on the right
   doc.setFont("helvetica", "bold");
@@ -346,7 +346,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     setDraw({ r: 180, g: 180, b: 180 }); doc.setLineWidth(0.3);
     doc.line(margin, pageH - 12, margin + cW, pageH - 12);
     doc.setFont("helvetica", "normal"); doc.setFontSize(7); setTxt(GRAY);
-    doc.text(`Holzknecht Natursteine  |  Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, margin, pageH - 7);
+    doc.text(`Schafferhofer Bau  |  Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, margin, pageH - 7);
     doc.text(`Seite ${p} / ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
   }
 
@@ -375,7 +375,7 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         Gesamtstunden: ${disturbance.stunden.toFixed(2)} h
       </div>
       <p>Der vollständige Bericht mit Kundenunterschrift befindet sich im angehängten PDF-Dokument.</p>
-      <p>Mit freundlichen Grüßen,<br>Holzknecht Natursteine</p>
+      <p>Mit freundlichen Grüßen,<br>Schafferhofer Bau</p>
     </div></body></html>`;
 }
 
@@ -434,7 +434,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq("key", "disturbance_report_email")
       .maybeSingle();
 
-    const officeEmail = setting?.value || "holzknecht.natursteine@gmail.com";
+    const officeEmail = setting?.value || "office@schafferhoferbau.at";
     const recipients = [officeEmail];
     if (disturbance.kunde_email) recipients.push(disturbance.kunde_email);
 
@@ -447,12 +447,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const emailPayload: {
       from: string;
+      reply_to: string;
       to: string[];
       subject: string;
       html: string;
       attachments?: { filename: string; content: string }[];
     } = {
-      from: "Holzknecht Natursteine <noreply@chrisnapetschnig.at>",
+      from: "Schafferhofer Bau <noreply@chrisnapetschnig.at>",
+      reply_to: "office@schafferhoferbau.at",
       to: recipients,
       subject,
       html: emailHtml,
