@@ -65,7 +65,7 @@ export default function Employees() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<Partial<Employee>>({});
-  const [newEmployee, setNewEmployee] = useState({ vorname: "", nachname: "", email: "" });
+  const [newEmployee, setNewEmployee] = useState({ vorname: "", nachname: "", email: "", kategorie: "facharbeiter" });
   const [showSizesDialog, setShowSizesDialog] = useState(false);
 
   useEffect(() => {
@@ -111,12 +111,17 @@ export default function Employees() {
     e.preventDefault();
     
     try {
+      const isExtern = newEmployee.kategorie === "extern";
       const { data, error } = await supabase
         .from("employees")
         .insert({
           vorname: newEmployee.vorname,
           nachname: newEmployee.nachname,
           email: newEmployee.email || null,
+          kategorie: newEmployee.kategorie,
+          is_external: isExtern,
+          regelarbeitszeit: isExtern ? null : (newEmployee.kategorie === "lehrling" ? LEHRLING_SCHEDULE : DEFAULT_SCHEDULE),
+          wochen_soll_stunden: isExtern ? null : 39,
         })
         .select()
         .single();
@@ -125,7 +130,7 @@ export default function Employees() {
 
       toast({ title: "Erfolg", description: "Mitarbeiter wurde angelegt" });
       setShowCreateDialog(false);
-      setNewEmployee({ vorname: "", nachname: "", email: "" });
+      setNewEmployee({ vorname: "", nachname: "", email: "", kategorie: "facharbeiter" });
       fetchEmployees();
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -350,54 +355,60 @@ export default function Employees() {
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Beschäftigung</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>SV-Nummer</Label>
-                        <Input
-                          value={formData.sv_nummer || ""}
-                          onChange={(e) => setFormData({ ...formData, sv_nummer: e.target.value })}
-                          placeholder="1234 010180"
-                        />
-                      </div>
+                      {formData.kategorie !== "extern" && (
+                        <div>
+                          <Label>SV-Nummer</Label>
+                          <Input
+                            value={formData.sv_nummer || ""}
+                            onChange={(e) => setFormData({ ...formData, sv_nummer: e.target.value })}
+                            placeholder="1234 010180"
+                          />
+                        </div>
+                      )}
                       <div>
                         <Label>Position</Label>
                         <Input
                           value={formData.position || ""}
                           onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                          placeholder="z.B. Zimmermann"
+                          placeholder={formData.kategorie === "extern" ? "z.B. Subunternehmer" : "z.B. Zimmermann"}
                         />
                       </div>
-                      <div>
-                        <Label>Eintrittsdatum</Label>
-                        <Input
-                          type="date"
-                          value={formData.eintritt_datum || ""}
-                          onChange={(e) => setFormData({ ...formData, eintritt_datum: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Austrittsdatum</Label>
-                        <Input
-                          type="date"
-                          value={formData.austritt_datum || ""}
-                          onChange={(e) => setFormData({ ...formData, austritt_datum: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Beschäftigungsart</Label>
-                        <Select
-                          value={formData.beschaeftigung_art || ""}
-                          onValueChange={(v) => setFormData({ ...formData, beschaeftigung_art: v })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Wählen..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vollzeit">Vollzeit</SelectItem>
-                            <SelectItem value="teilzeit">Teilzeit</SelectItem>
-                            <SelectItem value="geringfuegig">Geringfügig</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {formData.kategorie !== "extern" && (
+                        <>
+                          <div>
+                            <Label>Eintrittsdatum</Label>
+                            <Input
+                              type="date"
+                              value={formData.eintritt_datum || ""}
+                              onChange={(e) => setFormData({ ...formData, eintritt_datum: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Austrittsdatum</Label>
+                            <Input
+                              type="date"
+                              value={formData.austritt_datum || ""}
+                              onChange={(e) => setFormData({ ...formData, austritt_datum: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Beschäftigungsart</Label>
+                            <Select
+                              value={formData.beschaeftigung_art || ""}
+                              onValueChange={(v) => setFormData({ ...formData, beschaeftigung_art: v })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Wählen..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vollzeit">Vollzeit</SelectItem>
+                                <SelectItem value="teilzeit">Teilzeit</SelectItem>
+                                <SelectItem value="geringfuegig">Geringfügig</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                       <div>
                         <Label>Kategorie</Label>
                         <Select
@@ -503,6 +514,8 @@ export default function Employees() {
                   </div>
                   )}
 
+                  {formData.kategorie !== "extern" && (
+                  <>
                   <Separator />
 
                   <div>
@@ -577,6 +590,8 @@ export default function Employees() {
                       </div>
                     </div>
                   </div>
+                  </>
+                  )}
 
                   <Separator />
 
@@ -648,6 +663,23 @@ export default function Employees() {
           </DialogHeader>
           <form onSubmit={handleCreateEmployee} className="space-y-4">
             <div>
+              <Label>Kategorie</Label>
+              <Select
+                value={newEmployee.kategorie}
+                onValueChange={(v) => setNewEmployee({ ...newEmployee, kategorie: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lehrling">Lehrling</SelectItem>
+                  <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
+                  <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
+                  <SelectItem value="extern">Extern</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label>Vorname *</Label>
               <Input
                 value={newEmployee.vorname}
@@ -663,14 +695,16 @@ export default function Employees() {
                 required
               />
             </div>
-            <div>
-              <Label>E-Mail (optional)</Label>
-              <Input
-                type="email"
-                value={newEmployee.email}
-                onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
-              />
-            </div>
+            {newEmployee.kategorie !== "extern" && (
+              <div>
+                <Label>E-Mail (optional)</Label>
+                <Input
+                  type="email"
+                  value={newEmployee.email}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full">
               Mitarbeiter anlegen
             </Button>

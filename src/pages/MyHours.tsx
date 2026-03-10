@@ -51,12 +51,25 @@ const MyHours = () => {
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
   const [vacationBalance, setVacationBalance] = useState<{ total: number; used: number } | null>(null);
   const [vacationHistory, setVacationHistory] = useState<{ datum: string; stunden: number }[]>([]);
+  const [isExternal, setIsExternal] = useState(false);
 
   useEffect(() => {
     fetchEntries();
     fetchProjects();
     fetchVacationData();
+    checkIfExternal();
   }, [selectedMonth]);
+
+  const checkIfExternal = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("employees")
+      .select("is_external, kategorie")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setIsExternal(data?.is_external === true || data?.kategorie === "extern");
+  };
 
   const fetchProjects = async () => {
     const { data } = await supabase
@@ -300,6 +313,17 @@ const MyHours = () => {
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
+                    {isExternal ? (
+                      <TableRow>
+                        <TableHead>Datum</TableHead>
+                        <TableHead>Projekt</TableHead>
+                        <TableHead>Tätigkeit</TableHead>
+                        <TableHead className="text-right">Stunden</TableHead>
+                        <TableHead className="text-right">km</TableHead>
+                        <TableHead className="text-right">Aktionen</TableHead>
+                      </TableRow>
+                    ) : (
+                      <>
                     <TableRow>
                       <TableHead>Datum</TableHead>
                       <TableHead>Ort</TableHead>
@@ -323,9 +347,36 @@ const MyHours = () => {
                       <TableHead className="text-center">Ende</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
+                      </>
+                    )}
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry) => (
+                    {entries.map((entry) => isExternal ? (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-medium whitespace-nowrap">
+                          {new Date(entry.datum).toLocaleDateString("de-DE")}
+                        </TableCell>
+                        <TableCell>{entry.projects?.name || '-'}</TableCell>
+                        <TableCell>{entry.taetigkeit}</TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {entry.stunden.toFixed(2)} h
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {entry.kilometer ? `${entry.kilometer} km` : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => navigate(`/time-tracking?date=${entry.datum}`)}
+                            disabled={!isEditable(entry.datum)}
+                            className="h-8"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
                       <TableRow key={entry.id}>
                         <TableCell className="font-medium whitespace-nowrap">
                           {new Date(entry.datum).toLocaleDateString("de-DE")}
@@ -360,7 +411,7 @@ const MyHours = () => {
                           {calculateAfternoonStart(entry)}
                         </TableCell>
                         <TableCell className="text-center">
-                          {entry.pause_minutes && entry.pause_minutes > 0 
+                          {entry.pause_minutes && entry.pause_minutes > 0
                             ? entry.end_time?.substring(0, 5) || '-'
                             : '-'}
                         </TableCell>
@@ -383,12 +434,13 @@ const MyHours = () => {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={10} className="text-right font-semibold">
+                      <TableCell colSpan={isExternal ? 3 : 10} className="text-right font-semibold">
                         Gesamtstunden:
                       </TableCell>
                       <TableCell className="text-right font-bold text-lg">
                         {totalHours.toFixed(2)} h
                       </TableCell>
+                      {isExternal && <TableCell colSpan={2} />}
                     </TableRow>
                   </TableFooter>
                 </Table>
@@ -397,8 +449,8 @@ const MyHours = () => {
           </CardContent>
         </Card>
 
-        {/* Urlaubskonto */}
-        {vacationBalance && (
+        {/* Urlaubskonto - nicht für Externe */}
+        {vacationBalance && !isExternal && (
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

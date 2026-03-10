@@ -31,6 +31,7 @@ type TimeEntry = {
   projects: {
     name: string;
   } | null;
+  isExternal?: boolean;
 };
 
 type StorageFile = {
@@ -110,6 +111,14 @@ const Reports = () => {
       return;
     }
 
+    // Fetch external employee user_ids
+    const { data: externalEmployees } = await supabase
+      .from('employees')
+      .select('user_id')
+      .or('is_external.eq.true,kategorie.eq.extern')
+      .not('user_id', 'is', null);
+    const externalUserIds = new Set((externalEmployees || []).map(e => e.user_id));
+
     const entriesWithProfiles = await Promise.all(
       (data || []).map(async (entry) => {
         const { data: profileData } = await supabase
@@ -121,6 +130,7 @@ const Reports = () => {
         return {
           ...entry,
           profiles: profileData,
+          isExternal: externalUserIds.has(entry.user_id),
         };
       })
     );
@@ -214,7 +224,7 @@ const Reports = () => {
               ${timeEntries.map(entry => `
                 <tr>
                   <td>${new Date(entry.datum).toLocaleDateString('de-DE')}</td>
-                  <td>${entry.profiles ? `${entry.profiles.vorname} ${entry.profiles.nachname}` : 'Unbekannt'}</td>
+                  <td>${entry.profiles ? `${entry.profiles.vorname} ${entry.profiles.nachname}${entry.isExternal ? ' (Extern)' : ''}` : 'Unbekannt'}</td>
                   <td>${entry.projects?.name || 'Unbekanntes Projekt'}</td>
                   <td>${entry.taetigkeit}</td>
                   <td><strong>${entry.stunden} h</strong></td>
@@ -446,7 +456,7 @@ const Reports = () => {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Mitarbeiter</p>
                       <p className="font-semibold">
-                        {entry.profiles ? `${entry.profiles.vorname} ${entry.profiles.nachname}` : 'Unbekannt'}
+                        {entry.profiles ? `${entry.profiles.vorname} ${entry.profiles.nachname}${entry.isExternal ? ' (Extern)' : ''}` : 'Unbekannt'}
                       </p>
                     </div>
                     <div>

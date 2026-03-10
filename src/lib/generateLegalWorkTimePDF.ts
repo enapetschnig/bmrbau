@@ -8,6 +8,8 @@ interface DayRow {
   ende: string | null;
   pauseMinutes: number;
   arbeitszeit: number;
+  anmerkung: string | null;
+  schlechtwetterStunden: number;
 }
 
 interface LegalWorkTimePDFParams {
@@ -18,6 +20,7 @@ interface LegalWorkTimePDFParams {
   totalHours: number;
   totalPause: number;
   workingDays: number;
+  totalBadWeatherHours?: number;
 }
 
 const formatPause = (minutes: number) => {
@@ -27,8 +30,16 @@ const formatPause = (minutes: number) => {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 };
 
+const ANMERKUNG_LABELS: Record<string, string> = {
+  SW: "Schlechtwetter",
+  U: "Urlaub",
+  K: "Krankenstand",
+  F: "Feiertag",
+  ZA: "Zeitausgleich",
+};
+
 export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
-  const { employeeName, month, year, rows, totalHours, totalPause, workingDays } = params;
+  const { employeeName, month, year, rows, totalHours, totalPause, workingDays, totalBadWeatherHours = 0 } = params;
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
@@ -55,9 +66,9 @@ export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
   doc.text(`Zeitraum: ${month} ${year}`, margin, y);
   y += 10;
 
-  // Table header
-  const colX = [margin, margin + 25, margin + 50, margin + 72, margin + 94, margin + 120, margin + 150];
-  const colLabels = ["Datum", "Wochentag", "Beginn", "Ende", "Pause", "Arbeitszeit"];
+  // Table header — with Anmerkung column
+  const colX = [margin, margin + 22, margin + 44, margin + 64, margin + 82, margin + 104, margin + 130];
+  const colLabels = ["Datum", "Wochentag", "Beginn", "Ende", "Pause", "Arbeitszeit", "Anmerkung"];
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
@@ -87,7 +98,7 @@ export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
       doc.rect(margin, y - 3.5, pageWidth - 2 * margin, 5, "F");
     }
 
-    if (row.arbeitszeit === 0) {
+    if (row.arbeitszeit === 0 && !row.anmerkung) {
       doc.setTextColor(160, 160, 160);
     } else {
       doc.setTextColor(0, 0, 0);
@@ -99,6 +110,17 @@ export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
     doc.text(row.ende || "–", colX[3], y);
     doc.text(row.pauseMinutes > 0 ? formatPause(row.pauseMinutes) : "–", colX[4], y);
     doc.text(row.arbeitszeit > 0 ? `${row.arbeitszeit.toFixed(2)} h` : "–", colX[5], y);
+
+    // Anmerkung
+    if (row.anmerkung) {
+      if (row.anmerkung === "SW") {
+        doc.setTextColor(37, 99, 235); // blue
+        doc.text(`SW (${row.schlechtwetterStunden.toFixed(1)}h)`, colX[6], y);
+      } else {
+        doc.setTextColor(100, 100, 100);
+        doc.text(row.anmerkung, colX[6], y);
+      }
+    }
 
     y += 5;
   }
@@ -124,10 +146,27 @@ export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
   y += 5;
   doc.setFont("helvetica", "bold");
   doc.text(`Gesamtarbeitszeit: ${totalHours.toFixed(2)} Stunden`, margin, y);
-  y += 15;
+  y += 5;
+
+  if (totalBadWeatherHours > 0) {
+    doc.setTextColor(37, 99, 235);
+    doc.text(`Schlechtwetterstunden: ${totalBadWeatherHours.toFixed(1)} Stunden`, margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 5;
+  }
+
+  y += 10;
+
+  // Legend
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  const legendItems = Object.entries(ANMERKUNG_LABELS).map(([k, v]) => `${k} = ${v}`).join("  |  ");
+  doc.text(`Legende: ${legendItems}`, margin, y);
+  y += 10;
 
   // Signature lines
-  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(8);
   doc.line(margin, y, margin + 60, y);
   doc.text("Datum, Unterschrift Arbeitnehmer", margin, y + 4);

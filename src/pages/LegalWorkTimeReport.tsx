@@ -20,6 +20,8 @@ type DayRow = {
   ende: string | null;
   pauseMinutes: number;
   arbeitszeit: number;
+  anmerkung: string | null; // SW = Schlechtwetter, U = Urlaub, K = Krank
+  schlechtwetterStunden: number;
 };
 
 const monthNames = [
@@ -36,15 +38,25 @@ export default function LegalWorkTimeReport() {
   const [rows, setRows] = useState<DayRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch employees (all profiles)
+  // Fetch employees (exclude external)
   useEffect(() => {
     const fetchEmployees = async () => {
+      // Get external user IDs to exclude
+      const { data: externals } = await supabase
+        .from("employees")
+        .select("user_id")
+        .eq("is_external", true);
+      const externalIds = (externals || []).map(e => e.user_id).filter(Boolean);
+
       const { data } = await supabase
         .from("profiles")
         .select("id, vorname, nachname")
         .eq("is_active", true)
         .order("nachname");
-      if (data) setEmployees(data);
+
+      if (data) {
+        setEmployees(data.filter(e => !externalIds.includes(e.id)));
+      }
     };
     fetchEmployees();
   }, []);
@@ -60,26 +72,44 @@ export default function LegalWorkTimeReport() {
     const daysInMonth = getDaysInMonth(new Date(year, month - 1));
     const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
-    const { data } = await supabase
-      .from("time_entries")
-      .select("datum, start_time, end_time, pause_minutes, stunden")
-      .eq("user_id", selectedUserId)
-      .gte("datum", startDate)
-      .lte("datum", endDate)
-      .order("datum")
-      .order("start_time");
+    // Fetch time entries and bad weather records in parallel
+    const [{ data }, { data: weatherData }] = await Promise.all([
+      supabase
+        .from("time_entries")
+        .select("datum, start_time, end_time, pause_minutes, stunden, taetigkeit")
+        .eq("user_id", selectedUserId)
+        .gte("datum", startDate)
+        .lte("datum", endDate)
+        .order("datum")
+        .order("start_time"),
+      supabase
+        .from("bad_weather_records")
+        .select("datum, schlechtwetter_stunden")
+        .eq("user_id", selectedUserId)
+        .gte("datum", startDate)
+        .lte("datum", endDate),
+    ]);
 
-    // Group by datum
-    const grouped: Record<string, { starts: string[]; ends: string[]; pause: number; stunden: number }> = {};
+    // Group time entries by datum
+    const grouped: Record<string, { starts: string[]; ends: string[]; pause: number; stunden: number; taetigkeit: string[] }> = {};
     if (data) {
       for (const entry of data) {
         if (!grouped[entry.datum]) {
-          grouped[entry.datum] = { starts: [], ends: [], pause: 0, stunden: 0 };
+          grouped[entry.datum] = { starts: [], ends: [], pause: 0, stunden: 0, taetigkeit: [] };
         }
-        grouped[entry.datum].starts.push(entry.start_time);
-        grouped[entry.datum].ends.push(entry.end_time);
+        if (entry.start_time) grouped[entry.datum].starts.push(entry.start_time);
+        if (entry.end_time) grouped[entry.datum].ends.push(entry.end_time);
         grouped[entry.datum].pause += entry.pause_minutes || 0;
         grouped[entry.datum].stunden += entry.stunden || 0;
+        if (entry.taetigkeit) grouped[entry.datum].taetigkeit.push(entry.taetigkeit);
+      }
+    }
+
+    // Group bad weather by datum
+    const weatherByDate: Record<string, number> = {};
+    if (weatherData) {
+      for (const w of weatherData) {
+        weatherByDate[w.datum] = (weatherByDate[w.datum] || 0) + (w.schlechtwetter_stunden || 0);
       }
     }
 
@@ -88,12 +118,33 @@ export default function LegalWorkTimeReport() {
     for (let d = 1; d <= daysInMonth; d++) {
       const datum = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const g = grouped[datum];
+      const swHours = weatherByDate[datum] || 0;
+
+      // Determine annotation
+      let anmerkung: string | null = null;
+      if (swHours > 0) anmerkung = "SW";
+      if (g?.taetigkeit.includes("Urlaub")) anmerkung = "U";
+      if (g?.taetigkeit.includes("Krankenstand")) anmerkung = "K";
+      if (g?.taetigkeit.includes("Feiertag")) anmerkung = "F";
+      if (g?.taetigkeit.includes("Zeitausgleich")) anmerkung = "ZA";
+
       if (g) {
-        const beginn = g.starts.sort()[0]?.slice(0, 5) || null;
-        const ende = g.ends.sort().reverse()[0]?.slice(0, 5) || null;
-        dayRows.push({ datum, beginn, ende, pauseMinutes: g.pause, arbeitszeit: Math.round(g.stunden * 100) / 100 });
+        const beginn = g.starts.length > 0 ? g.starts.sort()[0]?.slice(0, 5) : null;
+        const ende = g.ends.length > 0 ? g.ends.sort().reverse()[0]?.slice(0, 5) : null;
+        dayRows.push({
+          datum, beginn, ende,
+          pauseMinutes: g.pause,
+          arbeitszeit: Math.round(g.stunden * 100) / 100,
+          anmerkung,
+          schlechtwetterStunden: swHours,
+        });
       } else {
-        dayRows.push({ datum, beginn: null, ende: null, pauseMinutes: 0, arbeitszeit: 0 });
+        dayRows.push({
+          datum, beginn: null, ende: null,
+          pauseMinutes: 0, arbeitszeit: 0,
+          anmerkung: swHours > 0 ? "SW" : null,
+          schlechtwetterStunden: swHours,
+        });
       }
     }
 
@@ -106,6 +157,7 @@ export default function LegalWorkTimeReport() {
   const totalHours = rows.reduce((sum, r) => sum + r.arbeitszeit, 0);
   const totalPause = rows.reduce((sum, r) => sum + r.pauseMinutes, 0);
   const workingDays = rows.filter((r) => r.arbeitszeit > 0).length;
+  const totalBadWeatherHours = rows.reduce((sum, r) => sum + r.schlechtwetterStunden, 0);
 
   const selectedEmployee = employees.find((e) => e.id === selectedUserId);
   const employeeName = selectedEmployee ? `${selectedEmployee.vorname} ${selectedEmployee.nachname}` : "";
@@ -120,16 +172,19 @@ export default function LegalWorkTimeReport() {
   const handleExportExcel = () => {
     if (!selectedUserId || rows.length === 0) return;
 
-    const wsData = [
+    const wsData: string[][] = [
       ["Arbeitszeitaufzeichnung"],
       [`Mitarbeiter: ${employeeName}`],
       [`Zeitraum: ${monthNames[month - 1]} ${year}`],
       [],
-      ["Datum", "Wochentag", "Arbeitsbeginn", "Arbeitsende", "Pause", "Arbeitszeit (h)"],
+      ["Datum", "Wochentag", "Arbeitsbeginn", "Arbeitsende", "Pause", "Arbeitszeit (h)", "Anmerkung"],
     ];
 
     for (const row of rows) {
       const dayName = format(new Date(row.datum), "EEEE", { locale: de });
+      const anmerkungText = row.anmerkung
+        ? row.anmerkung === "SW" ? `SW (${row.schlechtwetterStunden.toFixed(1)}h)` : row.anmerkung
+        : "";
       wsData.push([
         format(new Date(row.datum), "dd.MM.yyyy"),
         dayName,
@@ -137,22 +192,26 @@ export default function LegalWorkTimeReport() {
         row.ende || "",
         row.pauseMinutes > 0 ? formatPause(row.pauseMinutes) : "",
         row.arbeitszeit > 0 ? row.arbeitszeit.toFixed(2) : "",
+        anmerkungText,
       ]);
     }
 
     wsData.push([]);
-    wsData.push(["", "", "", "Summe:", formatPause(totalPause), totalHours.toFixed(2)]);
-    wsData.push(["", "", "", "Arbeitstage:", "", workingDays.toString()]);
+    wsData.push(["", "", "", "Summe:", formatPause(totalPause), totalHours.toFixed(2), ""]);
+    wsData.push(["", "", "", "Arbeitstage:", "", workingDays.toString(), ""]);
+    if (totalBadWeatherHours > 0) {
+      wsData.push(["", "", "", "Schlechtwetter:", "", totalBadWeatherHours.toFixed(1), ""]);
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
     // Column widths
     ws["!cols"] = [
-      { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+      { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 },
     ];
 
     // Bold header row
-    for (let c = 0; c < 6; c++) {
+    for (let c = 0; c < 7; c++) {
       const cell = ws[XLSX.utils.encode_cell({ r: 4, c })];
       if (cell) cell.s = { font: { bold: true } };
     }
@@ -172,6 +231,7 @@ export default function LegalWorkTimeReport() {
       totalHours,
       totalPause,
       workingDays,
+      totalBadWeatherHours,
     });
   };
 
@@ -226,7 +286,7 @@ export default function LegalWorkTimeReport() {
       ) : (
         <>
           {/* Summary */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className={`grid gap-3 mb-4 ${totalBadWeatherHours > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
             <Card>
               <CardHeader className="pb-2 pt-3 px-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Arbeitstage</CardTitle>
@@ -251,6 +311,16 @@ export default function LegalWorkTimeReport() {
                 <p className="text-2xl font-bold">{formatPause(totalPause)}</p>
               </CardContent>
             </Card>
+            {totalBadWeatherHours > 0 && (
+              <Card className="border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-2 pt-3 px-3">
+                  <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Schlechtwetter</CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalBadWeatherHours.toFixed(1)}h</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Export Buttons */}
@@ -276,6 +346,7 @@ export default function LegalWorkTimeReport() {
                       <TableHead>Ende</TableHead>
                       <TableHead>Pause</TableHead>
                       <TableHead className="text-right">Arbeitszeit</TableHead>
+                      <TableHead className="text-center">Anmerkung</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -285,7 +356,7 @@ export default function LegalWorkTimeReport() {
                       return (
                         <TableRow
                           key={row.datum}
-                          className={isWeekend ? "bg-muted/50" : row.arbeitszeit === 0 ? "text-muted-foreground" : ""}
+                          className={isWeekend ? "bg-muted/50" : row.arbeitszeit === 0 && !row.anmerkung ? "text-muted-foreground" : ""}
                         >
                           <TableCell className="text-sm">{format(date, "dd.MM.")}</TableCell>
                           <TableCell className="text-sm">{format(date, "EEE", { locale: de })}</TableCell>
@@ -294,6 +365,21 @@ export default function LegalWorkTimeReport() {
                           <TableCell className="text-sm">{row.pauseMinutes > 0 ? formatPause(row.pauseMinutes) : "–"}</TableCell>
                           <TableCell className="text-sm text-right font-medium">
                             {row.arbeitszeit > 0 ? `${row.arbeitszeit.toFixed(2)}h` : "–"}
+                          </TableCell>
+                          <TableCell className="text-sm text-center">
+                            {row.anmerkung === "SW" ? (
+                              <span className="text-blue-600 dark:text-blue-400 font-medium" title={`Schlechtwetter: ${row.schlechtwetterStunden.toFixed(1)}h`}>
+                                SW ({row.schlechtwetterStunden.toFixed(1)}h)
+                              </span>
+                            ) : row.anmerkung === "U" ? (
+                              <span className="text-green-600 font-medium">U</span>
+                            ) : row.anmerkung === "K" ? (
+                              <span className="text-red-600 font-medium">K</span>
+                            ) : row.anmerkung === "F" ? (
+                              <span className="text-purple-600 font-medium">F</span>
+                            ) : row.anmerkung === "ZA" ? (
+                              <span className="text-orange-600 font-medium">ZA</span>
+                            ) : "–"}
                           </TableCell>
                         </TableRow>
                       );
@@ -304,6 +390,9 @@ export default function LegalWorkTimeReport() {
                       <TableCell colSpan={4} className="font-bold">Summe</TableCell>
                       <TableCell className="font-bold">{formatPause(totalPause)}</TableCell>
                       <TableCell className="text-right font-bold">{totalHours.toFixed(2)}h</TableCell>
+                      <TableCell className="text-center font-bold">
+                        {totalBadWeatherHours > 0 ? `SW: ${totalBadWeatherHours.toFixed(1)}h` : ""}
+                      </TableCell>
                     </TableRow>
                   </TableFooter>
                 </Table>

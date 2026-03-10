@@ -48,6 +48,7 @@ interface TimeEntry {
 interface Profile {
   vorname: string;
   nachname: string;
+  isExternal?: boolean;
 }
 
 interface Project {
@@ -113,10 +114,12 @@ export default function HoursReport() {
     }
   }, [month, year, selectedUserId]);
 
+  const [selectedIsExternal, setSelectedIsExternal] = useState(false);
+
   const fetchEmployeeSchedule = async (userId: string) => {
     const { data } = await supabase
       .from("employees")
-      .select("regelarbeitszeit")
+      .select("regelarbeitszeit, is_external")
       .eq("user_id", userId)
       .single();
     if (data?.regelarbeitszeit) {
@@ -124,6 +127,7 @@ export default function HoursReport() {
     } else {
       setEmployeeSchedule(null);
     }
+    setSelectedIsExternal(data?.is_external === true);
   };
 
   const checkAdminStatus = async () => {
@@ -152,11 +156,16 @@ export default function HoursReport() {
   };
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from("profiles").select("id, vorname, nachname, is_active").eq("is_active", true);
+    const [{ data }, { data: externalData }] = await Promise.all([
+      supabase.from("profiles").select("id, vorname, nachname, is_active").eq("is_active", true),
+      supabase.from("employees").select("user_id, is_external").eq("is_external", true),
+    ]);
+    const externalIds = new Set((externalData || []).map(e => e.user_id).filter(Boolean));
+
     if (data) {
       const profileMap: Record<string, Profile> = {};
       data.forEach((p) => {
-        profileMap[p.id] = { vorname: p.vorname, nachname: p.nachname };
+        profileMap[p.id] = { vorname: p.vorname, nachname: p.nachname, isExternal: externalIds.has(p.id) };
       });
       setProfiles(profileMap);
     }
@@ -807,7 +816,7 @@ export default function HoursReport() {
                     <SelectContent position="popper">
                       {Object.entries(profiles).map(([id, profile]) => (
                         <SelectItem key={id} value={id}>
-                          {profile.vorname} {profile.nachname}
+                          {profile.vorname} {profile.nachname}{profile.isExternal ? " (Extern)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -842,24 +851,28 @@ export default function HoursReport() {
               {selectedUserId && (
                 <>
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className={`grid gap-4 ${selectedIsExternal ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
                       <div>
                         <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                         <p className="text-2xl font-bold">{totalHours.toFixed(2)} h</p>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Überstunden</p>
-                        <p className="text-2xl font-bold">{totalOvertime.toFixed(2)} h</p>
-                      </div>
+                      {!selectedIsExternal && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Überstunden</p>
+                          <p className="text-2xl font-bold">{totalOvertime.toFixed(2)} h</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm text-muted-foreground">Kilometer</p>
                         <p className="text-2xl font-bold">{totalKilometer.toFixed(0)} km</p>
                         <p className="text-xs text-muted-foreground">€ {totalKmGeld.toFixed(2)}</p>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Diäten</p>
-                        <p className="text-2xl font-bold">€ {totalDiaeten.toFixed(2)}</p>
-                      </div>
+                      {!selectedIsExternal && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Diäten</p>
+                          <p className="text-2xl font-bold">€ {totalDiaeten.toFixed(2)}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -868,14 +881,14 @@ export default function HoursReport() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[100px]">Datum</TableHead>
-                          <TableHead>Vormittag</TableHead>
-                          <TableHead>Pause</TableHead>
-                          <TableHead>Nachmittag</TableHead>
+                          {!selectedIsExternal && <TableHead>Vormittag</TableHead>}
+                          {!selectedIsExternal && <TableHead>Pause</TableHead>}
+                          {!selectedIsExternal && <TableHead>Nachmittag</TableHead>}
                           <TableHead className="text-right">Stunden</TableHead>
-                          <TableHead className="text-right">Überstunden</TableHead>
+                          {!selectedIsExternal && <TableHead className="text-right">Überstunden</TableHead>}
                           <TableHead className="text-right">km</TableHead>
-                          <TableHead className="text-right">Diäten</TableHead>
-                          <TableHead>Ort</TableHead>
+                          {!selectedIsExternal && <TableHead className="text-right">Diäten</TableHead>}
+                          {!selectedIsExternal && <TableHead>Ort</TableHead>}
                           <TableHead>Projekt</TableHead>
                           <TableHead>Tätigkeit</TableHead>
                           {isAdmin && <TableHead className="w-[50px]"></TableHead>}

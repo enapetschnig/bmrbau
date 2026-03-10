@@ -145,6 +145,7 @@ const TimeTracking = () => {
 
   // Employee schedule for individual working hours
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
+  const [isExternalUser, setIsExternalUser] = useState(false);
 
   const fetchEmployeeSchedule = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -152,12 +153,13 @@ const TimeTracking = () => {
     const userId = targetUserId || user.id;
     const { data } = await supabase
       .from("employees")
-      .select("regelarbeitszeit, wochen_soll_stunden")
+      .select("regelarbeitszeit, wochen_soll_stunden, is_external, kategorie")
       .eq("user_id", userId)
       .single();
     if (data?.regelarbeitszeit) {
       setEmployeeSchedule(data.regelarbeitszeit as unknown as WeekSchedule);
     }
+    setIsExternalUser(data?.is_external === true || data?.kategorie === "extern");
   }, [targetUserId]);
 
   useEffect(() => { fetchEmployeeSchedule(); }, [fetchEmployeeSchedule]);
@@ -672,53 +674,64 @@ const TimeTracking = () => {
       const block = timeBlocks[i];
       const blockNum = i + 1;
 
-      if (!block.startTime || !block.endTime) {
-        toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Start- und Endzeit erforderlich` });
-        setSaving(false);
-        return;
-      }
+      if (isExternalUser) {
+        // External: only manual hours required
+        if (!block.manualHours || parseFloat(block.manualHours) <= 0) {
+          toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Gesamtstunden erforderlich` });
+          setSaving(false);
+          return;
+        }
+      } else {
+        if (!block.startTime || !block.endTime) {
+          toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Start- und Endzeit erforderlich` });
+          setSaving(false);
+          return;
+        }
 
-      const [startH, startM] = block.startTime.split(':').map(Number);
-      const [endH, endM] = block.endTime.split(':').map(Number);
-      if (endH * 60 + endM <= startH * 60 + startM) {
-        toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Endzeit muss nach Startzeit liegen` });
-        setSaving(false);
-        return;
+        const [startH, startM] = block.startTime.split(':').map(Number);
+        const [endH, endM] = block.endTime.split(':').map(Number);
+        if (endH * 60 + endM <= startH * 60 + startM) {
+          toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Endzeit muss nach Startzeit liegen` });
+          setSaving(false);
+          return;
+        }
       }
 
       // Tätigkeit and Projekt are now optional - no validation needed
     }
 
-    // Check for overlaps between blocks
+    // Check for overlaps between blocks (skip for external — they use manual hours)
     const timeToMinutes = (time: string): number => {
       const [hours, minutes] = time.split(':').map(Number);
       return hours * 60 + minutes;
     };
 
-    for (let i = 0; i < timeBlocks.length; i++) {
-      for (let j = i + 1; j < timeBlocks.length; j++) {
-        const blockA = timeBlocks[i];
-        const blockB = timeBlocks[j];
-        
-        const aStart = timeToMinutes(blockA.startTime);
-        const aEnd = timeToMinutes(blockA.endTime);
-        const bStart = timeToMinutes(blockB.startTime);
-        const bEnd = timeToMinutes(blockB.endTime);
-        
-        if (aStart < bEnd && aEnd > bStart) {
-          toast({ 
-            variant: "destructive", 
-            title: "Zeitüberschneidung", 
-            description: `Block ${i + 1} und Block ${j + 1} überschneiden sich` 
-          });
-          setSaving(false);
-          return;
+    if (!isExternalUser) {
+      for (let i = 0; i < timeBlocks.length; i++) {
+        for (let j = i + 1; j < timeBlocks.length; j++) {
+          const blockA = timeBlocks[i];
+          const blockB = timeBlocks[j];
+
+          const aStart = timeToMinutes(blockA.startTime);
+          const aEnd = timeToMinutes(blockA.endTime);
+          const bStart = timeToMinutes(blockB.startTime);
+          const bEnd = timeToMinutes(blockB.endTime);
+
+          if (aStart < bEnd && aEnd > bStart) {
+            toast({
+              variant: "destructive",
+              title: "Zeitüberschneidung",
+              description: `Block ${i + 1} und Block ${j + 1} überschneiden sich`
+            });
+            setSaving(false);
+            return;
+          }
         }
       }
     }
 
-    // Check for overlaps with existing entries (skip entries being edited)
-    if (!editMode) {
+    // Check for overlaps with existing entries (skip entries being edited, skip for external)
+    if (!editMode && !isExternalUser) {
       const { data: existingEntries } = await supabase
         .from("time_entries")
         .select("id, start_time, end_time, taetigkeit")
@@ -777,12 +790,14 @@ const TimeTracking = () => {
     let hasError = false;
 
     for (const block of timeBlocks) {
-      const blockHours = calculateBlockHours(block);
-      const pauseMinutes = calculateBlockPauseMinutes(block);
+      const blockHours = isExternalUser
+        ? parseFloat(block.manualHours) || 0
+        : calculateBlockHours(block);
+      const pauseMinutes = isExternalUser ? 0 : calculateBlockPauseMinutes(block);
 
-      // Calculate Diäten for this block
+      // Calculate Diäten for this block (not for external)
       const isConstruction = block.locationType === "baustelle";
-      const diaeten = calculateDiaeten(blockHours, isConstruction);
+      const diaeten = isExternalUser ? { typ: null, betrag: 0 } : calculateDiaeten(blockHours, isConstruction);
       const km = block.kilometer ? parseFloat(block.kilometer) : null;
 
       const { error: insertError } = await supabase.from("time_entries").insert({
@@ -791,17 +806,17 @@ const TimeTracking = () => {
         project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
         taetigkeit: block.taetigkeit,
         stunden: blockHours,
-        start_time: block.startTime,
-        end_time: block.endTime,
+        start_time: isExternalUser ? null : block.startTime,
+        end_time: isExternalUser ? null : block.endTime,
         pause_minutes: pauseMinutes,
-        pause_start: block.pauseStart || null,
-        pause_end: block.pauseEnd || null,
+        pause_start: isExternalUser ? null : (block.pauseStart || null),
+        pause_end: isExternalUser ? null : (block.pauseEnd || null),
         location_type: block.locationType,
         notizen: null,
         week_type: null,
         kilometer: km,
         km_beschreibung: block.kmBeschreibung || null,
-        zeit_typ: block.zeitTyp,
+        zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
         diaeten_typ: diaeten.typ,
         diaeten_betrag: diaeten.betrag,
       });
@@ -899,7 +914,7 @@ const TimeTracking = () => {
                 <Clock className="h-5 w-5" />
                 <CardTitle>Zeiterfassung</CardTitle>
               </div>
-              {!targetUserId && (
+              {!targetUserId && !isExternalUser && (
                 <Button
                   variant="outline"
                   onClick={() => setShowAbsenceDialog(true)}
@@ -931,7 +946,8 @@ const TimeTracking = () => {
                 )}
               </div>
 
-              {/* Weekly target info */}
+              {/* Weekly target info — not for external */}
+              {!isExternalUser && (
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
@@ -948,6 +964,7 @@ const TimeTracking = () => {
                   </span>
                 </div>
               </div>
+              )}
 
               {/* Edit mode banner */}
               {editMode && (
@@ -1144,7 +1161,23 @@ const TimeTracking = () => {
                           />
                         </div>
 
-                        {/* Time inputs */}
+                        {/* Time inputs — external: only manual hours */}
+                        {isExternalUser ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Gesamtstunden</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.25"
+                              value={block.manualHours}
+                              onChange={(e) => updateBlock(block.id, { manualHours: e.target.value })}
+                              placeholder="z.B. 8"
+                              required
+                              className="h-10"
+                            />
+                          </div>
+                        ) : (
+                          <>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
                             <Label className="text-xs">Beginn</Label>
@@ -1209,6 +1242,8 @@ const TimeTracking = () => {
                             </SelectContent>
                           </Select>
                         </div>
+                          </>
+                        )}
 
                         {/* Kilometer */}
                         <div className="grid grid-cols-2 gap-2">
@@ -1312,34 +1347,38 @@ const TimeTracking = () => {
                           </div>
                         )}
 
-                        {/* Regelarbeitszeit button */}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const dateObj = new Date(selectedDate);
-                            const defaults = getDefaultWorkTimes(dateObj, employeeSchedule);
-                            if (defaults) {
-                              updateBlock(block.id, {
-                                startTime: defaults.startTime,
-                                endTime: defaults.endTime,
-                                pauseStart: "12:00",
-                                pauseEnd: "13:00",
-                              });
-                            }
-                          }}
-                          className="w-full text-xs"
-                        >
-                          <Sun className="w-3 h-3 mr-1" />
-                          Regelarbeitszeit einfüllen
-                        </Button>
+                        {/* Regelarbeitszeit button - not for external */}
+                        {!isExternalUser && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const dateObj = new Date(selectedDate);
+                              const defaults = getDefaultWorkTimes(dateObj, employeeSchedule);
+                              if (defaults) {
+                                updateBlock(block.id, {
+                                  startTime: defaults.startTime,
+                                  endTime: defaults.endTime,
+                                  pauseStart: "12:00",
+                                  pauseEnd: "13:00",
+                                });
+                              }
+                            }}
+                            className="w-full text-xs"
+                          >
+                            <Sun className="w-3 h-3 mr-1" />
+                            Regelarbeitszeit einfüllen
+                          </Button>
+                        )}
 
                         {/* Block hours */}
-                        <div className="bg-muted/50 rounded px-3 py-2 flex items-center justify-between text-sm">
-                          <span>Stunden</span>
-                          <span className="font-bold">{calculateBlockHours(block).toFixed(2)} h</span>
-                        </div>
+                        {!isExternalUser && (
+                          <div className="bg-muted/50 rounded px-3 py-2 flex items-center justify-between text-sm">
+                            <span>Stunden</span>
+                            <span className="font-bold">{calculateBlockHours(block).toFixed(2)} h</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -59,6 +59,7 @@ export default function Index() {
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [missingHoursDate, setMissingHoursDate] = useState<string | null>(null);
+  const [isExternal, setIsExternal] = useState(false);
   const { handleRestartInstallGuide } = useOnboarding();
 
   const checkMissingHours = async (userId: string) => {
@@ -145,7 +146,14 @@ export default function Index() {
       .eq("user_id", userId)
       .maybeSingle();
 
-    const [{ data: profileData }, { data: roleData }] = await Promise.all([profileReq, roleReq]);
+    // 3) Employee data (check if external)
+    const employeeReq = supabase
+      .from("employees")
+      .select("is_external, kategorie")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const [{ data: profileData }, { data: roleData }, { data: employeeData }] = await Promise.all([profileReq, roleReq, employeeReq]);
 
     // Prüfe ob Benutzer aktiviert ist
     if (profileData) {
@@ -166,6 +174,7 @@ export default function Index() {
 
     const role = roleData?.role ?? null;
     setUserRole(role);
+    setIsExternal(employeeData?.is_external === true || employeeData?.kategorie === "extern");
 
     await Promise.all([
       fetchProjects(),
@@ -432,9 +441,10 @@ export default function Index() {
             </CardContent>
           </Card>
 
-          {/* Projekte - Für alle */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
+          {/* Projekte - Für alle außer Externe */}
+          {!isExternal && (
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/projects")}
           >
             <CardHeader className="space-y-2 pb-3">
@@ -450,6 +460,7 @@ export default function Index() {
               <Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button>
             </CardContent>
           </Card>
+          )}
 
           {/* Meine Stunden - Für alle */}
           <Card 
@@ -470,9 +481,10 @@ export default function Index() {
             </CardContent>
           </Card>
 
-          {/* Regieberichte - Für alle */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
+          {/* Regieberichte - Für alle außer Externe */}
+          {!isExternal && (
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/disturbances")}
           >
             <CardHeader className="space-y-2 pb-3">
@@ -488,8 +500,10 @@ export default function Index() {
               <Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button>
             </CardContent>
           </Card>
+          )}
 
-          {/* Schlechtwetter - Für alle */}
+          {/* Schlechtwetter - Für alle außer Externe */}
+          {!isExternal && (
           <Card
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/bad-weather")}
@@ -507,9 +521,10 @@ export default function Index() {
               <Button className="w-full" size="sm" variant="outline">Schlechtwetter öffnen</Button>
             </CardContent>
           </Card>
+          )}
 
-
-          {/* Tagesberichte - Für alle */}
+          {/* Tagesberichte - Für alle außer Externe */}
+          {!isExternal && (
           <Card
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/daily-reports")}
@@ -527,9 +542,10 @@ export default function Index() {
               <Button className="w-full" size="sm" variant="outline">Berichte öffnen</Button>
             </CardContent>
           </Card>
+          )}
 
-          {/* Meine Dokumente - Für Mitarbeiter */}
-          {!isAdmin && (
+          {/* Meine Dokumente - Für Mitarbeiter (nicht Externe) */}
+          {!isAdmin && !isExternal && (
             <Card 
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
               onClick={() => navigate("/my-documents")}
@@ -550,7 +566,8 @@ export default function Index() {
           )}
 
 
-          {/* Dokumentenbibliothek - Für alle */}
+          {/* Dokumentenbibliothek - Für alle außer Externe */}
+          {!isExternal && (
           <Card
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/documents")}
@@ -568,6 +585,7 @@ export default function Index() {
               <Button className="w-full" size="sm" variant="outline">Bibliothek öffnen</Button>
             </CardContent>
           </Card>
+          )}
 
           {/* Admin: Stundenauswertung */}
           {isAdmin && (
