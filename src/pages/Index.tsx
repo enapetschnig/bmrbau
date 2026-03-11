@@ -34,6 +34,7 @@ type Notification = {
   message: string;
   is_read: boolean;
   created_at: string;
+  metadata: Record<string, any> | null;
 };
 
 type RecentTimeEntry = {
@@ -163,7 +164,7 @@ export default function Index() {
   const fetchNotifications = async (userId: string) => {
     const { data } = await supabase
       .from("notifications")
-      .select("id, type, title, message, is_read, created_at")
+      .select("id, type, title, message, is_read, created_at, metadata")
       .eq("user_id", userId)
       .eq("is_read", false)
       .order("created_at", { ascending: false })
@@ -470,11 +471,23 @@ export default function Index() {
       )
       .subscribe();
 
+    // Realtime subscription for chat previews
+    const chatChannel = supabase
+      .channel("dashboard-chat")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "project_messages" }, () => {
+        if (user) fetchChatPreviews(user.id, userRole === "administrator");
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "broadcast_messages" }, () => {
+        if (user) fetchChatPreviews(user.id, userRole === "administrator");
+      })
+      .subscribe();
+
     return () => {
       isMounted = false;
       subscription.unsubscribe();
       supabase.removeChannel(projectsChannel);
       supabase.removeChannel(entriesChannel);
+      supabase.removeChannel(chatChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
@@ -618,7 +631,10 @@ export default function Index() {
                   if (notif.type === "krankmeldung_upload") navigate("/admin");
                   if (notif.type === "lohnzettel_upload") navigate("/my-documents");
                   if (notif.type === "broadcast_message") navigate("/company-chat");
-                  if (notif.type === "chat_message") navigate("/company-chat");
+                  if (notif.type === "chat_message") {
+                    const pid = (notif.metadata as any)?.project_id;
+                    navigate(pid ? `/projects/${pid}/chat` : "/company-chat");
+                  }
                   if (notif.type === "account_activated") window.location.reload();
                 }}
               >
