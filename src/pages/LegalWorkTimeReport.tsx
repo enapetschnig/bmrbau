@@ -29,7 +29,11 @@ const monthNames = [
   "Juli", "August", "September", "Oktober", "November", "Dezember",
 ];
 
-export default function LegalWorkTimeReport() {
+interface LegalWorkTimeReportProps {
+  embedded?: boolean;
+}
+
+export default function LegalWorkTimeReport({ embedded = false }: LegalWorkTimeReportProps) {
   const navigate = useNavigate();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -235,14 +239,8 @@ export default function LegalWorkTimeReport() {
     });
   };
 
-  return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <PageHeader title="Gesetzl. Arbeitszeitaufzeichnung" />
-
-      <p className="text-sm text-muted-foreground mb-6">
-        Arbeitszeitaufzeichnung gemäß § 26 AZG — reine Arbeitszeiten ohne Projekt- oder Tätigkeitszuordnung
-      </p>
-
+  const content = (
+    <>
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -401,6 +399,18 @@ export default function LegalWorkTimeReport() {
           </Card>
         </>
       )}
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <div className="container mx-auto p-4 max-w-4xl">
+      <PageHeader title="Gesetzl. Arbeitszeitaufzeichnung" />
+      <p className="text-sm text-muted-foreground mb-6">
+        Arbeitszeitaufzeichnung gemäß § 26 AZG — reine Arbeitszeiten ohne Projekt- oder Tätigkeitszuordnung
+      </p>
+      {content}
     </div>
   );
 }

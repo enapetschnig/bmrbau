@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Zap, Calendar, Clock, User, Mail, Phone, MapPin, Edit, Trash2, Package, Plus, ArrowLeft, PenLine, Users } from "lucide-react";
+import { Zap, Calendar, Clock, User, Mail, Phone, MapPin, Edit, Trash2, Package, Plus, ArrowLeft, PenLine, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { DisturbanceForm } from "@/components/DisturbanceForm";
 import { DisturbanceMaterials } from "@/components/DisturbanceMaterials";
 import { DisturbancePhotos } from "@/components/DisturbancePhotos";
 import { SignatureDialog } from "@/components/SignatureDialog";
+import { generateDisturbancePDF } from "@/lib/generateDisturbancePDF";
 
 type Disturbance = {
   id: string;
@@ -234,6 +235,32 @@ const DisturbanceDetail = () => {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!disturbance) return;
+    // Fetch materials
+    const { data: matData } = await supabase.from("disturbance_materials").select("*").eq("disturbance_id", disturbance.id);
+    // Fetch photos
+    const { data: photoData } = await supabase.from("disturbance_photos").select("*").eq("disturbance_id", disturbance.id);
+    // Technician names
+    const techNames = workers.length > 0
+      ? workers.map((w) => `${w.vorname} ${w.nachname}`)
+      : [disturbance.profile_vorname && disturbance.profile_nachname ? `${disturbance.profile_vorname} ${disturbance.profile_nachname}` : "Unbekannt"];
+
+    const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
+    const { pdfBase64, pdfFilename } = await generateDisturbancePDF(
+      { ...disturbance, unterschrift_kunde: "" },
+      matData || [],
+      techNames,
+      photoData || [],
+      supabaseUrl,
+    );
+    // Download
+    const link = document.createElement("a");
+    link.href = `data:application/pdf;base64,${pdfBase64}`;
+    link.download = pdfFilename;
+    link.click();
+  };
+
   const canEdit = disturbance && (currentUserId === disturbance.user_id || isAdmin);
 
   if (loading) {
@@ -294,6 +321,10 @@ const DisturbanceDetail = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {getStatusBadge(disturbance.status, disturbance.is_verrechnet)}
+            <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
             {isAdmin && disturbance.status !== "offen" && (
               <Button
                 variant={disturbance.is_verrechnet ? "secondary" : "outline"}

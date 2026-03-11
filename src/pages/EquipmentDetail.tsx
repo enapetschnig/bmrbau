@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, ArrowRightLeft, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, ArrowRightLeft, AlertTriangle, Camera, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +137,42 @@ export default function EquipmentDetail() {
       </div>
 
       <div className="space-y-4">
+        {/* Photos */}
+        {(item.foto_url || item.rechnung_foto_url) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {item.foto_url && (
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
+                    <Camera className="w-4 h-4" /> Gerätefoto
+                  </div>
+                  <img
+                    src={item.foto_url}
+                    alt={item.name}
+                    className="w-full h-48 object-cover rounded-md border cursor-pointer"
+                    onClick={() => window.open(item.foto_url, "_blank")}
+                  />
+                </CardContent>
+              </Card>
+            )}
+            {item.rechnung_foto_url && (
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
+                    <Receipt className="w-4 h-4" /> Rechnung
+                  </div>
+                  <img
+                    src={item.rechnung_foto_url}
+                    alt="Rechnung"
+                    className="w-full h-48 object-cover rounded-md border cursor-pointer"
+                    onClick={() => window.open(item.rechnung_foto_url, "_blank")}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* Info */}
         <Card>
           <CardContent className="p-4 space-y-2 text-sm">

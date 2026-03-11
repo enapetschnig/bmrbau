@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree } from "lucide-react";
+import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -281,6 +282,32 @@ const MyHours = () => {
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   className="w-44"
                 />
+                {entries.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const data = entries.map((e: any) => ({
+                      Datum: new Date(e.datum).toLocaleDateString("de-AT"),
+                      Projekt: e.projects?.name || (e.location_type === "lager" ? "Lager" : "–"),
+                      Von: e.start_time || "",
+                      Bis: e.end_time || "",
+                      "Pause (Min)": e.pause_minutes || 0,
+                      Stunden: e.stunden,
+                      Tätigkeit: e.taetigkeit || "",
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "E2E8F0" } } };
+                    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+                    for (let c = range.s.c; c <= range.e.c; c++) {
+                      const addr = XLSX.utils.encode_cell({ r: 0, c });
+                      if (ws[addr]) ws[addr].s = headerStyle;
+                    }
+                    ws["!cols"] = [{ wch: 12 }, { wch: 25 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 30 }];
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Stunden");
+                    XLSX.writeFile(wb, `Meine_Stunden_${selectedMonth}.xlsx`);
+                  }}>
+                    <Download className="w-4 h-4 mr-1" /> Excel
+                  </Button>
+                )}
               </div>
               <div className="flex flex-wrap gap-4 text-sm sm:text-base">
                 <div>

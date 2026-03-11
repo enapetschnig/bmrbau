@@ -9,12 +9,14 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Warehouse, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Warehouse, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, Save, Users, Clock } from "lucide-react";
 import { format, isSameDay, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
 import { cn } from "@/lib/utils";
 import ProjectHoursReport from "@/components/ProjectHoursReport";
+import ExternalHoursReport from "@/components/ExternalHoursReport";
+import LegalWorkTimeReport from "@/pages/LegalWorkTimeReport";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +99,15 @@ export default function HoursReport() {
   const [newExtraBetrag, setNewExtraBetrag] = useState("");
   const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
   const [editExtraBetrag, setEditExtraBetrag] = useState("");
+
+  const [selectedView, setSelectedView] = useState<"mitarbeiter" | "externe" | null>(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "externe") return "externe";
+    if (tab === "mitarbeiter" || tab === "projekte") return "mitarbeiter";
+    // If a user is pre-selected, go directly to mitarbeiter view
+    if (searchParams.get("user") || searchParams.get("employee")) return "mitarbeiter";
+    return null;
+  });
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -753,24 +764,84 @@ export default function HoursReport() {
     toast({ title: "Excel exportiert", description: `Datei wurde heruntergeladen` });
   };
 
+  // Selection view: choose between Mitarbeiter and Externe
+  if (selectedView === null) {
+    return (
+      <div className="container mx-auto p-4 space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-3xl font-bold">Stundenauswertung</h1>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => setSelectedView("mitarbeiter")}
+          >
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileSpreadsheet className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-lg">Mitarbeiter-Auswertung</CardTitle>
+              <CardDescription className="text-sm">
+                Arbeitszeiterfassung und Projektzeiterfassung für interne Mitarbeiter
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => setSelectedView("externe")}
+          >
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-lg">Externe Mitarbeiter-Auswertung</CardTitle>
+              <CardDescription className="text-sm">
+                Stunden und Kilometer pro externem Mitarbeiter und Projekt
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Externe view
+  if (selectedView === "externe") {
+    return (
+      <div className="container mx-auto p-4 space-y-6">
+        <ExternalHoursReport onBack={() => setSelectedView(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => setSelectedView(null)}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-3xl font-bold">Stundenauswertung</h1>
       </div>
 
       <Tabs defaultValue={searchParams.get("tab") || "mitarbeiter"} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="mitarbeiter">
             <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Arbeitszeiterfassung
+            <span className="hidden sm:inline">Zeiterfassung</span>
+            <span className="sm:hidden">Zeit</span>
+          </TabsTrigger>
+          <TabsTrigger value="arbeitszeitaufzeichnung">
+            <Clock className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">Arbeitszeitaufzeichnung</span>
+            <span className="sm:hidden">AZA</span>
           </TabsTrigger>
           <TabsTrigger value="projekte">
             <Building2 className="w-4 h-4 mr-2" />
-            Projektzeiterfassung
+            <span className="hidden sm:inline">Projektzeiterfassung</span>
+            <span className="sm:hidden">Projekte</span>
           </TabsTrigger>
         </TabsList>
 
@@ -781,7 +852,7 @@ export default function HoursReport() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                     <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />
-                    Arbeitszeiterfassung nach Mitarbeitern
+                    Zeiterfassung nach Mitarbeitern
                   </CardTitle>
                   <CardDescription className="text-xs sm:text-sm">Monatsberichte mit Überstunden exportieren</CardDescription>
                 </div>
@@ -814,9 +885,11 @@ export default function HoursReport() {
                       <SelectValue placeholder="Mitarbeiter auswählen" />
                     </SelectTrigger>
                     <SelectContent position="popper">
-                      {Object.entries(profiles).map(([id, profile]) => (
+                      {Object.entries(profiles)
+                        .filter(([_, profile]) => !profile.isExternal)
+                        .map(([id, profile]) => (
                         <SelectItem key={id} value={id}>
-                          {profile.vorname} {profile.nachname}{profile.isExternal ? " (Extern)" : ""}
+                          {profile.vorname} {profile.nachname}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1197,6 +1270,10 @@ export default function HoursReport() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="arbeitszeitaufzeichnung">
+          <LegalWorkTimeReport embedded />
         </TabsContent>
 
         <TabsContent value="projekte">

@@ -10,10 +10,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { WeatherSelector } from "@/components/WeatherSelector";
 import { TemperatureInput } from "@/components/TemperatureInput";
 import { GeschossSelector } from "@/components/GeschossSelector";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 
 type Project = { id: string; name: string; plz: string | null };
+type Employee = { id: string; user_id: string; name: string };
 
 type Activity = {
   id: string;
@@ -54,6 +56,23 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
   const [beschreibung, setBeschreibung] = useState("");
   const [notizen, setNotizen] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
+
+  const fetchEmployees = useCallback(async () => {
+    const { data } = await supabase
+      .from("employees")
+      .select("id, user_id, vorname, nachname, is_external, kategorie")
+      .not("user_id", "is", null)
+      .order("nachname");
+    if (data) {
+      setEmployees(
+        data
+          .filter(e => !e.is_external && e.kategorie !== "extern")
+          .map(e => ({ id: e.id, user_id: e.user_id!, name: `${e.vorname} ${e.nachname}`.trim() }))
+      );
+    }
+  }, []);
 
   const fetchProjects = useCallback(async () => {
     const { data } = await supabase
@@ -66,7 +85,8 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
 
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    fetchEmployees();
+  }, [fetchProjects, fetchEmployees]);
 
   useEffect(() => {
     if (editData) {
@@ -80,6 +100,7 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
       setBeschreibung(editData.beschreibung);
       setNotizen(editData.notizen || "");
       loadActivities(editData.id);
+      loadWorkers(editData.id);
     } else {
       resetForm();
     }
@@ -100,6 +121,16 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
     }
   };
 
+  const loadWorkers = async (reportId: string) => {
+    const { data } = await supabase
+      .from("daily_report_workers")
+      .select("user_id")
+      .eq("daily_report_id", reportId);
+    if (data) {
+      setSelectedWorkers(data.map((w: any) => w.user_id));
+    }
+  };
+
   const resetForm = () => {
     setProjectId("");
     setReportType("tagesbericht");
@@ -111,6 +142,7 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
     setBeschreibung("");
     setNotizen("");
     setActivities([]);
+    setSelectedWorkers([]);
   };
 
   const addActivity = () => {
@@ -191,6 +223,20 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
           geschoss: a.geschoss,
           beschreibung: a.beschreibung.trim(),
           sort_order: idx,
+        }))
+      );
+    }
+
+    // Save workers
+    if (editData) {
+      await supabase.from("daily_report_workers").delete().eq("daily_report_id", reportId);
+    }
+    if (selectedWorkers.length > 0) {
+      await supabase.from("daily_report_workers").insert(
+        selectedWorkers.map((userId) => ({
+          daily_report_id: reportId,
+          user_id: userId,
+          is_main: false,
         }))
       );
     }
@@ -311,6 +357,38 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
               placeholder="Zusätzliche Bemerkungen..."
               rows={2}
             />
+          </div>
+
+          {/* Anwesende Mitarbeiter */}
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">Anwesende Mitarbeiter</Label>
+            <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+              {employees.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Mitarbeiter gefunden</p>
+              ) : (
+                employees.map((emp) => (
+                  <div key={emp.user_id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`worker-${emp.user_id}`}
+                      checked={selectedWorkers.includes(emp.user_id)}
+                      onCheckedChange={(checked) => {
+                        setSelectedWorkers(prev =>
+                          checked
+                            ? [...prev, emp.user_id]
+                            : prev.filter(id => id !== emp.user_id)
+                        );
+                      }}
+                    />
+                    <label htmlFor={`worker-${emp.user_id}`} className="text-sm cursor-pointer">
+                      {emp.name}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+            {selectedWorkers.length > 0 && (
+              <p className="text-xs text-muted-foreground">{selectedWorkers.length} Mitarbeiter ausgewählt</p>
+            )}
           </div>
 
           {/* Actions */}

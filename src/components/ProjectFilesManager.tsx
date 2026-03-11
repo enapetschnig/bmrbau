@@ -230,36 +230,47 @@ export function ProjectFilesManager({ projectId, defaultTab = 'photos' }: Projec
     });
   };
 
+  const canUpload = (type: DocumentType): boolean => {
+    if (type === 'plans' || type === 'reports' || type === 'chef') return isAdmin;
+    return true;
+  };
+
   const renderTabContent = (type: DocumentType) => {
     const filteredDocs = documents.filter(doc => doc.typ === type);
 
     return (
       <div className="space-y-4">
         {/* Upload Area */}
-        <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
-          <input
-            type="file"
-            multiple
-            accept={type === 'photos' ? 'image/*,application/pdf' : '*'}
-            capture="environment"
-            onChange={(e) => handleUpload(type, e.target.files)}
-            className="hidden"
-            id={`upload-${type}`}
-            disabled={uploading === type}
-          />
-          <label htmlFor={`upload-${type}`} className="cursor-pointer">
-            <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
-            <p className="text-sm font-medium">
-              {uploading === type ? 'Wird hochgeladen...' : 'Dateien hier ablegen oder klicken'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Mehrere Dateien auswählen möglich (Strg/Cmd + Klick)
-            </p>
-            <p className="text-xs text-primary font-medium mt-2">
-              📱 Tipp: Mit Handy-Kamera Dokumente scannen/fotografieren
-            </p>
-          </label>
-        </div>
+        {canUpload(type) ? (
+          <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
+            <input
+              type="file"
+              multiple
+              accept={type === 'photos' ? 'image/*,application/pdf' : '*'}
+              capture="environment"
+              onChange={(e) => handleUpload(type, e.target.files)}
+              className="hidden"
+              id={`upload-${type}`}
+              disabled={uploading === type}
+            />
+            <label htmlFor={`upload-${type}`} className="cursor-pointer">
+              <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium">
+                {uploading === type ? 'Wird hochgeladen...' : 'Dateien hier ablegen oder klicken'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Mehrere Dateien auswählen möglich (Strg/Cmd + Klick)
+              </p>
+              <p className="text-xs text-primary font-medium mt-2">
+                📱 Tipp: Mit Handy-Kamera Dokumente scannen/fotografieren
+              </p>
+            </label>
+          </div>
+        ) : (
+          <div className="border rounded-lg p-4 text-center text-muted-foreground text-sm bg-muted/30">
+            Nur der Geschäftsführer kann hier Dateien hochladen
+          </div>
+        )}
 
         {/* Dateiliste */}
         <ScrollArea className="h-[400px]">

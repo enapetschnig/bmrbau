@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, FolderOpen, Plus, FileText, Image, Package, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star } from "lucide-react";
+import { ArrowLeft, FolderOpen, Plus, FileText, Image, Package, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -51,21 +52,14 @@ const Projects = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [newProject, setNewProject] = useState({
     name: "",
-    beschreibung: "",
     adresse: "",
-    plz: "",
-    bauherr: "",
-    bauherr_kontakt: "",
-    bauleiter: "",
-    budget: "",
-    start_datum: "",
-    end_datum: "",
     kunde_telefon: "",
     kunde_email: "",
     erreichbarkeit: "",
     besonderheiten: "",
     hinweise: "",
   });
+  const [newContacts, setNewContacts] = useState<{ rolle: string; name: string; telefon: string; email: string }[]>([]);
   const [quickUploadProject, setQuickUploadProject] = useState<{
     projectId: string;
     documentType: 'photos' | 'plans' | 'reports' | 'materials';
@@ -255,56 +249,47 @@ const Projects = () => {
       return;
     }
 
-    if (!newProject.plz.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Fehler",
-        description: "PLZ ist erforderlich",
-      });
-      return;
-    }
-
-    if (!/^\d{4,5}$/.test(newProject.plz.trim())) {
-      toast({
-        variant: "destructive",
-        title: "Fehler",
-        description: "PLZ muss 4-5 Ziffern enthalten",
-      });
-      return;
-    }
-
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from("projects")
       .insert({
         name: newProject.name.trim(),
-        beschreibung: newProject.beschreibung.trim() || null,
         adresse: newProject.adresse.trim() || null,
-        plz: newProject.plz.trim(),
-        bauherr: newProject.bauherr.trim() || null,
-        bauherr_kontakt: newProject.bauherr_kontakt.trim() || null,
-        bauleiter: newProject.bauleiter.trim() || null,
-        budget: newProject.budget ? parseFloat(newProject.budget) : null,
-        start_datum: newProject.start_datum || null,
-        end_datum: newProject.end_datum || null,
         kunde_telefon: newProject.kunde_telefon.trim() || null,
         kunde_email: newProject.kunde_email.trim() || null,
         erreichbarkeit: newProject.erreichbarkeit.trim() || null,
         besonderheiten: newProject.besonderheiten.trim() || null,
         hinweise: newProject.hinweise.trim() || null,
-      });
+      })
+      .select("id")
+      .single();
 
-    if (error) {
+    if (error || !inserted) {
       toast({
         variant: "destructive",
         title: "Fehler",
         description: "Projekt konnte nicht erstellt werden",
       });
     } else {
+      // Save contacts if any
+      const validContacts = newContacts.filter(c => c.name.trim() || c.rolle.trim());
+      if (validContacts.length > 0) {
+        await supabase.from("project_contacts").insert(
+          validContacts.map(c => ({
+            project_id: inserted.id,
+            name: c.name.trim() || c.rolle.trim(),
+            rolle: c.rolle.trim() || null,
+            telefon: c.telefon.trim() || null,
+            email: c.email.trim() || null,
+          }))
+        );
+      }
+
       toast({
         title: "Erfolg",
         description: "Projekt wurde erstellt",
       });
-      setNewProject({ name: "", beschreibung: "", adresse: "", plz: "", bauherr: "", bauherr_kontakt: "", bauleiter: "", budget: "", start_datum: "", end_datum: "", kunde_telefon: "", kunde_email: "", erreichbarkeit: "", besonderheiten: "", hinweise: "" });
+      setNewProject({ name: "", adresse: "", kunde_telefon: "", kunde_email: "", erreichbarkeit: "", besonderheiten: "", hinweise: "" });
+      setNewContacts([]);
       setShowNewDialog(false);
       fetchProjects();
     }
@@ -482,6 +467,31 @@ const Projects = () => {
     return date.toLocaleDateString("de-DE");
   };
 
+  const exportToExcel = () => {
+    const data = projects.map((p) => ({
+      Name: p.name,
+      Status: p.status === "aktiv" ? "Aktiv" : "Geschlossen",
+      Bauherr: p.bauherr || "",
+      Adresse: p.adresse || "",
+      PLZ: p.plz || "",
+      Bauleiter: p.bauleiter || "",
+      "Start": p.start_datum || "",
+      "Ende": p.end_datum || "",
+      Budget: p.budget ?? "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "E2E8F0" } } };
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) ws[addr].s = headerStyle;
+    }
+    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 20 }, { wch: 30 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Projekte");
+    XLSX.writeFile(wb, `Projekte_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -506,6 +516,13 @@ const Projects = () => {
                 onClick={() => navigate("/")}
               />
             </div>
+            <div className="flex items-center gap-2">
+              {isAdmin && projects.length > 0 && (
+                <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-1">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Excel</span>
+                </Button>
+              )}
             <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
               {isAdmin && (
               <DialogTrigger asChild>
@@ -516,159 +533,178 @@ const Projects = () => {
                 </Button>
               </DialogTrigger>
               )}
-              <DialogContent className="max-w-sm sm:max-w-md">
+              <DialogContent className="max-w-sm sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Neues Projekt erstellen</DialogTitle>
                   <DialogDescription>Bauvorhaben hinzufügen</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Projektname *</Label>
-                    <Input
-                      id="name"
-                      value={newProject.name}
-                      onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                      placeholder="z.B. Einfamilienhaus Müller"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="plz">PLZ *</Label>
-                    <Input
-                      id="plz"
-                      value={newProject.plz}
-                      onChange={(e) => setNewProject({ ...newProject, plz: e.target.value })}
-                      placeholder="z.B. 9613"
-                      maxLength={5}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      4-5 stellige Postleitzahl
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="adresse">Adresse</Label>
-                    <Input
-                      id="adresse"
-                      value={newProject.adresse}
-                      onChange={(e) => setNewProject({ ...newProject, adresse: e.target.value })}
-                      placeholder="Straße und Hausnummer"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="beschreibung">Beschreibung</Label>
-                    <Textarea
-                      id="beschreibung"
-                      value={newProject.beschreibung}
-                      onChange={(e) => setNewProject({ ...newProject, beschreibung: e.target.value })}
-                      placeholder="Kurze Projektbeschreibung..."
-                      className="min-h-20"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-6">
+                  {/* Kundendaten */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Kundendaten</h3>
                     <div className="space-y-2">
-                      <Label>Bauherr</Label>
+                      <Label htmlFor="name">Projektname *</Label>
                       <Input
-                        value={newProject.bauherr}
-                        onChange={(e) => setNewProject({ ...newProject, bauherr: e.target.value })}
-                        placeholder="Name des Bauherrn"
+                        id="name"
+                        value={newProject.name}
+                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        placeholder="z.B. Einfamilienhaus Müller"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Bauherr Kontakt</Label>
+                      <Label htmlFor="adresse">Adresse</Label>
                       <Input
-                        value={newProject.bauherr_kontakt}
-                        onChange={(e) => setNewProject({ ...newProject, bauherr_kontakt: e.target.value })}
-                        placeholder="Tel / Email"
+                        id="adresse"
+                        value={newProject.adresse}
+                        onChange={(e) => setNewProject({ ...newProject, adresse: e.target.value })}
+                        placeholder="Straße und Hausnummer, PLZ Ort"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        z.B. Hauptstraße 12, 8010 Graz
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Telefon</Label>
+                        <Input
+                          value={newProject.kunde_telefon}
+                          onChange={(e) => setNewProject({ ...newProject, kunde_telefon: e.target.value })}
+                          placeholder="Tel. des Kunden"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>E-Mail</Label>
+                        <Input
+                          type="email"
+                          value={newProject.kunde_email}
+                          onChange={(e) => setNewProject({ ...newProject, kunde_email: e.target.value })}
+                          placeholder="E-Mail des Kunden"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+
+                  {/* Projektkontakte */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Wichtige Projektkontakte</h3>
+                    {newContacts.map((contact, idx) => (
+                      <div key={idx} className="rounded-lg border p-3 space-y-2 relative">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-1 right-1 h-7 w-7 p-0"
+                          onClick={() => setNewContacts(prev => prev.filter((_, i) => i !== idx))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Bezeichnung</Label>
+                            <Input
+                              value={contact.rolle}
+                              onChange={(e) => {
+                                const updated = [...newContacts];
+                                updated[idx] = { ...updated[idx], rolle: e.target.value };
+                                setNewContacts(updated);
+                              }}
+                              placeholder="z.B. Zimmerer"
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Name</Label>
+                            <Input
+                              value={contact.name}
+                              onChange={(e) => {
+                                const updated = [...newContacts];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                setNewContacts(updated);
+                              }}
+                              placeholder="Name"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Telefon</Label>
+                            <Input
+                              value={contact.telefon}
+                              onChange={(e) => {
+                                const updated = [...newContacts];
+                                updated[idx] = { ...updated[idx], telefon: e.target.value };
+                                setNewContacts(updated);
+                              }}
+                              placeholder="Telefonnummer"
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">E-Mail</Label>
+                            <Input
+                              value={contact.email}
+                              onChange={(e) => {
+                                const updated = [...newContacts];
+                                updated[idx] = { ...updated[idx], email: e.target.value };
+                                setNewContacts(updated);
+                              }}
+                              placeholder="E-Mail"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={() => setNewContacts(prev => [...prev, { rolle: "", name: "", telefon: "", email: "" }])}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Kontakt hinzufügen
+                    </Button>
+                  </div>
+
+                  {/* Zusatzinformationen */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Zusatzinformationen</h3>
                     <div className="space-y-2">
-                      <Label>Bauleiter</Label>
+                      <Label>Erreichbarkeit</Label>
                       <Input
-                        value={newProject.bauleiter}
-                        onChange={(e) => setNewProject({ ...newProject, bauleiter: e.target.value })}
-                        placeholder="Name"
+                        value={newProject.erreichbarkeit}
+                        onChange={(e) => setNewProject({ ...newProject, erreichbarkeit: e.target.value })}
+                        placeholder="z.B. Mo-Fr 8-16 Uhr"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Budget (EUR)</Label>
-                      <Input
-                        type="number"
-                        value={newProject.budget}
-                        onChange={(e) => setNewProject({ ...newProject, budget: e.target.value })}
-                        placeholder="z.B. 150000"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Startdatum</Label>
-                      <Input
-                        type="date"
-                        value={newProject.start_datum}
-                        onChange={(e) => setNewProject({ ...newProject, start_datum: e.target.value })}
+                      <Label>Besonderheiten</Label>
+                      <Textarea
+                        value={newProject.besonderheiten}
+                        onChange={(e) => setNewProject({ ...newProject, besonderheiten: e.target.value })}
+                        placeholder="Besonderheiten des Projekts..."
+                        className="min-h-16"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Enddatum</Label>
-                      <Input
-                        type="date"
-                        value={newProject.end_datum}
-                        onChange={(e) => setNewProject({ ...newProject, end_datum: e.target.value })}
+                      <Label>Hinweise zur Baustelle</Label>
+                      <Textarea
+                        value={newProject.hinweise}
+                        onChange={(e) => setNewProject({ ...newProject, hinweise: e.target.value })}
+                        placeholder="Zufahrt, Parkmöglichkeiten, etc."
+                        className="min-h-16"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Kunde Telefon</Label>
-                      <Input
-                        value={newProject.kunde_telefon}
-                        onChange={(e) => setNewProject({ ...newProject, kunde_telefon: e.target.value })}
-                        placeholder="Tel. des Kunden"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Kunde E-Mail</Label>
-                      <Input
-                        type="email"
-                        value={newProject.kunde_email}
-                        onChange={(e) => setNewProject({ ...newProject, kunde_email: e.target.value })}
-                        placeholder="E-Mail des Kunden"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Erreichbarkeit</Label>
-                    <Input
-                      value={newProject.erreichbarkeit}
-                      onChange={(e) => setNewProject({ ...newProject, erreichbarkeit: e.target.value })}
-                      placeholder="z.B. Mo-Fr 8-16 Uhr"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Besonderheiten</Label>
-                    <Textarea
-                      value={newProject.besonderheiten}
-                      onChange={(e) => setNewProject({ ...newProject, besonderheiten: e.target.value })}
-                      placeholder="Besonderheiten des Projekts..."
-                      className="min-h-16"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Hinweise zur Baustelle</Label>
-                    <Textarea
-                      value={newProject.hinweise}
-                      onChange={(e) => setNewProject({ ...newProject, hinweise: e.target.value })}
-                      placeholder="Zufahrt, Parkmöglichkeiten, etc."
-                      className="min-h-16"
-                    />
-                  </div>
+
                   <Button onClick={handleCreateProject} className="w-full">
                     Projekt erstellen
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
         </div>
       </header>
@@ -743,7 +779,7 @@ const Projects = () => {
                       {project.adresse && (
                         <CardDescription className="text-xs sm:text-sm">
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.adresse + (project.plz ? `, ${project.plz}` : ''))}`}
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.adresse)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}

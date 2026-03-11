@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Clock, Plus, AlertTriangle, CheckCircle2, Calendar, Sun, Trash2, Pencil, Package, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, Plus, AlertTriangle, CheckCircle2, Calendar, Sun, Trash2, Pencil, Package, ChevronDown, ChevronUp, CloudRain } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/PageHeader";
 import { format, startOfWeek } from "date-fns";
@@ -109,6 +109,16 @@ const TimeTracking = () => {
   
   const [showAbsenceDialog, setShowAbsenceDialog] = useState(false);
   const [showFillDialog, setShowFillDialog] = useState(false);
+  const [showBadWeatherDialog, setShowBadWeatherDialog] = useState(false);
+  const [savingBadWeather, setSavingBadWeather] = useState(false);
+  const [badWeatherData, setBadWeatherData] = useState({
+    projectId: "",
+    beginn: "08:00",
+    ende: "16:00",
+    arbeitsstundenVorher: "",
+    notizen: "",
+  });
+  const [badWeatherArt, setBadWeatherArt] = useState<string[]>([]);
 
   const [absenceData, setAbsenceData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -880,6 +890,42 @@ const TimeTracking = () => {
     setSaving(false);
   };
 
+  const handleSaveBadWeather = async () => {
+    if (!badWeatherData.projectId || !badWeatherData.beginn || !badWeatherData.ende) {
+      toast({ variant: "destructive", title: "Fehler", description: "Bitte Projekt, Beginn und Ende ausfüllen" });
+      return;
+    }
+    setSavingBadWeather(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSavingBadWeather(false); return; }
+
+    const [bh, bm] = badWeatherData.beginn.split(":").map(Number);
+    const [eh, em] = badWeatherData.ende.split(":").map(Number);
+    const stunden = Math.max(0, Math.round(((eh * 60 + em) - (bh * 60 + bm)) / 60 * 100) / 100);
+
+    const { error } = await supabase.from("bad_weather_records").insert({
+      user_id: targetUserId || user.id,
+      project_id: badWeatherData.projectId,
+      datum: selectedDate,
+      beginn_schlechtwetter: badWeatherData.beginn,
+      ende_schlechtwetter: badWeatherData.ende,
+      schlechtwetter_stunden: stunden,
+      arbeitsstunden_vor_schlechtwetter: parseFloat(badWeatherData.arbeitsstundenVorher) || 0,
+      wetter_art: badWeatherArt,
+      notizen: badWeatherData.notizen.trim() || null,
+    });
+
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+    } else {
+      toast({ title: "Gespeichert", description: `Schlechtwetter-Eintrag (${stunden}h) erstellt` });
+      setShowBadWeatherDialog(false);
+      setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "" });
+      setBadWeatherArt([]);
+    }
+    setSavingBadWeather(false);
+  };
+
   const isDayBlocked = existingDayEntries.some(e => ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag", "Zeitausgleich"].includes(e.taetigkeit));
 
   if (loading) return <div className="p-4">Lädt...</div>;
@@ -915,14 +961,26 @@ const TimeTracking = () => {
                 <CardTitle>Zeiterfassung</CardTitle>
               </div>
               {!targetUserId && !isExternalUser && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAbsenceDialog(true)}
-                  className="gap-2"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Abwesenheit
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBadWeatherDialog(true)}
+                    className="gap-1"
+                  >
+                    <CloudRain className="h-4 w-4" />
+                    <span className="hidden sm:inline">Schlechtwetter</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAbsenceDialog(true)}
+                    className="gap-1"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    <span className="hidden sm:inline">Abwesenheit</span>
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>
@@ -1100,12 +1158,13 @@ const TimeTracking = () => {
                           )}
                         </div>
 
-                        {/* Location selection */}
+                        {/* Location selection — not for external */}
+                        {!isExternalUser && (
                         <div className="space-y-2">
                           <Label>Arbeitsort</Label>
-                          <RadioGroup 
-                            value={block.locationType} 
-                            onValueChange={(value: 'baustelle' | 'werkstatt') => updateBlock(block.id, { locationType: value })} 
+                          <RadioGroup
+                            value={block.locationType}
+                            onValueChange={(value: 'baustelle' | 'werkstatt') => updateBlock(block.id, { locationType: value })}
                             className="grid grid-cols-2 gap-4"
                           >
                             <div>
@@ -1122,11 +1181,12 @@ const TimeTracking = () => {
                             </div>
                           </RadioGroup>
                         </div>
+                        )}
 
-                        {/* Project selection - only for Baustelle */}
-                        {block.locationType === "baustelle" && (
+                        {/* Project selection - for Baustelle (internal) or always (external) */}
+                        {(isExternalUser || block.locationType === "baustelle") && (
                           <div className="space-y-2">
-                            <Label>Projekt <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>{isExternalUser ? "Baustelle / Projekt" : "Projekt"} <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Select 
                               value={block.projectId} 
                               onValueChange={(value) => {
@@ -1360,8 +1420,8 @@ const TimeTracking = () => {
                                 updateBlock(block.id, {
                                   startTime: defaults.startTime,
                                   endTime: defaults.endTime,
-                                  pauseStart: "12:00",
-                                  pauseEnd: "13:00",
+                                  pauseStart: defaults.pauseStart,
+                                  pauseEnd: defaults.pauseEnd,
                                 });
                               }
                             }}
@@ -1717,6 +1777,130 @@ const TimeTracking = () => {
             await fetchExistingDayEntries(selectedDate);
           }}
         />
+
+        {/* Bad Weather Dialog */}
+        <Dialog open={showBadWeatherDialog} onOpenChange={(open) => {
+          setShowBadWeatherDialog(open);
+          if (!open) {
+            setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "" });
+            setBadWeatherArt([]);
+          }
+        }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CloudRain className="h-5 w-5" />
+                Schlechtwetter dokumentieren
+              </DialogTitle>
+              <DialogDescription>
+                Schlechtwetter für {selectedDate ? format(new Date(selectedDate), "EEEE, dd.MM.yyyy", { locale: de }) : "heute"} erfassen
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div>
+                <Label>Baustelle / Projekt *</Label>
+                <Select value={badWeatherData.projectId} onValueChange={(v) => setBadWeatherData({ ...badWeatherData, projectId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.filter(p => p.status === "aktiv" || p.status === "in_planung").map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name} ({p.plz})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Beginn Schlechtwetter *</Label>
+                  <Input
+                    type="time"
+                    value={badWeatherData.beginn}
+                    onChange={(e) => setBadWeatherData({ ...badWeatherData, beginn: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Ende Schlechtwetter *</Label>
+                  <Input
+                    type="time"
+                    value={badWeatherData.ende}
+                    onChange={(e) => setBadWeatherData({ ...badWeatherData, ende: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {badWeatherData.beginn && badWeatherData.ende && (() => {
+                const [bh, bm] = badWeatherData.beginn.split(":").map(Number);
+                const [eh, em] = badWeatherData.ende.split(":").map(Number);
+                const hrs = Math.max(0, ((eh * 60 + em) - (bh * 60 + bm)) / 60);
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    Schlechtwetter-Stunden: <strong>{hrs.toFixed(1)}h</strong>
+                  </p>
+                );
+              })()}
+
+              <div>
+                <Label>Arbeitsstunden vor Schlechtwetter</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={badWeatherData.arbeitsstundenVorher}
+                  onChange={(e) => setBadWeatherData({ ...badWeatherData, arbeitsstundenVorher: e.target.value })}
+                  placeholder="z.B. 2.5"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Art des Schlechtwetters</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "regen", label: "Regen" },
+                    { value: "schnee", label: "Schnee" },
+                    { value: "frost", label: "Frost" },
+                    { value: "sturm", label: "Sturm" },
+                    { value: "hagel", label: "Hagel" },
+                    { value: "gewitter", label: "Gewitter" },
+                  ].map((opt) => (
+                    <Badge
+                      key={opt.value}
+                      variant={badWeatherArt.includes(opt.value) ? "default" : "outline"}
+                      className="cursor-pointer text-sm px-3 py-1.5 select-none"
+                      onClick={() => {
+                        setBadWeatherArt(prev =>
+                          prev.includes(opt.value)
+                            ? prev.filter(v => v !== opt.value)
+                            : [...prev, opt.value]
+                        );
+                      }}
+                    >
+                      {opt.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>Notizen</Label>
+                <Input
+                  value={badWeatherData.notizen}
+                  onChange={(e) => setBadWeatherData({ ...badWeatherData, notizen: e.target.value })}
+                  placeholder="Zusätzliche Informationen..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowBadWeatherDialog(false)}>
+                  Abbrechen
+                </Button>
+                <Button onClick={handleSaveBadWeather} disabled={savingBadWeather}>
+                  {savingBadWeather ? "Speichere..." : "Speichern"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </div>

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Wrench, Search, AlertTriangle } from "lucide-react";
+import { Plus, Wrench, Search, AlertTriangle, Camera, Receipt, X, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,8 @@ type Equipment = {
   notizen: string | null;
   naechste_wartung: string | null;
   wartungsintervall_monate: number | null;
+  foto_url: string | null;
+  rechnung_foto_url: string | null;
   created_at: string;
 };
 
@@ -65,6 +68,14 @@ export default function EquipmentPage() {
     notizen: "", naechste_wartung: "", wartungsintervall_monate: "",
   });
 
+  // Photo state
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [rechnungFile, setRechnungFile] = useState<File | null>(null);
+  const [rechnungPreview, setRechnungPreview] = useState<string | null>(null);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const rechnungInputRef = useRef<HTMLInputElement>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -89,6 +100,10 @@ export default function EquipmentPage() {
   const resetForm = () => {
     setForm({ name: "", kategorie: "werkzeug", seriennummer: "", kaufdatum: "", zustand: "gut", standort_typ: "lager", standort_project_id: "", notizen: "", naechste_wartung: "", wartungsintervall_monate: "" });
     setEditingItem(null);
+    setFotoFile(null);
+    setFotoPreview(null);
+    setRechnungFile(null);
+    setRechnungPreview(null);
   };
 
   const openEdit = (item: Equipment) => {
@@ -99,7 +114,20 @@ export default function EquipmentPage() {
       standort_project_id: item.standort_project_id || "", notizen: item.notizen || "",
       naechste_wartung: item.naechste_wartung || "", wartungsintervall_monate: item.wartungsintervall_monate?.toString() || "",
     });
+    setFotoFile(null);
+    setFotoPreview(item.foto_url || null);
+    setRechnungFile(null);
+    setRechnungPreview(item.rechnung_foto_url || null);
     setShowForm(true);
+  };
+
+  const uploadPhoto = async (file: File, equipmentId: string, prefix: string): Promise<string | null> => {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${equipmentId}/${prefix}_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("equipment-photos").upload(path, file, { upsert: true });
+    if (error) return null;
+    const { data: urlData } = supabase.storage.from("equipment-photos").getPublicUrl(path);
+    return urlData.publicUrl;
   };
 
   const handleSave = async () => {
@@ -109,7 +137,7 @@ export default function EquipmentPage() {
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, any> = {
       name: form.name.trim(),
       kategorie: form.kategorie,
       seriennummer: form.seriennummer.trim() || null,
@@ -123,20 +151,50 @@ export default function EquipmentPage() {
     };
 
     let error;
+    let equipmentId = editingItem?.id;
+
     if (editingItem) {
       ({ error } = await supabase.from("equipment").update(payload).eq("id", editingItem.id));
     } else {
-      ({ error } = await supabase.from("equipment").insert(payload));
+      const { data, error: insertError } = await supabase.from("equipment").insert(payload).select("id").single();
+      error = insertError;
+      if (data) equipmentId = data.id;
     }
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
-    } else {
-      toast({ title: "Gespeichert" });
-      setShowForm(false);
-      resetForm();
-      fetchData();
+      setSaving(false);
+      return;
     }
+
+    // Upload photos if selected
+    if (equipmentId) {
+      const photoUpdates: Record<string, string> = {};
+
+      if (fotoFile) {
+        const url = await uploadPhoto(fotoFile, equipmentId, "foto");
+        if (url) photoUpdates.foto_url = url;
+      } else if (!fotoPreview && editingItem?.foto_url) {
+        // Photo was removed
+        photoUpdates.foto_url = null as any;
+      }
+
+      if (rechnungFile) {
+        const url = await uploadPhoto(rechnungFile, equipmentId, "rechnung");
+        if (url) photoUpdates.rechnung_foto_url = url;
+      } else if (!rechnungPreview && editingItem?.rechnung_foto_url) {
+        photoUpdates.rechnung_foto_url = null as any;
+      }
+
+      if (Object.keys(photoUpdates).length > 0) {
+        await supabase.from("equipment").update(photoUpdates).eq("id", equipmentId);
+      }
+    }
+
+    toast({ title: "Gespeichert" });
+    setShowForm(false);
+    resetForm();
+    fetchData();
     setSaving(false);
   };
 
@@ -160,6 +218,30 @@ export default function EquipmentPage() {
     return matchSearch && matchKat && matchStandort && matchZustand;
   });
 
+  const exportToExcel = () => {
+    const data = filtered.map((item) => ({
+      Name: item.name,
+      Kategorie: KATEGORIE_LABELS[item.kategorie] || item.kategorie,
+      Seriennummer: item.seriennummer || "",
+      Kaufdatum: item.kaufdatum ? new Date(item.kaufdatum).toLocaleDateString("de-AT") : "",
+      Zustand: ZUSTAND_LABELS[item.zustand] || item.zustand,
+      Standort: item.standort_typ === "lager" ? "Lager" : projectMap[item.standort_project_id!] || "Baustelle",
+      "Nächste Wartung": item.naechste_wartung ? new Date(item.naechste_wartung).toLocaleDateString("de-AT") : "",
+      "Wartungsintervall (Monate)": item.wartungsintervall_monate || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "E2E8F0" } } };
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) ws[addr].s = headerStyle;
+    }
+    ws["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 25 }, { wch: 15 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Geräte");
+    XLSX.writeFile(wb, `Geraete_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <PageHeader title="Geräteverwaltung" />
@@ -168,11 +250,18 @@ export default function EquipmentPage() {
         <p className="text-sm text-muted-foreground">
           {items.length} Geräte gesamt
         </p>
-        {isAdmin && (
-          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
-            <Plus className="w-4 h-4 mr-1" /> Neues Gerät
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {items.length > 0 && (
+            <Button size="sm" variant="outline" onClick={exportToExcel}>
+              <Download className="w-4 h-4 mr-1" /> Excel
+            </Button>
+          )}
+          {isAdmin && (
+            <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Neues Gerät
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -226,26 +315,39 @@ export default function EquipmentPage() {
               onClick={() => navigate(`/equipment/${item.id}`)}
             >
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{item.name}</span>
-                      <Badge variant="outline" className="text-xs">{KATEGORIE_LABELS[item.kategorie]}</Badge>
-                      <Badge className={`text-xs ${ZUSTAND_COLORS[item.zustand] || ""}`}>
-                        {ZUSTAND_LABELS[item.zustand]}
-                      </Badge>
+                <div className="flex items-start gap-3">
+                  {item.foto_url ? (
+                    <img
+                      src={item.foto_url}
+                      alt={item.name}
+                      className="w-12 h-12 rounded-md object-cover shrink-0 border"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 border">
+                      <Wrench className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {item.standort_typ === "lager" ? "Lager" : projectMap[item.standort_project_id!] || "Baustelle"}
-                      {item.seriennummer && ` · SN: ${item.seriennummer}`}
-                    </p>
-                  </div>
-                  {isMaintenanceSoon(item.naechste_wartung) && (
-                    <Badge variant={isMaintenanceOverdue(item.naechste_wartung) ? "destructive" : "secondary"} className="shrink-0 text-xs">
-                      <AlertTriangle className="w-3 h-3 mr-1" />
-                      {isMaintenanceOverdue(item.naechste_wartung) ? "Überfällig" : "Wartung bald"}
-                    </Badge>
                   )}
+                  <div className="flex items-start justify-between gap-2 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{item.name}</span>
+                        <Badge variant="outline" className="text-xs">{KATEGORIE_LABELS[item.kategorie]}</Badge>
+                        <Badge className={`text-xs ${ZUSTAND_COLORS[item.zustand] || ""}`}>
+                          {ZUSTAND_LABELS[item.zustand]}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.standort_typ === "lager" ? "Lager" : projectMap[item.standort_project_id!] || "Baustelle"}
+                        {item.seriennummer && ` · SN: ${item.seriennummer}`}
+                      </p>
+                    </div>
+                    {isMaintenanceSoon(item.naechste_wartung) && (
+                      <Badge variant={isMaintenanceOverdue(item.naechste_wartung) ? "destructive" : "secondary"} className="shrink-0 text-xs">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        {isMaintenanceOverdue(item.naechste_wartung) ? "Überfällig" : "Wartung bald"}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -330,6 +432,87 @@ export default function EquipmentPage() {
             <div>
               <Label>Notizen</Label>
               <Textarea value={form.notizen} onChange={(e) => setForm({ ...form, notizen: e.target.value })} rows={2} />
+            </div>
+            {/* Photo uploads */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="flex items-center gap-1.5 mb-1.5">
+                  <Camera className="w-3.5 h-3.5" /> Gerätefoto
+                </Label>
+                <input
+                  ref={fotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFotoFile(file);
+                      setFotoPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                />
+                {fotoPreview ? (
+                  <div className="relative">
+                    <img src={fotoPreview} alt="Gerätefoto" className="w-full h-28 object-cover rounded-md border" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6"
+                      onClick={(e) => { e.stopPropagation(); setFotoFile(null); setFotoPreview(null); }}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className="w-full h-28 border-2 border-dashed rounded-md flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => fotoInputRef.current?.click()}
+                  >
+                    <Camera className="w-6 h-6 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Foto hochladen</span>
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label className="flex items-center gap-1.5 mb-1.5">
+                  <Receipt className="w-3.5 h-3.5" /> Rechnungsfoto
+                </Label>
+                <input
+                  ref={rechnungInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setRechnungFile(file);
+                      setRechnungPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                />
+                {rechnungPreview ? (
+                  <div className="relative">
+                    <img src={rechnungPreview} alt="Rechnung" className="w-full h-28 object-cover rounded-md border" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6"
+                      onClick={(e) => { e.stopPropagation(); setRechnungFile(null); setRechnungPreview(null); }}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className="w-full h-28 border-2 border-dashed rounded-md flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => rechnungInputRef.current?.click()}
+                  >
+                    <Receipt className="w-6 h-6 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Rechnung hochladen</span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => { resetForm(); setShowForm(false); }}>Abbrechen</Button>

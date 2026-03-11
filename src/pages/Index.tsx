@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, UserPlus, Zap, Receipt, Bell, X, CloudRain, ClipboardList, Scale, Wrench, CalendarDays, BookOpen, Star, MapPin, Megaphone, MessageCircle, ChevronLeft } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, UserPlus, Zap, Receipt, Bell, X, CloudRain, ClipboardList, Scale, Wrench, CalendarDays, BookOpen, Star, MapPin, Megaphone, MessageCircle, ChevronLeft, Package, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WeeklyAssignmentWidget } from "@/components/dashboard/WeeklyAssignmentWidget";
 
 type Project = {
   id: string;
@@ -487,8 +488,8 @@ export default function Index() {
           </div>
         )}
 
-        {/* Missing Hours Reminder */}
-        {missingHoursDate && (
+        {/* Missing Hours Reminder — nicht für Externe */}
+        {!isExternal && missingHoursDate && (
           <div
             className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 cursor-pointer"
             onClick={() => navigate(`/time-tracking?date=${missingHoursDate}`)}
@@ -504,8 +505,8 @@ export default function Index() {
           </div>
         )}
 
-        {/* Favoriten-Projekte */}
-        {favoriteProjects.length > 0 && (
+        {/* Favoriten-Projekte — nicht für Externe */}
+        {!isExternal && favoriteProjects.length > 0 && (
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Star className="h-5 w-5 fill-red-500 text-red-500" />
@@ -538,12 +539,104 @@ export default function Index() {
           </div>
         )}
 
+        {/* Chat-Button — prominent über dem Grid */}
+        <div
+          className="mb-6 flex items-center gap-4 rounded-xl border-2 border-green-400 bg-green-50 dark:bg-green-950/20 p-4 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors shadow-sm"
+          onClick={() => {
+            if (isAdmin) {
+              setChatDialogMode("select");
+              setShowChatDialog(true);
+            } else {
+              navigate("/company-chat");
+            }
+          }}
+        >
+          <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center shrink-0">
+            {isAdmin ? <MessageCircle className="h-6 w-6 text-green-600" /> : <Megaphone className="h-6 w-6 text-green-600" />}
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-green-900 dark:text-green-100">{isAdmin ? "Chat starten" : "Firmen-Chat"}</p>
+            <p className="text-sm text-green-700 dark:text-green-300">
+              {isAdmin ? "Firmen-Chat oder Projekt-Chat starten" : "Nachrichten & Infos vom Chef"}
+            </p>
+          </div>
+          <ArrowRight className="h-5 w-5 text-green-600 shrink-0" />
+        </div>
+
+        {/* Chat starten Dialog (Admin) */}
+        <Dialog open={showChatDialog} onOpenChange={(open) => { setShowChatDialog(open); if (!open) setChatDialogMode("select"); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {chatDialogMode === "project" && (
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-1" onClick={() => setChatDialogMode("select")}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                {chatDialogMode === "select" ? "Chat starten" : "Projekt auswählen"}
+              </DialogTitle>
+            </DialogHeader>
+
+            {chatDialogMode === "select" ? (
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-all hover:border-green-500/50 border-2"
+                  onClick={() => { setShowChatDialog(false); navigate("/company-chat"); }}
+                >
+                  <CardContent className="p-4 text-center space-y-2">
+                    <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto">
+                      <Megaphone className="h-6 w-6 text-green-600" />
+                    </div>
+                    <p className="font-semibold text-sm">Firmen-Chat</p>
+                    <p className="text-xs text-muted-foreground">An Mitarbeiter senden</p>
+                  </CardContent>
+                </Card>
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-all hover:border-blue-500/50 border-2"
+                  onClick={() => setChatDialogMode("project")}
+                >
+                  <CardContent className="p-4 text-center space-y-2">
+                    <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto">
+                      <FolderKanban className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <p className="font-semibold text-sm">Projekt-Chat</p>
+                    <p className="text-xs text-muted-foreground">In einem Projekt</p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-80 overflow-y-auto pt-2">
+                {allProjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Projekte</p>
+                ) : (
+                  allProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                      onClick={() => { setShowChatDialog(false); navigate(`/projects/${project.id}/chat`); }}
+                    >
+                      <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium flex-1 truncate">{project.name}</span>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Wochenplanung Widget */}
+        {!isExternal && user && (
+          <WeeklyAssignmentWidget userId={user.id} />
+        )}
+
         {/* Main Actions Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
           {/* Zeiterfassung - Für alle */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
-            onClick={() => navigate("/time-tracking")}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+            onClick={() => navigate(isExternal ? "/external-time-tracking" : "/time-tracking")}
           >
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -558,95 +651,6 @@ export default function Index() {
               <Button className="w-full" size="sm">Stunden erfassen</Button>
             </CardContent>
           </Card>
-
-          {/* Chat - Admin: Dialog; Nicht-Admin: direkt Firmen-Chat */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-green-500/50"
-            onClick={() => {
-              if (isAdmin) {
-                setChatDialogMode("select");
-                setShowChatDialog(true);
-              } else {
-                navigate("/company-chat");
-              }
-            }}
-          >
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                {isAdmin ? <MessageCircle className="h-6 w-6 text-green-600" /> : <Megaphone className="h-6 w-6 text-green-600" />}
-              </div>
-              <CardTitle className="text-lg sm:text-xl">{isAdmin ? "Chat starten" : "Firmen-Chat"}</CardTitle>
-              <CardDescription className="text-sm">
-                {isAdmin ? "Firmen-Chat oder Projekt-Chat starten" : "Nachrichten & Infos vom Chef"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm" variant="outline">{isAdmin ? "Chat starten" : "Chat öffnen"}</Button>
-            </CardContent>
-          </Card>
-
-          {/* Chat starten Dialog (Admin) */}
-          <Dialog open={showChatDialog} onOpenChange={(open) => { setShowChatDialog(open); if (!open) setChatDialogMode("select"); }}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {chatDialogMode === "project" && (
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-1" onClick={() => setChatDialogMode("select")}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {chatDialogMode === "select" ? "Chat starten" : "Projekt auswählen"}
-                </DialogTitle>
-              </DialogHeader>
-
-              {chatDialogMode === "select" ? (
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <Card
-                    className="cursor-pointer hover:shadow-md transition-all hover:border-green-500/50 border-2"
-                    onClick={() => { setShowChatDialog(false); navigate("/company-chat"); }}
-                  >
-                    <CardContent className="p-4 text-center space-y-2">
-                      <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto">
-                        <Megaphone className="h-6 w-6 text-green-600" />
-                      </div>
-                      <p className="font-semibold text-sm">Firmen-Chat</p>
-                      <p className="text-xs text-muted-foreground">An Mitarbeiter senden</p>
-                    </CardContent>
-                  </Card>
-                  <Card
-                    className="cursor-pointer hover:shadow-md transition-all hover:border-blue-500/50 border-2"
-                    onClick={() => setChatDialogMode("project")}
-                  >
-                    <CardContent className="p-4 text-center space-y-2">
-                      <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto">
-                        <FolderKanban className="h-6 w-6 text-blue-600" />
-                      </div>
-                      <p className="font-semibold text-sm">Projekt-Chat</p>
-                      <p className="text-xs text-muted-foreground">In einem Projekt</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              ) : (
-                <div className="space-y-1 max-h-80 overflow-y-auto pt-2">
-                  {allProjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Projekte</p>
-                  ) : (
-                    allProjects.map((project) => (
-                      <div
-                        key={project.id}
-                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors"
-                        onClick={() => { setShowChatDialog(false); navigate(`/projects/${project.id}/chat`); }}
-                      >
-                        <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-medium flex-1 truncate">{project.name}</span>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
 
           {/* Projekte - Ab Facharbeiter */}
           {canSee("facharbeiter") && (
@@ -705,27 +709,6 @@ export default function Index() {
             </CardHeader>
             <CardContent>
               <Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button>
-            </CardContent>
-          </Card>
-          )}
-
-          {/* Schlechtwetter - Ab Vorarbeiter */}
-          {canSee("vorarbeiter") && (
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/bad-weather")}
-          >
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <CloudRain className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg sm:text-xl">Schlechtwetter</CardTitle>
-              <CardDescription className="text-sm">
-                Schlechtwettertage dokumentieren
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm" variant="outline">Schlechtwetter öffnen</Button>
             </CardContent>
           </Card>
           )}
@@ -819,7 +802,7 @@ export default function Index() {
           {isAdmin && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/legal-work-time")}
+              onClick={() => navigate("/hours-report?tab=arbeitszeitaufzeichnung")}
             >
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -836,8 +819,8 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Admin: Plantafel */}
-          {isAdmin && (
+          {/* Plantafel - Ab Vorarbeiter */}
+          {canSee("vorarbeiter") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/schedule")}
@@ -848,7 +831,7 @@ export default function Index() {
                 </div>
                 <CardTitle className="text-lg sm:text-xl">Plantafel</CardTitle>
                 <CardDescription className="text-sm">
-                  Mitarbeiter-Einsatzplanung pro Woche
+                  Zeit- und Ressourcenplanung
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -878,23 +861,107 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Admin: Rechnungen */}
+          {/* Admin: Eingangsrechnungen */}
           {isAdmin && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/invoices")}
+              onClick={() => navigate("/incoming-invoices")}
             >
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Receipt className="h-6 w-6 text-primary" />
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Rechnungen</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Eingangsrechnungen</CardTitle>
                 <CardDescription className="text-sm">
-                  Rechnungen & Angebote verwalten
+                  Rechnungen prüfen & abgleichen
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Rechnungen öffnen</Button>
+                <Button className="w-full" size="sm" variant="outline">Eingangsrechnungen öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Vorarbeiter+: Evaluierungen & Unterweisungen */}
+          {canSee("vorarbeiter") && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/safety-evaluations")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Evaluierungen</CardTitle>
+                <CardDescription className="text-sm">
+                  Sicherheitsunterweisungen & Evaluierungen
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Evaluierungen öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Alle: Arbeitsschutz */}
+          {!isExternal && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/my-safety")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-green-500" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Arbeitsschutz</CardTitle>
+                <CardDescription className="text-sm">
+                  Meine Unterweisungen & Evaluierungen
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Arbeitsschutz öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lieferscheine & Rechnungen erfassen */}
+          {canSee("facharbeiter") && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/incoming-documents")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-blue-500" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Lieferscheine</CardTitle>
+                <CardDescription className="text-sm">
+                  Lieferscheine & Rechnungen fotografieren
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Erfassen</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lagerverwaltung */}
+          {canSee("facharbeiter") && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/warehouse")}
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <Package className="h-6 w-6 text-amber-500" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Lagerverwaltung</CardTitle>
+                <CardDescription className="text-sm">
+                  Lagerbestand & Lieferscheine
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Öffnen</Button>
               </CardContent>
             </Card>
           )}
@@ -988,8 +1055,8 @@ export default function Index() {
           </Card>
         )}
 
-        {/* Projects Overview */}
-        {projects.length > 0 && (
+        {/* Projects Overview — nicht für Externe */}
+        {!isExternal && projects.length > 0 && (
           <div className="mt-6 sm:mt-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl sm:text-2xl font-bold">Aktive Projekte</h2>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, Plus, Calendar, Clock, User, Mail, Phone, MapPin, Filter, Search, ArrowLeft } from "lucide-react";
+import { Zap, Plus, Calendar, Clock, User, Mail, Phone, MapPin, Filter, Search, ArrowLeft, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -164,6 +165,31 @@ const Disturbances = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const exportToExcel = () => {
+    const data = filteredDisturbances.map((d) => ({
+      Datum: d.datum,
+      Kunde: d.kunde_name,
+      Adresse: d.kunde_adresse || "",
+      "Von": d.start_time?.slice(0, 5) || "",
+      "Bis": d.end_time?.slice(0, 5) || "",
+      Stunden: d.stunden,
+      Beschreibung: d.beschreibung,
+      Status: d.status,
+      Verrechnet: d.is_verrechnet ? "Ja" : "Nein",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "E2E8F0" } } };
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) ws[addr].s = headerStyle;
+    }
+    ws["!cols"] = [{ wch: 12 }, { wch: 25 }, { wch: 30 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 40 }, { wch: 14 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Regieberichte");
+    XLSX.writeFile(wb, `Regieberichte_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -198,10 +224,18 @@ const Disturbances = () => {
               Service-Einsätze dokumentieren
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Neuer Regiebericht
-          </Button>
+          <div className="flex gap-2">
+            {filteredDisturbances.length > 0 && (
+              <Button variant="outline" onClick={exportToExcel} className="gap-2">
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Excel Export</span>
+              </Button>
+            )}
+            <Button onClick={() => setShowForm(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Neuer Regiebericht
+            </Button>
+          </div>
         </div>
 
         {/* Filter Section */}

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Shield, User as UserIcon, UserPlus, Send, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar, Package, Plus } from "lucide-react";
+import { ArrowLeft, Shield, User as UserIcon, UserPlus, Send, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar, Package, Plus, Upload } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import * as XLSX from "xlsx-js-style";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
+import { PayslipBulkUploadDialog } from "@/components/PayslipBulkUploadDialog";
 import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
 
@@ -84,6 +85,7 @@ export default function Admin() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showSizesDialog, setShowSizesDialog] = useState(false);
+  const [showPayslipUpload, setShowPayslipUpload] = useState(false);
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<'stammdaten' | 'dokumente' | 'stunden'>('stammdaten');
   
@@ -950,10 +952,16 @@ export default function Admin() {
               Rollen verwalten und Mitarbeiterdaten/Dokumente bearbeiten
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={() => setShowSizesDialog(true)}>
-            <Shirt className="w-4 h-4 mr-2" />
-            Arbeitskleidung/Schuhe Größen
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setShowPayslipUpload(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Sammel-Lohnzettel
+            </Button>
+            <Button variant="outline" onClick={() => setShowSizesDialog(true)}>
+              <Shirt className="w-4 h-4 mr-2" />
+              Arbeitskleidung/Schuhe Größen
+            </Button>
+          </div>
         </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -1742,6 +1750,10 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
+      <PayslipBulkUploadDialog
+        open={showPayslipUpload}
+        onOpenChange={setShowPayslipUpload}
+      />
     </div>
   );
 }

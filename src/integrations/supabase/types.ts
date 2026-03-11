@@ -133,6 +133,30 @@ export type Database = {
           },
         ]
       }
+      company_holidays: {
+        Row: {
+          id: string
+          datum: string
+          bezeichnung: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          datum: string
+          bezeichnung?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          datum?: string
+          bezeichnung?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       daily_report_activities: {
         Row: {
           beschreibung: string
@@ -542,6 +566,145 @@ export type Database = {
           },
         ]
       }
+      delivery_notes: {
+        Row: {
+          id: string
+          order_id: string
+          project_id: string
+          photo_url: string
+          notes: string | null
+          uploaded_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          project_id: string
+          photo_url: string
+          notes?: string | null
+          uploaded_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          project_id?: string
+          photo_url?: string
+          notes?: string | null
+          uploaded_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_notes_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          id: string
+          order_id: string
+          material: string
+          menge: string | null
+          einheit: string | null
+          status: string
+          checked_by: string | null
+          checked_at: string | null
+          comment: string | null
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          material: string
+          menge?: string | null
+          einheit?: string | null
+          status?: string
+          checked_by?: string | null
+          checked_at?: string | null
+          comment?: string | null
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          material?: string
+          menge?: string | null
+          einheit?: string | null
+          status?: string
+          checked_by?: string | null
+          checked_at?: string | null
+          comment?: string | null
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          screenshot_url: string | null
+          title: string | null
+          status: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          screenshot_url?: string | null
+          title?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          screenshot_url?: string | null
+          title?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           adresse: string | null
@@ -641,12 +804,14 @@ export type Database = {
       equipment: {
         Row: {
           created_at: string
+          foto_url: string | null
           id: string
           kategorie: string
           kaufdatum: string | null
           naechste_wartung: string | null
           name: string
           notizen: string | null
+          rechnung_foto_url: string | null
           seriennummer: string | null
           standort_project_id: string | null
           standort_typ: string
@@ -656,12 +821,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          foto_url?: string | null
           id?: string
           kategorie: string
           kaufdatum?: string | null
           naechste_wartung?: string | null
           name: string
           notizen?: string | null
+          rechnung_foto_url?: string | null
           seriennummer?: string | null
           standort_project_id?: string | null
           standort_typ?: string
@@ -671,12 +838,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          foto_url?: string | null
           id?: string
           kategorie?: string
           kaufdatum?: string | null
           naechste_wartung?: string | null
           name?: string
           notizen?: string | null
+          rechnung_foto_url?: string | null
           seriennummer?: string | null
           standort_project_id?: string | null
           standort_typ?: string
@@ -756,6 +925,74 @@ export type Database = {
           {
             foreignKeyName: "equipment_transfers_von_project_id_fkey"
             columns: ["von_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      incoming_documents: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          typ: string
+          status: string
+          photo_url: string
+          lieferant: string | null
+          dokument_datum: string | null
+          dokument_nummer: string | null
+          betrag: number | null
+          positionen: Json
+          unterschrift: string | null
+          unterschrift_name: string | null
+          notizen: string | null
+          bezahlt_am: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          typ: string
+          status?: string
+          photo_url: string
+          lieferant?: string | null
+          dokument_datum?: string | null
+          dokument_nummer?: string | null
+          betrag?: number | null
+          positionen?: Json
+          unterschrift?: string | null
+          unterschrift_name?: string | null
+          notizen?: string | null
+          bezahlt_am?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          typ?: string
+          status?: string
+          photo_url?: string
+          lieferant?: string | null
+          dokument_datum?: string | null
+          dokument_nummer?: string | null
+          betrag?: number | null
+          positionen?: Json
+          unterschrift?: string | null
+          unterschrift_name?: string | null
+          notizen?: string | null
+          bezahlt_am?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incoming_documents_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
@@ -1116,6 +1353,129 @@ export type Database = {
           },
         ]
       }
+      safety_evaluation_employees: {
+        Row: {
+          created_at: string
+          evaluation_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evaluation_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evaluation_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluation_employees_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "safety_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_evaluation_signatures: {
+        Row: {
+          created_at: string
+          evaluation_id: string
+          id: string
+          unterschrieben_am: string
+          unterschrift: string
+          unterschrift_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evaluation_id: string
+          id?: string
+          unterschrieben_am?: string
+          unterschrift: string
+          unterschrift_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evaluation_id?: string
+          id?: string
+          unterschrieben_am?: string
+          unterschrift?: string
+          unterschrift_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluation_signatures_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "safety_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_evaluations: {
+        Row: {
+          checklist_items: unknown
+          created_at: string
+          created_by: string
+          diskussion_notizen: string | null
+          excel_file_url: string | null
+          filled_answers: unknown
+          id: string
+          kategorie: string | null
+          project_id: string
+          status: string
+          titel: string
+          typ: string
+          updated_at: string
+        }
+        Insert: {
+          checklist_items?: unknown
+          created_at?: string
+          created_by: string
+          diskussion_notizen?: string | null
+          excel_file_url?: string | null
+          filled_answers?: unknown
+          id?: string
+          kategorie?: string | null
+          project_id: string
+          status?: string
+          titel: string
+          typ: string
+          updated_at?: string
+        }
+        Update: {
+          checklist_items?: unknown
+          created_at?: string
+          created_by?: string
+          diskussion_notizen?: string | null
+          excel_file_url?: string | null
+          filled_answers?: unknown
+          id?: string
+          kategorie?: string | null
+          project_id?: string
+          status?: string
+          titel?: string
+          typ?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           anleitung_completed: boolean | null
@@ -1385,7 +1745,7 @@ export type Database = {
           kunde_email: string | null
           kunde_telefon: string | null
           name: string
-          plz: string
+          plz: string | null
           start_datum: string | null
           status: string | null
           updated_at: string
@@ -1406,7 +1766,7 @@ export type Database = {
           kunde_email?: string | null
           kunde_telefon?: string | null
           name: string
-          plz: string
+          plz?: string | null
           start_datum?: string | null
           status?: string | null
           updated_at?: string
@@ -1427,7 +1787,7 @@ export type Database = {
           kunde_email?: string | null
           kunde_telefon?: string | null
           name?: string
-          plz?: string
+          plz?: string | null
           start_datum?: string | null
           status?: string | null
           updated_at?: string
@@ -1837,6 +2197,183 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_products: {
+        Row: {
+          id: string
+          name: string
+          category: string
+          einheit: string
+          ek_preis: number | null
+          current_stock: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          category: string
+          einheit?: string
+          ek_preis?: number | null
+          current_stock?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          category?: string
+          einheit?: string
+          ek_preis?: number | null
+          current_stock?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      warehouse_delivery_notes: {
+        Row: {
+          id: string
+          transfer_type: string
+          source_project_id: string | null
+          target_project_id: string | null
+          user_id: string
+          datum: string
+          photo_urls: string[]
+          unterschrift: string
+          unterschrift_name: string | null
+          notizen: string | null
+          parent_note_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          transfer_type: string
+          source_project_id?: string | null
+          target_project_id?: string | null
+          user_id: string
+          datum?: string
+          photo_urls?: string[]
+          unterschrift: string
+          unterschrift_name?: string | null
+          notizen?: string | null
+          parent_note_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          transfer_type?: string
+          source_project_id?: string | null
+          target_project_id?: string | null
+          user_id?: string
+          datum?: string
+          photo_urls?: string[]
+          unterschrift?: string
+          unterschrift_name?: string | null
+          notizen?: string | null
+          parent_note_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_delivery_notes_source_project_id_fkey"
+            columns: ["source_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_notes_target_project_id_fkey"
+            columns: ["target_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_delivery_note_items: {
+        Row: {
+          id: string
+          delivery_note_id: string
+          product_id: string
+          menge: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          delivery_note_id: string
+          product_id: string
+          menge: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          delivery_note_id?: string
+          product_id?: string
+          menge?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_delivery_note_items_delivery_note_id_fkey"
+            columns: ["delivery_note_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_delivery_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_note_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_stock_transactions: {
+        Row: {
+          id: string
+          product_id: string
+          delivery_note_id: string
+          menge: number
+          project_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          delivery_note_id: string
+          menge: number
+          project_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          delivery_note_id?: string
+          menge?: number
+          project_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stock_transactions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stock_transactions_delivery_note_id_fkey"
+            columns: ["delivery_note_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_delivery_notes"
             referencedColumns: ["id"]
           },
         ]

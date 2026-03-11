@@ -49,6 +49,7 @@ type DailyReport = {
 
 type Activity = { id: string; geschoss: string; beschreibung: string; sort_order: number };
 type Photo = { id: string; file_path: string; file_name: string };
+type Worker = { user_id: string; name: string };
 
 export default function DailyReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +59,7 @@ export default function DailyReportDetail() {
   const [report, setReport] = useState<DailyReport | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -98,6 +100,24 @@ export default function DailyReportDetail() {
       .eq("daily_report_id", id)
       .order("created_at");
     if (pics) setPhotos(pics);
+
+    // Fetch workers
+    const { data: workerData } = await supabase
+      .from("daily_report_workers")
+      .select("user_id")
+      .eq("daily_report_id", id);
+    if (workerData && workerData.length > 0) {
+      const userIds = workerData.map((w: any) => w.user_id);
+      const { data: empData } = await supabase
+        .from("employees")
+        .select("user_id, vorname, nachname")
+        .in("user_id", userIds);
+      if (empData) {
+        setWorkers(empData.map((e: any) => ({ user_id: e.user_id, name: `${e.vorname} ${e.nachname}`.trim() })));
+      }
+    } else {
+      setWorkers([]);
+    }
 
     setLoading(false);
   }, [id]);
@@ -294,6 +314,20 @@ export default function DailyReportDetail() {
               {report.notizen && (
                 <p className="text-sm text-muted-foreground mt-2">{report.notizen}</p>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Anwesende Mitarbeiter */}
+        {workers.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Anwesende Mitarbeiter</CardTitle></CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {workers.map((w) => (
+                  <Badge key={w.user_id} variant="secondary">{w.name}</Badge>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}

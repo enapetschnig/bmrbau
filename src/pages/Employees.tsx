@@ -504,9 +504,48 @@ export default function Employees() {
                   {formData.kategorie !== "extern" && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Regelarbeitszeit</h3>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Wochensoll: {formData.wochen_soll_stunden || 39}h
-                    </p>
+                    <div className="flex items-center gap-3 mb-3">
+                      <Label className="text-sm whitespace-nowrap">Wochenstunden:</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="60"
+                        step="0.5"
+                        value={formData.wochen_soll_stunden || 39}
+                        onChange={(e) => {
+                          const newTotal = parseFloat(e.target.value) || 0;
+                          const schedule = (formData.regelarbeitszeit as WeekSchedule) || DEFAULT_SCHEDULE;
+                          const oldTotal = Object.values(schedule).reduce((s, d) => s + (d?.hours ?? 0), 0);
+                          if (oldTotal === 0) return;
+
+                          const newSchedule = { ...schedule };
+                          const timeToMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+                          const minToTime = (mins: number) => {
+                            const h = Math.floor(mins / 60);
+                            const m = Math.round(mins % 60);
+                            return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+                          };
+
+                          for (const dayKey of Object.keys(schedule) as (keyof WeekSchedule)[]) {
+                            const day = schedule[dayKey];
+                            if (!day || day.hours === 0) continue;
+                            const ratio = day.hours / oldTotal;
+                            const newHours = Math.round(newTotal * ratio * 4) / 4; // round to 0.25
+                            const newDay = { ...day, hours: newHours };
+                            // Recalculate end time if start exists
+                            if (day.start) {
+                              const startMin = timeToMin(day.start);
+                              const endMin = startMin + (newHours * 60) + (day.pause || 0);
+                              newDay.end = minToTime(Math.min(endMin, 23 * 60 + 59));
+                            }
+                            newSchedule[dayKey] = newDay;
+                          }
+                          setFormData({ ...formData, regelarbeitszeit: newSchedule, wochen_soll_stunden: newTotal });
+                        }}
+                        className="h-9 w-24"
+                      />
+                      <span className="text-sm text-muted-foreground">h/Woche</span>
+                    </div>
                     <div className="grid grid-cols-7 gap-2">
                       {DAY_KEYS.map((key, idx) => {
                         const schedule = (formData.regelarbeitszeit as WeekSchedule) || DEFAULT_SCHEDULE;
@@ -540,7 +579,7 @@ export default function Employees() {
                               type="number"
                               min="0"
                               max="24"
-                              step="0.5"
+                              step="0.25"
                               value={day.hours}
                               onChange={(e) => {
                                 const newSchedule = { ...schedule };
@@ -552,12 +591,27 @@ export default function Employees() {
                               className="h-8 text-xs px-1"
                               placeholder="h"
                             />
+                            <Input
+                              type="number"
+                              min="0"
+                              max="120"
+                              step="5"
+                              value={day.pause || 0}
+                              onChange={(e) => {
+                                const newSchedule = { ...schedule };
+                                const pause = parseInt(e.target.value) || 0;
+                                newSchedule[key] = { ...day, pause };
+                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
+                              }}
+                              className="h-8 text-xs px-1"
+                              placeholder="min"
+                            />
                           </div>
                         );
                       })}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Von / Bis / Stunden pro Tag
+                      Von / Bis / Stunden / Pause (min) pro Tag
                     </p>
                   </div>
                   )}

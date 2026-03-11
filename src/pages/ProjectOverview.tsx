@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle, ClipboardCheck } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -610,6 +610,40 @@ const ProjectOverview = () => {
               </div>
               <CardTitle className="text-xl">Materialliste</CardTitle>
               <CardDescription>Verwendete Materialien dokumentieren</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full">Öffnen</Button>
+            </CardContent>
+          </Card>
+
+          {/* Bestellungen */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => navigate(`/projects/${projectId}/orders`)}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="text-primary"><ClipboardCheck className="h-8 w-8" /></div>
+              </div>
+              <CardTitle className="text-xl">Bestellungen</CardTitle>
+              <CardDescription>Bestellungen verwalten & Lieferungen abhaken</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full">Öffnen</Button>
+            </CardContent>
+          </Card>
+
+          {/* Lieferscheine */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => navigate(`/incoming-documents?project=${projectId}`)}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="text-primary"><FileCheck className="h-8 w-8" /></div>
+              </div>
+              <CardTitle className="text-xl">Lieferscheine</CardTitle>
+              <CardDescription>Lieferscheine & Rechnungen erfassen</CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" className="w-full">Öffnen</Button>
