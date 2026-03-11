@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, UserPlus, Zap, Receipt, CloudRain, ClipboardList, Wrench, CalendarDays, BookOpen, Star, MapPin, Megaphone, MessageCircle, ChevronLeft, Package, ShieldCheck, Plus } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, Camera, ArrowRight, Info, User as UserIcon, UserPlus, Zap, Receipt, CloudRain, ClipboardList, Wrench, CalendarDays, BookOpen, Star, MapPin, Megaphone, MessageCircle, ChevronLeft, Package, ShieldCheck, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -18,6 +18,9 @@ import {
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WeeklyAssignmentWidget } from "@/components/dashboard/WeeklyAssignmentWidget";
 
 type Project = {
@@ -78,9 +81,16 @@ export default function Index() {
   const [favoriteProjects, setFavoriteProjects] = useState<{ id: string; name: string; adresse: string | null }[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [showChatDialog, setShowChatDialog] = useState(false);
-  const [chatDialogMode, setChatDialogMode] = useState<"select" | "project">("select");
+  const [chatDialogMode, setChatDialogMode] = useState<"select" | "project" | "company">("select");
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [chatPreviews, setChatPreviews] = useState<ChatPreview[]>([]);
+  // New channel creation from dashboard
+  const [newChAudience, setNewChAudience] = useState<"all" | "roles" | "direct">("all");
+  const [newChRoles, setNewChRoles] = useState<string[]>([]);
+  const [newChDirectUserId, setNewChDirectUserId] = useState("");
+  const [newChName, setNewChName] = useState("");
+  const [newChCreating, setNewChCreating] = useState(false);
+  const [chatEmployees, setChatEmployees] = useState<{ user_id: string; vorname: string; nachname: string }[]>([]);
   const { handleRestartInstallGuide } = useOnboarding();
 
   // Role-based visibility helper
@@ -290,6 +300,79 @@ export default function Index() {
     });
 
     setChatPreviews(previews);
+  };
+
+  const ROLE_LABELS: Record<string, string> = {
+    vorarbeiter: "Vorarbeiter",
+    facharbeiter: "Facharbeiter",
+    lehrling: "Lehrling",
+    extern: "Extern",
+  };
+
+  const loadChatEmployees = async () => {
+    const { data } = await supabase
+      .from("employees")
+      .select("user_id, vorname, nachname")
+      .order("nachname");
+    setChatEmployees((data || []) as { user_id: string; vorname: string; nachname: string }[]);
+  };
+
+  const handleCreateChannelFromDashboard = async () => {
+    if (!user) return;
+    if (newChAudience === "roles" && newChRoles.length === 0) return;
+    if (newChAudience === "direct" && !newChDirectUserId) return;
+
+    setNewChCreating(true);
+
+    let target_roles: string[] = [];
+    let target_user_id: string | null = null;
+    let channel_type = "broadcast";
+
+    if (newChAudience === "roles") {
+      target_roles = newChRoles;
+    } else if (newChAudience === "direct") {
+      channel_type = "direct";
+      target_user_id = newChDirectUserId;
+    }
+
+    const directEmp = chatEmployees.find((e) => e.user_id === newChDirectUserId);
+    const autoName =
+      newChAudience === "all"
+        ? "Alle Mitarbeiter"
+        : newChAudience === "direct" && directEmp
+        ? `${directEmp.vorname} ${directEmp.nachname}`.trim()
+        : newChRoles.map((r) => ROLE_LABELS[r] || r).join(", ");
+
+    const name = newChName.trim() || autoName;
+
+    const { data, error } = await supabase
+      .from("chat_channels")
+      .insert({ name, channel_type, target_roles, target_user_id, created_by: user.id })
+      .select()
+      .single();
+
+    setNewChCreating(false);
+
+    if (!error && data) {
+      setShowChatDialog(false);
+      setNewChAudience("all");
+      setNewChRoles([]);
+      setNewChDirectUserId("");
+      setNewChName("");
+      navigate(`/company-chat?tab=${data.id}`);
+    }
+  };
+
+  const handleDeleteChannel = async (channelId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await supabase.from("chat_channels").delete().eq("id", channelId);
+    setChatPreviews((prev) => prev.filter((p) => p.channelId !== channelId));
+  };
+
+  const toggleNewChRole = (role: string) => {
+    setNewChRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    );
   };
 
   const fetchRecentEntries = async (userId: string, role: string | null) => {
@@ -716,6 +799,16 @@ export default function Index() {
                       {chat.unreadCount}
                     </Badge>
                   )}
+                  {/* X button: admin can delete company channels */}
+                  {isAdmin && chat.type === "company" && chat.channelId && (
+                    <button
+                      className="ml-1 h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                      onClick={(e) => handleDeleteChannel(chat.channelId!, e)}
+                      title="Chat löschen"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -741,25 +834,31 @@ export default function Index() {
           </div>
         )}
 
-        {/* Chat starten Dialog (Admin) */}
-        <Dialog open={showChatDialog} onOpenChange={(open) => { setShowChatDialog(open); if (!open) setChatDialogMode("select"); }}>
+        {/* Chat starten Dialog */}
+        <Dialog open={showChatDialog} onOpenChange={(open) => {
+          setShowChatDialog(open);
+          if (!open) { setChatDialogMode("select"); setNewChAudience("all"); setNewChRoles([]); setNewChDirectUserId(""); setNewChName(""); }
+        }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {chatDialogMode === "project" && (
+                {(chatDialogMode === "project" || chatDialogMode === "company") && (
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-1" onClick={() => setChatDialogMode("select")}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                 )}
-                {chatDialogMode === "select" ? "Chat starten" : "Projekt auswählen"}
+                {chatDialogMode === "select" ? "Chat starten"
+                  : chatDialogMode === "company" ? "Neuer Firmen-Chat"
+                  : "Projekt auswählen"}
               </DialogTitle>
             </DialogHeader>
 
-            {chatDialogMode === "select" ? (
+            {/* Step 1: Select type */}
+            {chatDialogMode === "select" && (
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <Card
                   className="cursor-pointer hover:shadow-md transition-all hover:border-green-500/50 border-2"
-                  onClick={() => { setShowChatDialog(false); navigate("/company-chat"); }}
+                  onClick={() => { loadChatEmployees(); setChatDialogMode("company"); }}
                 >
                   <CardContent className="p-4 text-center space-y-2">
                     <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto">
@@ -782,7 +881,90 @@ export default function Index() {
                   </CardContent>
                 </Card>
               </div>
-            ) : (
+            )}
+
+            {/* Step 2a: Create company channel */}
+            {chatDialogMode === "company" && (
+              <div className="space-y-4 pt-2">
+                <div>
+                  <Label className="text-sm font-medium">Wer soll diesen Chat sehen?</Label>
+                  <div className="space-y-2 mt-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input type="radio" name="chAudience" checked={newChAudience === "all"} onChange={() => setNewChAudience("all")} className="accent-primary" />
+                      Alle Mitarbeiter
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input type="radio" name="chAudience" checked={newChAudience === "roles"} onChange={() => setNewChAudience("roles")} className="accent-primary" />
+                      Bestimmte Rollen
+                    </label>
+                    {newChAudience === "roles" && (
+                      <div className="ml-5 flex flex-wrap gap-2">
+                        {["vorarbeiter", "facharbeiter", "lehrling", "extern"].map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => toggleNewChRole(r)}
+                            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                              newChRoles.includes(r)
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted border-border hover:border-primary/50"
+                            }`}
+                          >
+                            {ROLE_LABELS[r]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input type="radio" name="chAudience" checked={newChAudience === "direct"} onChange={() => setNewChAudience("direct")} className="accent-primary" />
+                      Direktnachricht an einen Mitarbeiter
+                    </label>
+                    {newChAudience === "direct" && (
+                      <div className="ml-5">
+                        <Select value={newChDirectUserId} onValueChange={setNewChDirectUserId}>
+                          <SelectTrigger className="text-sm">
+                            <SelectValue placeholder="Mitarbeiter auswählen" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {chatEmployees.map((emp) => (
+                              <SelectItem key={emp.user_id} value={emp.user_id}>
+                                {emp.vorname} {emp.nachname}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-sm">Name des Chats (optional)</Label>
+                  <Input
+                    value={newChName}
+                    onChange={(e) => setNewChName(e.target.value)}
+                    placeholder="Wird automatisch vergeben"
+                    className="mt-1"
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCreateChannelFromDashboard(); }}
+                  />
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={handleCreateChannelFromDashboard}
+                  disabled={
+                    newChCreating ||
+                    (newChAudience === "roles" && newChRoles.length === 0) ||
+                    (newChAudience === "direct" && !newChDirectUserId)
+                  }
+                >
+                  {newChCreating ? "Erstelle..." : "Chat erstellen"}
+                </Button>
+              </div>
+            )}
+
+            {/* Step 2b: Select project */}
+            {chatDialogMode === "project" && (
               <div className="space-y-1 max-h-80 overflow-y-auto pt-2">
                 {allProjects.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Projekte</p>
