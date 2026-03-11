@@ -130,7 +130,7 @@ export default function MySafety() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <PageHeader title="Arbeitsschutz" />
+        <PageHeader title="Arbeitsschutz" backPath="/" />
         <div className="container mx-auto p-4"><p>Lade...</p></div>
       </div>
     );
@@ -138,7 +138,7 @@ export default function MySafety() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageHeader title="Arbeitsschutz" />
+      <PageHeader title="Arbeitsschutz" backPath="/" />
 
       <div className="container mx-auto p-4 max-w-4xl">
         {/* Pending alert */}

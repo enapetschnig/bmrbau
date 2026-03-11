@@ -246,7 +246,7 @@ const DisturbanceDetail = () => {
       ? workers.map((w) => `${w.vorname} ${w.nachname}`)
       : [disturbance.profile_vorname && disturbance.profile_nachname ? `${disturbance.profile_vorname} ${disturbance.profile_nachname}` : "Unbekannt"];
 
-    const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const { pdfBase64, pdfFilename } = await generateDisturbancePDF(
       { ...disturbance, unterschrift_kunde: "" },
       matData || [],

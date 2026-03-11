@@ -209,7 +209,7 @@ export default function SafetyEvaluations() {
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <PageHeader title="Evaluierungen & Unterweisungen" />
+      <PageHeader title="Evaluierungen & Unterweisungen" backPath="/" />
 
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-muted-foreground">

@@ -80,6 +80,70 @@ export type Database = {
           },
         ]
       }
+      broadcast_messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string | null
+          message: string | null
+          target_roles: string[]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          target_roles?: string[]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          target_roles?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          created_at: string | null
+          id: string
+          subscription: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          subscription: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          subscription?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bad_weather_records: {
         Row: {
           arbeitsstunden_vor_schlechtwetter: number | null
