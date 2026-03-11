@@ -86,14 +86,14 @@ export default function ScheduleBoard() {
   }, [weekStart, mode, permLoading]);
 
   // --- Assignment handlers ---
-  const handleAssign = async (uid: string, date: Date, projectId: string) => {
+  const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string) => {
     const datum = format(date, "yyyy-MM-dd");
     const existing = getAssignmentForDay(assignments, uid, date);
 
     if (existing) {
       const { error } = await supabase
         .from("worker_assignments")
-        .update({ project_id: projectId })
+        .update({ project_id: projectId, notizen: notizen ?? null })
         .eq("id", existing.id);
       if (error) {
         toast({ variant: "destructive", title: "Fehler", description: error.message });
@@ -101,13 +101,13 @@ export default function ScheduleBoard() {
       }
       setAssignments((prev) =>
         prev.map((a) =>
-          a.id === existing.id ? { ...a, project_id: projectId } : a
+          a.id === existing.id ? { ...a, project_id: projectId, notizen: notizen ?? null } : a
         )
       );
     } else {
       const { data, error } = await supabase
         .from("worker_assignments")
-        .insert({ user_id: uid, project_id: projectId, datum, created_by: userId })
+        .insert({ user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null })
         .select()
         .single();
       if (error) {

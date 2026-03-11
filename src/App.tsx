@@ -88,6 +88,13 @@ function AppContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+      const isAdmin = roleData?.role === "administrator";
+
       channel = supabase
         .channel("user-notifications")
         .on(
@@ -99,6 +106,7 @@ function AppContent() {
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            if (!isAdmin) return;
             const notification = payload.new as {
               title: string;
               message: string;

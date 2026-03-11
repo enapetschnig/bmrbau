@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { CalendarDays, ArrowRight } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   startOfISOWeek,
@@ -19,6 +18,7 @@ type WeekAssignment = {
   datum: string;
   project_id: string;
   project_name: string;
+  notizen: string | null;
 };
 
 type HolidayDay = {
@@ -37,7 +37,6 @@ interface Props {
 }
 
 export function WeeklyAssignmentWidget({ userId }: Props) {
-  const navigate = useNavigate();
   const [assignments, setAssignments] = useState<WeekAssignment[]>([]);
   const [holidays, setHolidays] = useState<HolidayDay[]>([]);
   const [leaves, setLeaves] = useState<LeaveDay[]>([]);
@@ -56,7 +55,7 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
         await Promise.all([
           supabase
             .from("worker_assignments")
-            .select("datum, project_id, projects:project_id(name)")
+            .select("datum, project_id, notizen, projects:project_id(name)")
             .eq("user_id", userId)
             .gte("datum", fromDate)
             .lte("datum", toDate),
@@ -80,6 +79,7 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
             datum: a.datum,
             project_id: a.project_id,
             project_name: a.projects?.name || "–",
+            notizen: a.notizen ?? null,
           }))
         );
       }
@@ -101,15 +101,12 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
   if (!hasAnyData) return null;
 
   return (
-    <div
-      className="mb-6 cursor-pointer"
-      onClick={() => navigate("/schedule")}
-    >
+    <div className="mb-6">
       <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
         <CalendarDays className="h-5 w-5 text-primary" />
         Meine Einteilung – KW {getISOWeek(weekStart)}
       </h2>
-      <Card className="hover:shadow-md transition-shadow">
+      <Card>
         <CardContent className="p-3">
           <div className="grid grid-cols-5 gap-1.5">
             {weekDays.map((day) => {
@@ -149,9 +146,14 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
                     </div>
                   ) : assign ? (
                     <div
-                      className={`rounded-md ${color?.bg} ${color?.text} text-[10px] px-1 py-2 border ${color?.border} truncate`}
+                      className={`rounded-md ${color?.bg} ${color?.text} text-[10px] px-1 py-2 border ${color?.border}`}
                     >
-                      {assign.project_name}
+                      <div className="truncate">{assign.project_name}</div>
+                      {assign.notizen && (
+                        <div className="text-[9px] opacity-75 mt-0.5 break-words whitespace-normal leading-tight">
+                          {assign.notizen}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-md border border-dashed border-muted-foreground/20 text-muted-foreground text-[10px] px-1 py-2">
@@ -161,10 +163,6 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
                 </div>
               );
             })}
-          </div>
-          <div className="flex items-center justify-end mt-2 text-xs text-muted-foreground">
-            <span>Plantafel öffnen</span>
-            <ArrowRight className="h-3 w-3 ml-1" />
           </div>
         </CardContent>
       </Card>

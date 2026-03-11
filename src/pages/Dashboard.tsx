@@ -29,10 +29,15 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!userId) return;
+    const CHAT_TYPES = ["chat_message", "broadcast_message"];
     const channel = supabase
       .channel("dashboard-notifications")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => setNotifications((prev) => [payload.new as Notification, ...prev])
+        (payload) => {
+          const notif = payload.new as Notification;
+          if (CHAT_TYPES.includes(notif.type)) return;
+          setNotifications((prev) => [notif, ...prev]);
+        }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -50,11 +55,13 @@ const Dashboard = () => {
       .single();
     setIsAdmin(role?.role === "administrator");
 
+    const CHAT_TYPES = ["chat_message", "broadcast_message"];
     const { data: notifs } = await supabase
       .from("notifications")
       .select("*")
       .eq("user_id", user.id)
       .eq("is_read", false)
+      .not("type", "in", `(${CHAT_TYPES.join(",")})`)
       .order("created_at", { ascending: false })
       .limit(10);
     if (notifs) setNotifications(notifs as Notification[]);
