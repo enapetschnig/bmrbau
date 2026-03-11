@@ -213,12 +213,13 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
       // 3. Call AI extraction with compressed JPEG base64
       // Use direct fetch (not supabase.functions.invoke) to access error response body
       const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-document`;
       const fnResponse = await fetch(fnUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token}`,
+          "Authorization": `Bearer ${token}`,
           "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ imageBase64: base64, mediaType: mimeType }),
