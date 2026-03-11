@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
-import { Download, Upload, Filter, FileText, Check, AlertTriangle, XCircle, Loader2 } from "lucide-react";
+import { Download, Upload, Filter, FileText, Check, AlertTriangle, XCircle, Loader2, X, Plus } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as XLSX from "xlsx-js-style";
 import * as pdfjsLib from "pdfjs-dist";
@@ -139,6 +139,7 @@ export default function IncomingInvoices() {
   const [editBelegnummer, setEditBelegnummer] = useState("");
   const [editBetrag, setEditBetrag] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
+  const [editPositionen, setEditPositionen] = useState<{ material: string; menge: string; einheit: string; preis: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
@@ -325,6 +326,7 @@ export default function IncomingInvoices() {
     setEditBelegnummer("");
     setEditBetrag("");
     setEditProjectId("");
+    setEditPositionen([]);
 
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
@@ -379,6 +381,12 @@ export default function IncomingInvoices() {
       setEditDatum(data.datum || "");
       setEditBelegnummer(data.belegnummer || "");
       setEditBetrag(data.betrag != null ? String(data.betrag) : "");
+      setEditPositionen((data.positionen || []).map((p: any) => ({
+        material: p.material || "",
+        menge: p.menge != null ? String(p.menge) : "",
+        einheit: p.einheit || "",
+        preis: p.preis != null ? String(p.preis) : "",
+      })));
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Extraktion fehlgeschlagen", description: (err as Error).message });
     } finally {
@@ -419,7 +427,12 @@ export default function IncomingInvoices() {
         dokument_datum: editDatum || null,
         dokument_nummer: editBelegnummer || null,
         betrag: editBetrag ? parseFloat(editBetrag) : null,
-        positionen: extracted?.positionen || [],
+        positionen: editPositionen.map(p => ({
+          material: p.material,
+          menge: p.menge,
+          einheit: p.einheit,
+          preis: p.preis || null,
+        })),
       });
 
       if (insertError) throw insertError;
@@ -435,6 +448,7 @@ export default function IncomingInvoices() {
       setEditBelegnummer("");
       setEditBetrag("");
       setEditProjectId("");
+      setEditPositionen([]);
 
       // Refresh list
       fetchData();
@@ -712,33 +726,66 @@ export default function IncomingInvoices() {
                           </Select>
                         </div>
 
-                        {extracted.positionen && extracted.positionen.length > 0 && (
-                          <div className="space-y-2">
-                            <Label>Positionen</Label>
-                            <div className="overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Material</TableHead>
-                                    <TableHead>Menge</TableHead>
-                                    <TableHead>Einheit</TableHead>
-                                    <TableHead>Preis</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {extracted.positionen.map((pos, i) => (
-                                    <TableRow key={i}>
-                                      <TableCell>{pos.material}</TableCell>
-                                      <TableCell>{pos.menge}</TableCell>
-                                      <TableCell>{pos.einheit}</TableCell>
-                                      <TableCell>{pos.preis || "–"}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label>Positionen ({editPositionen.length})</Label>
+                            <Button size="sm" variant="outline" onClick={() =>
+                              setEditPositionen([...editPositionen, { material: "", menge: "", einheit: "", preis: "" }])
+                            }>
+                              <Plus className="w-3 h-3 mr-1" /> Position hinzufügen
+                            </Button>
                           </div>
-                        )}
+                          <div className="overflow-x-auto border rounded-lg">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Material</TableHead>
+                                  <TableHead className="w-20">Menge</TableHead>
+                                  <TableHead className="w-20">Einheit</TableHead>
+                                  <TableHead className="w-24">Preis (€)</TableHead>
+                                  <TableHead className="w-8"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {editPositionen.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="text-center text-muted-foreground py-4">Keine Positionen</TableCell>
+                                  </TableRow>
+                                ) : editPositionen.map((pos, i) => (
+                                  <TableRow key={i}>
+                                    <TableCell>
+                                      <Input value={pos.material} onChange={e => {
+                                        const p = [...editPositionen]; p[i] = { ...p[i], material: e.target.value }; setEditPositionen(p);
+                                      }} className="h-8 text-xs" />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input value={pos.menge} onChange={e => {
+                                        const p = [...editPositionen]; p[i] = { ...p[i], menge: e.target.value }; setEditPositionen(p);
+                                      }} className="h-8 text-xs w-16" />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input value={pos.einheit} onChange={e => {
+                                        const p = [...editPositionen]; p[i] = { ...p[i], einheit: e.target.value }; setEditPositionen(p);
+                                      }} className="h-8 text-xs w-16" />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input value={pos.preis} onChange={e => {
+                                        const p = [...editPositionen]; p[i] = { ...p[i], preis: e.target.value }; setEditPositionen(p);
+                                      }} className="h-8 text-xs w-20" />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() =>
+                                        setEditPositionen(editPositionen.filter((_, j) => j !== i))
+                                      }>
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
 
                         <Button onClick={handleSaveInvoice} disabled={saving || !editProjectId} className="w-full">
                           {saving ? (

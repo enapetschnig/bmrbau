@@ -52,7 +52,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        max_tokens: 4096,
+        max_tokens: 8000,
         messages: [
           {
             role: "user",
@@ -65,30 +65,29 @@ serve(async (req) => {
               },
               {
                 type: "text",
-                text: `Analysiere dieses Foto eines Lieferscheins, Lagerlieferscheins oder einer Rechnung.
+                text: `Analysiere dieses Bild einer Rechnung, eines Lieferscheins oder Lagerlieferscheins.
 
-Extrahiere folgende Informationen und antworte NUR mit einem validen JSON-Objekt (keine Erklärungen):
+Extrahiere ALLE Informationen und antworte NUR mit einem validen JSON-Objekt (keine Erklärungen, kein Markdown):
 
 {
-  "lieferant": "Name des Lieferanten/der Firma",
-  "datum": "YYYY-MM-DD (Datum des Dokuments)",
-  "belegnummer": "Beleg-/Lieferscheinnummer",
+  "lieferant": "Name des Lieferanten/Firma",
+  "datum": "YYYY-MM-DD",
+  "belegnummer": "Beleg-/Rechnungsnummer",
   "betrag": 0.00,
   "positionen": [
-    {"material": "Materialname", "menge": "Anzahl", "einheit": "Stk/m/kg/etc", "preis": "Einzelpreis oder null"}
+    {"material": "exakter Materialname", "menge": "Anzahl als Zahl", "einheit": "Stk/m/m²/kg/t/l/etc", "preis": "Einzelpreis als Zahl oder null"}
   ],
   "qualitaet": "gut/mittel/schlecht"
 }
 
-Regeln:
-- "datum": Im Format YYYY-MM-DD. Falls nicht erkennbar, null.
-- "betrag": Gesamtbetrag als Zahl (ohne Währungszeichen). Falls nicht erkennbar, null.
-- "positionen": Alle erkennbaren Materialpositionen. Falls keine erkennbar, leeres Array [].
-- "qualitaet": Bewerte die Bildqualität:
-  - "gut" = Text klar lesbar, alle Details erkennbar
-  - "mittel" = Teilweise lesbar, einige Details unklar
-  - "schlecht" = Text kaum lesbar, unscharf, zu dunkel/hell
-- Falls ein Feld nicht erkennbar ist, setze es auf null.`,
+WICHTIGE REGELN:
+- "positionen": Extrahiere JEDE einzelne Zeile/Position lückenlos — auch wenn es 50+ Positionen sind. Überspringe keine einzige Zeile. Lies das gesamte Dokument von oben bis unten durch.
+- "datum": Format YYYY-MM-DD, sonst null.
+- "betrag": Gesamtbetrag als reine Zahl ohne Währungszeichen, sonst null.
+- "menge" und "preis": Als reine Zahlen (nicht als String mit Einheit).
+- "qualitaet": "gut" = Text klar lesbar | "mittel" = teilweise lesbar | "schlecht" = kaum lesbar.
+- Felder die nicht erkennbar sind → null.
+- Antworte NUR mit dem JSON — kein Text davor oder danach.`,
               },
             ],
           },
