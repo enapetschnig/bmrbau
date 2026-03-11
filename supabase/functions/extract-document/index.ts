@@ -19,19 +19,21 @@ serve(async (req) => {
       );
     }
 
-    const { imageBase64, mediaType } = await req.json();
-    if (!imageBase64) {
-      return new Response(
-        JSON.stringify({ error: "imageBase64 required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const { imageBase64, pages, mediaType } = await req.json();
 
-    const isPdf = mediaType === "application/pdf";
-    const isImage = typeof mediaType === "string" && mediaType.startsWith("image/");
-
-    // Skip unsupported file types
-    if (!isPdf && !isImage) {
+    // Baue Content-Array: eine image_url pro Seite (PDF) oder eine für Einzelbilder
+    let imageBlocks: any[];
+    if (pages && Array.isArray(pages) && pages.length > 0) {
+      // PDF: jede Seite als eigenes Bild
+      imageBlocks = pages.map((p: string) => ({
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${p}` },
+      }));
+    } else if (imageBase64 && typeof mediaType === "string" && mediaType.startsWith("image/")) {
+      // Einzelnes Foto (JPG, PNG, etc.)
+      imageBlocks = [{ type: "image_url", image_url: { url: `data:${mediaType};base64,${imageBase64}` } }];
+    } else {
+      // Weder pages noch imageBase64 — kein verarbeitbarer Inhalt
       return new Response(
         JSON.stringify({
           lieferant: null,
@@ -46,25 +48,7 @@ serve(async (req) => {
       );
     }
 
-    // Build content block depending on file type:
-    // PDFs → native file input (GPT-4o reads all pages as text, no quality loss)
-    // Images → image_url (vision)
-    const fileContent = isPdf
-      ? {
-          type: "file",
-          file: {
-            filename: "document.pdf",
-            file_data: `data:application/pdf;base64,${imageBase64}`,
-          },
-        }
-      : {
-          type: "image_url",
-          image_url: {
-            url: `data:${mediaType};base64,${imageBase64}`,
-          },
-        };
-
-    const PROMPT = `Analysiere dieses Dokument (Rechnung, Lieferschein oder Lagerlieferschein) vollständig — alle Seiten, alle Zeilen.
+    const PROMPT = `Du siehst eine Rechnung oder einen Lieferschein. Lies den Text buchstabengenau.
 
 Antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder danach):
 
@@ -75,23 +59,19 @@ Antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder 
   "betrag": 0.00,
   "preistyp": "brutto/netto/unbekannt",
   "positionen": [
-    {
-      "material": "exakter Materialname wie im Dokument",
-      "menge": 1.0,
-      "einheit": "Stk/m/m²/m³/kg/t/l/etc",
-      "einzelpreis": 0.00,
-      "gesamtpreis": 0.00
-    }
+    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreis": 0.00, "gesamtpreis": 0.00 }
   ],
   "qualitaet": "gut/mittel/schlecht"
 }
 
-WICHTIGE REGELN:
-- "positionen": Extrahiere JEDE einzelne Zeile/Position — lückenlos, von Seite 1 bis zur letzten Seite. Auch wenn es 100+ Positionen sind — überspringe keine einzige.
-- "preistyp": Steht meist im Dokument ("inkl. MwSt." = brutto, "exkl. MwSt." / "netto" = netto). Falls nicht erkennbar → "unbekannt".
-- "menge", "einzelpreis", "gesamtpreis": Immer als reine Zahlen (kein Währungszeichen, keine Einheit).
-- "gesamtpreis" pro Position: Menge × Einzelpreis — falls Einzelpreis null, dann auch null.
-- "betrag": Der Gesamtbetrag des gesamten Dokuments als reine Zahl.
+STRIKTE REGELN — KEINE AUSNAHMEN:
+- "material": BUCHSTABENGENAU abschreiben wie es im Dokument steht. NICHT umformulieren. NICHT übersetzen. NICHT paraphrasieren. Siehst du "Bolo Carl XS" → schreibe "Bolo Carl XS". Siehst du "Pax Fix 25 kg" → schreibe "Pax Fix 25 kg". Erfinde KEINE Namen.
+- "positionen": Jede einzelne Zeile/Position aus dem Dokument — lückenlos, alle Seiten, von oben nach unten. Nichts weglassen.
+- "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen, keine Einheit).
+- "gesamtpreis": Menge × Einzelpreis als reine Zahl. Falls im Dokument angegeben, diesen Wert nehmen.
+- "betrag": Gesamtbetrag des gesamten Dokuments als reine Zahl.
+- "preistyp": "inkl. MwSt." im Dokument → "brutto" | "exkl. MwSt." / "netto" → "netto" | sonst "unbekannt".
+- "qualitaet": "gut" = Text klar lesbar | "mittel" = teilweise lesbar | "schlecht" = kaum lesbar.
 - Felder die nicht erkennbar sind → null.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -107,7 +87,7 @@ WICHTIGE REGELN:
           {
             role: "user",
             content: [
-              fileContent,
+              ...imageBlocks,
               { type: "text", text: PROMPT },
             ],
           },
@@ -131,7 +111,6 @@ WICHTIGE REGELN:
     try {
       extracted = JSON.parse(text);
     } catch {
-      // Try to extract JSON from markdown-wrapped response
       const match = text.match(/\{[\s\S]*\}/);
       extracted = match ? JSON.parse(match[0]) : {};
     }

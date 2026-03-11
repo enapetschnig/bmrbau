@@ -106,7 +106,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
     handleFileSelected(file);
   };
 
-  const prepareImageForAI = (file: File): Promise<{ base64: string; mimeType: string }> =>
+  const prepareImageForAI = (file: File): Promise<{ base64: string; mimeType: string; pages?: string[] }> =>
     new Promise((resolve, reject) => {
       const QUALITY = 0.85;
 
@@ -125,15 +125,25 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
       };
 
       if (file.type === "application/pdf") {
-        // Send PDF as-is (raw base64) — GPT-4o reads PDFs natively (all pages, full text quality)
+        // Jede Seite einzeln als JPEG rendern — GPT bekommt alle Seiten als separate Bilder
         const reader = new FileReader();
         reader.onerror = reject;
-        reader.onload = (e) => {
-          const arrayBuffer = e.target!.result as ArrayBuffer;
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = "";
-          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-          resolve({ base64: btoa(binary), mimeType: "application/pdf" });
+        reader.onload = async (e) => {
+          try {
+            const data = new Uint8Array(e.target!.result as ArrayBuffer);
+            const pdf = await pdfjsLib.getDocument({ data }).promise;
+            const pages: string[] = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const viewport = page.getViewport({ scale: 1.5 });
+              const canvas = document.createElement("canvas");
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
+              pages.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1] || "");
+            }
+            resolve({ base64: "", mimeType: "image/jpeg", pages });
+          } catch (err) { reject(err); }
         };
         reader.readAsArrayBuffer(file);
       } else {
@@ -175,12 +185,15 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
 
       setUploadedUrl(urlData.publicUrl);
 
-      // 2. Prepare image for AI: compress images, render PDFs to JPEG via PDF.js
-      const { base64, mimeType } = await prepareImageForAI(imageFile);
+      // 2. Prepare image for AI: PDFs als Seiten-Array, Bilder als einzelne base64
+      const prepared = await prepareImageForAI(imageFile);
+      const invokeBody = prepared.pages?.length
+        ? { pages: prepared.pages, mediaType: prepared.mimeType }
+        : { imageBase64: prepared.base64, mediaType: prepared.mimeType };
 
       // 3. Call AI extraction (SDK handles auth automatically)
       const { data, error: fnError } = await supabase.functions.invoke("extract-document", {
-        body: { imageBase64: base64, mediaType: mimeType },
+        body: invokeBody,
       });
 
       if (fnError) {

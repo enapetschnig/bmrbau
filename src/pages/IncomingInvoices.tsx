@@ -14,19 +14,33 @@ import { DocumentDetailDialog, type IncomingDocument } from "@/components/Docume
 import { Download, Upload, Filter, FileText, Check, AlertTriangle, XCircle, Loader2, X, Plus } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as XLSX from "xlsx-js-style";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-const prepareFileForAI = (file: File): Promise<{ base64: string; mimeType: string }> =>
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+
+const prepareFileForAI = (file: File): Promise<{ base64: string; mimeType: string; pages?: string[] }> =>
   new Promise((resolve, reject) => {
     if (file.type === "application/pdf") {
-      // Send PDF as-is (raw base64) — GPT-4o reads PDFs natively (all pages, full text quality)
+      // Jede Seite einzeln als JPEG rendern — GPT bekommt alle Seiten als separate Bilder
       const reader = new FileReader();
       reader.onerror = reject;
-      reader.onload = (e) => {
-        const arrayBuffer = e.target!.result as ArrayBuffer;
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        resolve({ base64: btoa(binary), mimeType: "application/pdf" });
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target!.result as ArrayBuffer);
+          const pdf = await pdfjsLib.getDocument({ data }).promise;
+          const pages: string[] = [];
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
+            pages.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1] || "");
+          }
+          resolve({ base64: "", mimeType: "image/jpeg", pages });
+        } catch (err) { reject(err); }
       };
       reader.readAsArrayBuffer(file);
     } else {
@@ -329,12 +343,15 @@ export default function IncomingInvoices() {
         .from("incoming-documents")
         .getPublicUrl(filePath);
 
-      // Prepare file as base64 for AI (PDF → JPEG via canvas, images resized)
-      const { base64, mimeType } = await prepareFileForAI(uploadFile);
+      // Prepare file for AI: PDFs als Seiten-Array, Bilder als einzelne base64
+      const prepared = await prepareFileForAI(uploadFile);
+      const invokeBody = prepared.pages?.length
+        ? { pages: prepared.pages, mediaType: prepared.mimeType }
+        : { imageBase64: prepared.base64, mediaType: prepared.mimeType };
 
       // Call extract-document edge function (SDK handles auth automatically)
       const { data, error: fnError } = await supabase.functions.invoke("extract-document", {
-        body: { imageBase64: base64, mediaType: mimeType },
+        body: invokeBody,
       });
 
       if (fnError) {
@@ -356,8 +373,8 @@ export default function IncomingInvoices() {
         material: p.material || "",
         menge: p.menge != null ? String(p.menge) : "",
         einheit: p.einheit || "",
-        einzelpreis: p.einzelpreis != null ? String(p.einzelpreis) : "",
-        gesamtpreis: p.gesamtpreis != null ? String(p.gesamtpreis) : "",
+        einzelpreis: (p.einzelpreis ?? p.preis) != null ? String(p.einzelpreis ?? p.preis) : "",
+        gesamtpreis: (p.gesamtpreis ?? p.gesamtbetrag) != null ? String(p.gesamtpreis ?? p.gesamtbetrag) : "",
       })));
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Extraktion fehlgeschlagen", description: (err as Error).message });
