@@ -70,6 +70,33 @@ export default function DailyReportDetail() {
   const [signatureName, setSignatureName] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
 
+  const handleDelete = async () => {
+    if (!id || !window.confirm("Tagesbericht wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.")) return;
+    if (photos.length > 0) {
+      await supabase.storage.from("daily-report-photos").remove(photos.map(p => p.file_path));
+    }
+    const { error } = await supabase.from("daily_reports").delete().eq("id", id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler beim Löschen", description: error.message });
+      return;
+    }
+    toast({ title: "Gelöscht", description: "Tagesbericht wurde gelöscht." });
+    navigate("/daily-reports");
+  };
+
+  const openSignDialog = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("vorname, nachname")
+        .eq("user_id", user.id)
+        .single();
+      if (emp) setSignatureName(`${emp.vorname} ${emp.nachname}`.trim());
+    }
+    setShowSignDialog(true);
+  };
+
   const fetchReport = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -421,12 +448,15 @@ export default function DailyReportDetail() {
             </CardContent>
           </Card>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setShowEditForm(true)}>
               <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
             </Button>
-            <Button onClick={() => setShowSignDialog(true)}>
+            <Button onClick={openSignDialog}>
               Unterschreiben & Absenden
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="w-4 h-4 mr-2" /> Löschen
             </Button>
           </div>
         )}
