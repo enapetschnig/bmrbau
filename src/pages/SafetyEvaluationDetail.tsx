@@ -14,19 +14,13 @@ import { SafetyEmployeeSelector } from "@/components/safety/SafetyEmployeeSelect
 import { generateSafetyEvaluationPDF } from "@/lib/generateSafetyEvaluationPDF";
 
 const STATUS_LABELS: Record<string, string> = {
-  warte_auf_unterschrift: "Warte auf Unterschrift",
-  abgeschlossen: "Abgeschlossen",
-  entwurf: "Entwurf",
-  ausgefuellt: "Ausgefüllt",
-  diskutiert: "Diskutiert",
+  warte_auf_unterschrift: "Zur Unterschrift",
+  abgeschlossen: "Unterschrieben",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   warte_auf_unterschrift: "bg-orange-100 text-orange-700",
   abgeschlossen: "bg-green-100 text-green-700",
-  entwurf: "bg-gray-100 text-gray-700",
-  ausgefuellt: "bg-blue-100 text-blue-700",
-  diskutiert: "bg-yellow-100 text-yellow-700",
 };
 
 type Employee = { id: string; vorname: string; nachname: string };
@@ -204,7 +198,7 @@ export default function SafetyEvaluationDetail() {
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="flex items-center gap-2 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/safety-evaluations")}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(isAdmin ? "/safety-evaluations" : "/my-safety")}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">

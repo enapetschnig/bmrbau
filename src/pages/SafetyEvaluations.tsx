@@ -29,19 +29,13 @@ type Evaluation = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  warte_auf_unterschrift: "Warte auf Unterschrift",
-  abgeschlossen: "Abgeschlossen",
-  entwurf: "Entwurf",
-  ausgefuellt: "Ausgefüllt",
-  diskutiert: "Diskutiert",
+  warte_auf_unterschrift: "Zur Unterschrift",
+  abgeschlossen: "Unterschrieben",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   warte_auf_unterschrift: "bg-orange-100 text-orange-700",
   abgeschlossen: "bg-green-100 text-green-700",
-  entwurf: "bg-gray-100 text-gray-700",
-  ausgefuellt: "bg-blue-100 text-blue-700",
-  diskutiert: "bg-yellow-100 text-yellow-700",
 };
 
 const TYP_LABELS: Record<string, string> = {
@@ -56,6 +50,7 @@ export default function SafetyEvaluations() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Filters
   const [filterProject, setFilterProject] = useState("alle");
@@ -83,7 +78,15 @@ export default function SafetyEvaluations() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) setUserId(user.id);
+    if (!user) { setLoading(false); return; }
+    setUserId(user.id);
+
+    const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
+    if (roleData?.role !== "administrator") {
+      navigate("/my-safety");
+      return;
+    }
+    setIsAdmin(true);
 
     const [{ data: evalData }, { data: projData }] = await Promise.all([
       supabase.from("safety_evaluations").select("*").order("created_at", { ascending: false }),
