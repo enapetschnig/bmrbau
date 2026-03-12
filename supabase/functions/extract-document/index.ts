@@ -50,7 +50,7 @@ STRIKTE REGELN — KEINE AUSNAHMEN:
 - "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen, keine Einheit).
 - "gesamtpreis": Gesamtpreis der Position als reine Zahl. Falls im Text vorhanden, diesen Wert nehmen.
 - "betragNetto": Lies den Wert, der im Dokument direkt neben/unter einem Label wie "Nettobetrag", "Warenwert", "Betrag exkl. MwSt.", "Zwischensumme", "Summe netto", "Netto-Gesamtsumme" steht. Das ist der Gesamtbetrag OHNE MwSt., wie er auf der Rechnung ausgewiesen ist. NICHT selber berechnen — nur ablesen. Nicht vorhanden → null.
-- "betragBrutto": Lies den Wert, der neben/unter einem Label wie "Gesamtsumme", "Rechnungsbetrag", "Endbetrag", "Bruttobetrag", "Betrag inkl. MwSt.", "Zu zahlen", "Total" steht. Das ist der finale zu zahlende Betrag inkl. MwSt. NICHT selber berechnen — nur ablesen.
+- "betragBrutto": Der finale Gesamtbetrag inkl. MwSt. — steht meistens ganz am Ende des Dokuments. Suche nach Labeln wie "Gesamtbetrag", "Gesamtsumme", "Rechnungsbetrag", "Brutto-Gesamtsumme", "Betrag inkl. MwSt.", "Summe inkl. MwSt.", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total". Wenn kein eindeutiges Label gefunden → nimm den letzten / größten Geldbetrag am Ende des Dokuments. NICHT selber berechnen — nur ablesen.
 - Alle Zahlen ohne Währungszeichen und ohne Einheiten. Nicht erkennbare Felder → null.`;
 
       messages = [{ role: "user", content: prompt }];
@@ -80,7 +80,7 @@ STRIKTE REGELN — KEINE AUSNAHMEN:
 - "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen).
 - "gesamtpreis": Menge × Einzelpreis als reine Zahl. Falls im Dokument angegeben, diesen Wert nehmen.
 - "betragNetto": Lies den Wert, der im Dokument direkt neben/unter einem Label wie "Nettobetrag", "Warenwert", "Betrag exkl. MwSt.", "Zwischensumme", "Summe netto" steht. Das ist der Gesamtbetrag OHNE MwSt. NICHT selber berechnen — nur ablesen. Nicht vorhanden → null.
-- "betragBrutto": Lies den Wert, der neben/unter "Gesamtsumme", "Rechnungsbetrag", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total" steht. Das ist der finale zu zahlende Betrag inkl. MwSt. NICHT selber berechnen — nur ablesen.
+- "betragBrutto": Der finale Gesamtbetrag inkl. MwSt. — steht meistens ganz am Ende des Dokuments. Suche nach Labeln wie "Gesamtbetrag", "Gesamtsumme", "Rechnungsbetrag", "Brutto-Gesamtsumme", "Betrag inkl. MwSt.", "Summe inkl. MwSt.", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total". Wenn kein eindeutiges Label gefunden → nimm den letzten / größten Geldbetrag am Ende des Dokuments. NICHT selber berechnen — nur ablesen.
 - "qualitaet": "gut" = klar lesbar | "mittel" = teilweise lesbar | "schlecht" = kaum lesbar.
 - Felder nicht erkennbar → null.`;
 
