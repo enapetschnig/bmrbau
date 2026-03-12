@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DocumentCaptureDialog } from "@/components/DocumentCaptureDialog";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
-import { Download, Plus, Filter, FileText, Receipt } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Download, Plus, Filter, FileText, ArrowRightLeft } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
@@ -125,6 +126,33 @@ export default function IncomingDocuments() {
     return true;
   });
 
+  // Abgleich: filter without typ/status (show all for reconciliation)
+  const abgleichFiltered = documents.filter((doc) => {
+    if (filterProject !== "alle" && doc.project_id !== filterProject) return false;
+    if (filterLieferant && doc.lieferant && !doc.lieferant.toLowerCase().includes(filterLieferant.toLowerCase())) return false;
+    if (filterLieferant && !doc.lieferant) return false;
+    return true;
+  });
+
+  const lieferantenAbgleich = useMemo(() => {
+    const lieferanten = [...new Set(abgleichFiltered.filter(d => d.lieferant).map(d => d.lieferant!))];
+    return lieferanten.map(l => {
+      const docs = abgleichFiltered.filter(d => d.lieferant === l);
+      const rechnungen = docs.filter(d => d.typ === "rechnung");
+      const lieferscheine = docs.filter(d => d.typ === "lieferschein" || d.typ === "lagerlieferschein");
+      const totalRechnungen = rechnungen.reduce((s, d) => s + (d.betrag ? Number(d.betrag) : 0), 0);
+      const totalLieferscheine = lieferscheine.reduce((s, d) => s + (d.betrag ? Number(d.betrag) : 0), 0);
+      return {
+        lieferant: l,
+        rechnungen,
+        lieferscheine,
+        totalRechnungen,
+        totalLieferscheine,
+        differenz: totalRechnungen - totalLieferscheine,
+      };
+    }).sort((a, b) => Math.abs(b.differenz) - Math.abs(a.differenz));
+  }, [abgleichFiltered]);
+
   // Stats
   const offeneLieferscheine = documents.filter(d => d.status === "offen" && (d.typ === "lieferschein" || d.typ === "lagerlieferschein")).length;
   const offeneRechnungen = documents.filter(d => d.status === "offen" && d.typ === "rechnung").length;
@@ -183,146 +211,319 @@ export default function IncomingDocuments() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-start flex-wrap gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Filter className="w-5 h-5 text-muted-foreground shrink-0" />
+        <Tabs defaultValue="dokumente">
+          <TabsList className="mb-4">
+            <TabsTrigger value="dokumente">
+              <FileText className="w-4 h-4 mr-1.5" />
+              Lieferscheine hochladen
+            </TabsTrigger>
+            <TabsTrigger value="abgleich">
+              <ArrowRightLeft className="w-4 h-4 mr-1.5" />
+              Abgleich
+            </TabsTrigger>
+          </TabsList>
 
-                <Select value={filterTyp} onValueChange={setFilterTyp}>
-                  <SelectTrigger className="w-[160px] h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alle">Alle Typen</SelectItem>
-                    <SelectItem value="lieferschein">Lieferschein</SelectItem>
-                    <SelectItem value="lagerlieferschein">Lagerlieferschein</SelectItem>
-                    <SelectItem value="rechnung">Rechnung</SelectItem>
-                  </SelectContent>
-                </Select>
+          {/* Dokumente Tab */}
+          <TabsContent value="dokumente">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-start flex-wrap gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Filter className="w-5 h-5 text-muted-foreground shrink-0" />
 
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[130px] h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alle">Alle Status</SelectItem>
-                    <SelectItem value="offen">Offen</SelectItem>
-                    <SelectItem value="bezahlt">Bezahlt</SelectItem>
-                    <SelectItem value="storniert">Storniert</SelectItem>
-                  </SelectContent>
-                </Select>
+                    <Select value={filterTyp} onValueChange={setFilterTyp}>
+                      <SelectTrigger className="w-[160px] h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alle">Alle Typen</SelectItem>
+                        <SelectItem value="lieferschein">Lieferschein</SelectItem>
+                        <SelectItem value="lagerlieferschein">Lagerlieferschein</SelectItem>
+                        <SelectItem value="rechnung">Rechnung</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                <Select value={filterProject} onValueChange={setFilterProject}>
-                  <SelectTrigger className="w-[180px] h-10">
-                    <SelectValue placeholder="Alle Projekte" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alle">Alle Projekte</SelectItem>
-                    {projects.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    <Select value={filterStatus} onValueChange={setFilterStatus}>
+                      <SelectTrigger className="w-[130px] h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alle">Alle Status</SelectItem>
+                        <SelectItem value="offen">Offen</SelectItem>
+                        <SelectItem value="bezahlt">Bezahlt</SelectItem>
+                        <SelectItem value="storniert">Storniert</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                <Input
-                  placeholder="Lieferant..."
-                  value={filterLieferant}
-                  onChange={(e) => setFilterLieferant(e.target.value)}
-                  className="w-[150px] h-10"
-                />
+                    <Select value={filterProject} onValueChange={setFilterProject}>
+                      <SelectTrigger className="w-[180px] h-10">
+                        <SelectValue placeholder="Alle Projekte" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alle">Alle Projekte</SelectItem>
+                        {projects.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                <Select value={filterMonth.toString()} onValueChange={(v) => setFilterMonth(parseInt(v))}>
-                  <SelectTrigger className="w-[130px] h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthNames.map((name, i) => (
-                      <SelectItem key={i} value={(i + 1).toString()}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    <Input
+                      placeholder="Lieferant..."
+                      value={filterLieferant}
+                      onChange={(e) => setFilterLieferant(e.target.value)}
+                      className="w-[150px] h-10"
+                    />
 
-                <Select value={filterYear.toString()} onValueChange={(v) => setFilterYear(parseInt(v))}>
-                  <SelectTrigger className="w-[100px] h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {years.map(y => (
-                      <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    <Select value={filterMonth.toString()} onValueChange={(v) => setFilterMonth(parseInt(v))}>
+                      <SelectTrigger className="w-[130px] h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {monthNames.map((name, i) => (
+                          <SelectItem key={i} value={(i + 1).toString()}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={exportToExcel} disabled={filtered.length === 0}>
-                  <Download className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Excel</span>
-                </Button>
-                <Button onClick={() => setShowCaptureDialog(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Erfassen</span>
-                </Button>
-              </div>
+                    <Select value={filterYear.toString()} onValueChange={(v) => setFilterYear(parseInt(v))}>
+                      <SelectTrigger className="w-[100px] h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {years.map(y => (
+                          <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={exportToExcel} disabled={filtered.length === 0}>
+                      <Download className="w-4 h-4 mr-2" />
+                      <span className="hidden sm:inline">Excel</span>
+                    </Button>
+                    <Button onClick={() => setShowCaptureDialog(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      <span className="hidden sm:inline">Erfassen</span>
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                {loading ? (
+                  <p className="text-center py-8 text-muted-foreground">Lädt...</p>
+                ) : filtered.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Keine Dokumente im ausgewählten Zeitraum</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Datum</TableHead>
+                          <TableHead>Typ</TableHead>
+                          <TableHead>Lieferant</TableHead>
+                          <TableHead className="hidden md:table-cell">Projekt</TableHead>
+                          <TableHead className="hidden sm:table-cell">Belegnr.</TableHead>
+                          <TableHead className="text-right">Betrag</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map((doc) => {
+                          const typInfo = TYP_LABELS[doc.typ] || TYP_LABELS.lieferschein;
+                          const statusInfo = STATUS_LABELS[doc.status] || STATUS_LABELS.offen;
+
+                          return (
+                            <TableRow
+                              key={doc.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => { setSelectedDoc(doc); setShowDetailDialog(true); }}
+                            >
+                              <TableCell className="font-mono text-xs">
+                                {doc.dokument_datum
+                                  ? format(parseISO(doc.dokument_datum), "dd.MM.yyyy")
+                                  : format(new Date(doc.created_at), "dd.MM.yyyy")}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={typInfo.color + " text-xs"}>{typInfo.label}</Badge>
+                              </TableCell>
+                              <TableCell className="font-medium">{doc.lieferant || "–"}</TableCell>
+                              <TableCell className="hidden md:table-cell">{doc.project_name}</TableCell>
+                              <TableCell className="hidden sm:table-cell font-mono text-xs">{doc.dokument_nummer || "–"}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {doc.betrag != null ? `€ ${Number(doc.betrag).toFixed(2)}` : "–"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={statusInfo.color + " text-xs"}>{statusInfo.label}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Abgleich Tab */}
+          <TabsContent value="abgleich">
+            {/* Month/Year + Lieferant filters for Abgleich */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <Filter className="w-5 h-5 text-muted-foreground shrink-0" />
+              <Select value={filterProject} onValueChange={setFilterProject}>
+                <SelectTrigger className="w-[180px] h-10">
+                  <SelectValue placeholder="Alle Projekte" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alle">Alle Projekte</SelectItem>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Lieferant..."
+                value={filterLieferant}
+                onChange={(e) => setFilterLieferant(e.target.value)}
+                className="w-[150px] h-10"
+              />
+              <Select value={filterMonth.toString()} onValueChange={(v) => setFilterMonth(parseInt(v))}>
+                <SelectTrigger className="w-[130px] h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {monthNames.map((name, i) => (
+                    <SelectItem key={i} value={(i + 1).toString()}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterYear.toString()} onValueChange={(v) => setFilterYear(parseInt(v))}>
+                <SelectTrigger className="w-[100px] h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {years.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardHeader>
 
-          <CardContent>
             {loading ? (
               <p className="text-center py-8 text-muted-foreground">Lädt...</p>
-            ) : filtered.length === 0 ? (
+            ) : lieferantenAbgleich.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Keine Dokumente im ausgewählten Zeitraum</p>
+                <ArrowRightLeft className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Keine Dokumente für {monthNames[filterMonth - 1]} {filterYear}</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Datum</TableHead>
-                      <TableHead>Typ</TableHead>
-                      <TableHead>Lieferant</TableHead>
-                      <TableHead className="hidden md:table-cell">Projekt</TableHead>
-                      <TableHead className="hidden sm:table-cell">Belegnr.</TableHead>
-                      <TableHead className="text-right">Betrag</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((doc) => {
-                      const typInfo = TYP_LABELS[doc.typ] || TYP_LABELS.lieferschein;
-                      const statusInfo = STATUS_LABELS[doc.status] || STATUS_LABELS.offen;
+              <div className="space-y-3">
+                {lieferantenAbgleich.map((entry) => {
+                  const diff = entry.differenz;
+                  const diffColor = diff === 0
+                    ? "text-green-700"
+                    : diff > 0
+                    ? "text-orange-600"
+                    : "text-red-600";
+                  const diffBg = diff === 0
+                    ? "bg-green-50 border-green-200"
+                    : diff > 0
+                    ? "bg-orange-50 border-orange-200"
+                    : "bg-red-50 border-red-200";
 
-                      return (
-                        <TableRow
-                          key={doc.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => { setSelectedDoc(doc); setShowDetailDialog(true); }}
-                        >
-                          <TableCell className="font-mono text-xs">
-                            {doc.dokument_datum
-                              ? format(parseISO(doc.dokument_datum), "dd.MM.yyyy")
-                              : format(new Date(doc.created_at), "dd.MM.yyyy")}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={typInfo.color + " text-xs"}>{typInfo.label}</Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">{doc.lieferant || "–"}</TableCell>
-                          <TableCell className="hidden md:table-cell">{doc.project_name}</TableCell>
-                          <TableCell className="hidden sm:table-cell font-mono text-xs">{doc.dokument_nummer || "–"}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {doc.typ !== "rechnung" && doc.betrag != null ? `€ ${Number(doc.betrag).toFixed(2)}` : "–"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={statusInfo.color + " text-xs"}>{statusInfo.label}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                  return (
+                    <Card key={entry.lieferant} className={`border ${diffBg}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <CardTitle className="text-base">{entry.lieferant}</CardTitle>
+                          <div className="flex gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {entry.rechnungen.length} Rechnung{entry.rechnungen.length !== 1 ? "en" : ""}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.lieferscheine.length} Lieferschein{entry.lieferscheine.length !== 1 ? "e" : ""}
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground text-xs mb-0.5">Rechnungen</p>
+                            <p className="font-semibold">€ {entry.totalRechnungen.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground text-xs mb-0.5">Lieferscheine</p>
+                            <p className="font-semibold">€ {entry.totalLieferscheine.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground text-xs mb-0.5">Differenz</p>
+                            <p className={`font-bold ${diffColor}`}>
+                              {diff > 0 ? "+" : ""}€ {diff.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Document list */}
+                        {entry.rechnungen.length > 0 || entry.lieferscheine.length > 0 ? (
+                          <div className="mt-3 pt-3 border-t space-y-1">
+                            {[...entry.rechnungen, ...entry.lieferscheine]
+                              .sort((a, b) => (a.dokument_datum || a.created_at) > (b.dokument_datum || b.created_at) ? -1 : 1)
+                              .map(doc => {
+                                const typInfo = TYP_LABELS[doc.typ] || TYP_LABELS.lieferschein;
+                                return (
+                                  <div
+                                    key={doc.id}
+                                    className="flex items-center justify-between text-xs py-1 cursor-pointer hover:bg-white/60 rounded px-1"
+                                    onClick={() => { setSelectedDoc(doc); setShowDetailDialog(true); }}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Badge className={typInfo.color + " text-[10px] px-1 py-0 shrink-0"}>{typInfo.label}</Badge>
+                                      <span className="text-muted-foreground font-mono">
+                                        {doc.dokument_datum
+                                          ? format(parseISO(doc.dokument_datum), "dd.MM.")
+                                          : format(new Date(doc.created_at), "dd.MM.")}
+                                      </span>
+                                      {doc.dokument_nummer && (
+                                        <span className="text-muted-foreground truncate">{doc.dokument_nummer}</span>
+                                      )}
+                                    </div>
+                                    <span className="font-medium shrink-0 ml-2">
+                                      {doc.betrag != null ? `€ ${Number(doc.betrag).toFixed(2)}` : "–"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {/* Summary */}
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-4">
+                    <div className="grid grid-cols-3 gap-4 text-sm font-semibold">
+                      <div>
+                        <p className="text-muted-foreground text-xs mb-0.5 font-normal">Rechnungen gesamt</p>
+                        <p>€ {lieferantenAbgleich.reduce((s, e) => s + e.totalRechnungen, 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs mb-0.5 font-normal">Lieferscheine gesamt</p>
+                        <p>€ {lieferantenAbgleich.reduce((s, e) => s + e.totalLieferscheine, 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs mb-0.5 font-normal">Gesamtdifferenz</p>
+                        <p className={lieferantenAbgleich.reduce((s, e) => s + e.differenz, 0) === 0 ? "text-green-700" : "text-orange-600"}>
+                          € {lieferantenAbgleich.reduce((s, e) => s + e.differenz, 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Capture Dialog */}

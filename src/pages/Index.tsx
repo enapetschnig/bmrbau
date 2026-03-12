@@ -1079,7 +1079,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate(isExternal ? "/external-time-tracking" : "/time-tracking")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Clock className="h-6 w-6 text-primary" />
               </div>
@@ -1100,7 +1101,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/projects")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
                 <FolderKanban className="h-6 w-6 text-accent" />
               </div>
@@ -1121,7 +1123,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/my-hours")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <BarChart3 className="h-6 w-6 text-primary" />
               </div>
@@ -1142,7 +1145,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/disturbances")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Zap className="h-6 w-6 text-primary" />
               </div>
@@ -1163,7 +1167,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/daily-reports")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <ClipboardList className="h-6 w-6 text-primary" />
               </div>
@@ -1180,11 +1185,12 @@ export default function Index() {
 
           {/* Meine Dokumente */}
           {menuVisible("meine_dokumente") && (
-            <Card 
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" 
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/my-documents")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
                 <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
                   <FileText className="h-6 w-6 text-accent" />
                 </div>
@@ -1206,7 +1212,8 @@ export default function Index() {
             className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
             onClick={() => navigate("/documents")}
           >
-            <CardHeader className="space-y-2 pb-3">
+            <CardHeader className="space-y-2 pb-3 relative">
+              {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <BookOpen className="h-6 w-6 text-primary" />
               </div>
@@ -1227,7 +1234,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/hours-report")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <BarChart3 className="h-6 w-6 text-primary" />
                 </div>
@@ -1248,7 +1256,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/schedule")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <CalendarDays className="h-6 w-6 text-primary" />
                 </div>
@@ -1269,7 +1278,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/equipment")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Wrench className="h-6 w-6 text-primary" />
                 </div>
@@ -1290,7 +1300,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/incoming-invoices")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Receipt className="h-6 w-6 text-primary" />
                 </div>
@@ -1311,7 +1322,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/safety-evaluations")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <ShieldCheck className="h-6 w-6 text-primary" />
                 </div>
@@ -1332,7 +1344,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/my-safety")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                   <ShieldCheck className="h-6 w-6 text-green-500" />
                 </div>
@@ -1353,17 +1366,18 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/incoming-documents")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
                 <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
                   <FileText className="h-6 w-6 text-blue-500" />
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Lieferscheine</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Eingangsrechnungen & Abgleich</CardTitle>
                 <CardDescription className="text-sm">
-                  Lieferscheine & Rechnungen fotografieren
+                  Lieferscheine & Rechnungen erfassen und abgleichen
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Erfassen</Button>
+                <Button className="w-full" size="sm" variant="outline">Öffnen</Button>
               </CardContent>
             </Card>
           )}
@@ -1374,7 +1388,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/warehouse")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
                   <Package className="h-6 w-6 text-amber-500" />
                 </div>
@@ -1395,7 +1410,8 @@ export default function Index() {
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/admin")}
             >
-              <CardHeader className="space-y-2 pb-3">
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Users className="h-6 w-6 text-primary" />
                 </div>
