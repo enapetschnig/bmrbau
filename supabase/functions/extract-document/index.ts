@@ -5,6 +5,100 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const BASE_PROMPT = `Du bist ein präziser Parser für Lieferantenrechnungen eines Unternehmens.
+
+Die hochgeladene Datei ist eine Rechnung eines Lieferanten.
+Die Rechnung enthält hauptsächlich Produktpositionen (Material) und manchmal auch Arbeitspositionen.
+
+Deine Aufgabe ist es, alle relevanten Daten exakt zu extrahieren und in die bestehende Datenstruktur des Systems einzupassen.
+
+WICHTIG:
+- Erfinde niemals Werte
+- Wenn ein Feld nicht eindeutig ist → schreibe "nicht gefunden"
+- Zahlen immer exakt aus der Rechnung übernehmen
+- Dezimalzahlen mit Punkt schreiben (z.B. 10145.29)
+
+------------------------------------
+
+1. RECHNUNGSDATEN EXTRAHIEREN
+
+Extrahiere folgende Felder:
+
+Lieferant
+Datum (Rechnungsdatum)
+Belegnummer (Rechnungsnummer)
+Betrag Netto
+Betrag Brutto
+
+Falls mehrere Netto-Zwischensummen vorkommen, verwende die Netto-Gesamtsumme der Rechnung.
+
+------------------------------------
+
+2. POSITIONEN EXTRAHIEREN
+
+Extrahiere jede einzelne Position der Rechnung.
+
+Für jede Position extrahiere:
+
+Material (Beschreibung der Position)
+Menge
+Einheit
+Einzelpreis (€ netto)
+Gesamt (€ netto)
+
+WICHTIG:
+
+- Extrahiere ALLE Positionen
+- Auch Arbeitspositionen wie "Monteur", "Techniker" zählen als Position
+- Verwende exakt die Bezeichnungen aus der Rechnung
+- Mengen und Preise dürfen nicht gerundet werden
+
+------------------------------------
+
+3. POSITIONEN BERECHNUNG PRÜFEN
+
+Prüfe:
+
+Menge × Einzelpreis ≈ Gesamtpreis
+
+Wenn die Rechnung kleine Rundungsdifferenzen enthält, übernehme trotzdem die Werte aus der Rechnung.
+
+------------------------------------
+
+4. AUSGABEFORMAT
+
+Die Ausgabe muss exakt der folgenden Struktur entsprechen (NUR JSON, kein Markdown, kein Text davor oder danach):
+
+{
+  "Lieferant": "",
+  "Datum": "",
+  "Belegnummer": "",
+  "Betrag Netto (€)": "",
+  "Betrag Brutto (€)": "",
+  "Positionen": [
+    {
+      "Material": "",
+      "Menge": "",
+      "Einheit": "",
+      "Einzelpreis (€ netto)": "",
+      "Gesamt (€ netto)": ""
+    }
+  ]
+}
+
+------------------------------------
+
+5. VALIDIERUNG
+
+Am Ende prüfe:
+
+- Stimmen die Positionssummen ungefähr mit dem Netto-Gesamtbetrag überein?
+- Ist Brutto ≈ Netto + MwSt?
+
+Falls etwas nicht passt, füge ein optionales Feld "Warnung" mit einer kurzen Erklärung hinzu.
+
+Arbeite langsam und überprüfe alle Zahlen sorgfältig.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -24,65 +118,24 @@ serve(async (req) => {
     let messages: any[];
 
     if (pdfText && typeof pdfText === "string" && pdfText.trim().length > 0) {
-      // PDF mit eingebettetem Textlayer — direkt als Text an GPT (kein OCR, 100% genau)
-      const prompt = `Hier ist der extrahierte Text einer Rechnung oder eines Lieferscheins:
+      // PDF mit eingebettetem Textlayer — direkt als Text an GPT
+      const prompt = `${BASE_PROMPT}
 
-${pdfText}
+------------------------------------
 
-Strukturiere diesen Text und antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder danach):
+Hier ist der extrahierte Text der Rechnung:
 
-{
-  "lieferant": "Name des Lieferanten/Firma",
-  "datum": "YYYY-MM-DD",
-  "belegnummer": "Beleg-/Rechnungsnummer",
-  "betragNetto": 0.00,
-  "betragBrutto": 0.00,
-  "positionen": [
-    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreis": 0.00, "gesamtpreis": 0.00 }
-  ],
-  "qualitaet": "gut"
-}
-
-STRIKTE REGELN — KEINE AUSNAHMEN:
-- "lieferant": BUCHSTABENGENAU den Firmennamen des Absenders übernehmen — exakt so wie im Briefkopf, Stempel oder Absender-Bereich des Dokuments geschrieben. Das ist die Firma, die die Rechnung ausgestellt hat. Kein Paraphrasieren, keine Abkürzungen erfinden, keine Übersetzung.
-- "material": BUCHSTABENGENAU aus dem Text übernehmen — kein Paraphrasieren, keine Übersetzung, keine Zusammenfassung. Exakt so wie im Dokument geschrieben.
-- "positionen": JEDE einzelne Position aus dem Text — lückenlos, von Seite 1 bis zur letzten Seite. Nichts weglassen.
-- "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen, keine Einheit).
-- "gesamtpreis": Gesamtpreis der Position als reine Zahl. Falls im Text vorhanden, diesen Wert nehmen.
-- "betragNetto": Lies den Wert, der im Dokument direkt neben/unter einem Label wie "Nettobetrag", "Warenwert", "Betrag exkl. MwSt.", "Zwischensumme", "Summe netto", "Netto-Gesamtsumme" steht. Das ist der Gesamtbetrag OHNE MwSt., wie er auf der Rechnung ausgewiesen ist. NICHT selber berechnen — nur ablesen. Nicht vorhanden → null.
-- "betragBrutto": Der finale Gesamtbetrag inkl. MwSt. — steht meistens ganz am Ende des Dokuments. Suche nach Labeln wie "Gesamtbetrag", "Gesamtsumme", "Rechnungsbetrag", "Brutto-Gesamtsumme", "Betrag inkl. MwSt.", "Summe inkl. MwSt.", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total". Wenn kein eindeutiges Label gefunden → nimm den letzten / größten Geldbetrag am Ende des Dokuments. NICHT selber berechnen — nur ablesen.
-- Alle Zahlen ohne Währungszeichen und ohne Einheiten. Nicht erkennbare Felder → null.`;
+${pdfText}`;
 
       messages = [{ role: "user", content: prompt }];
 
     } else if (imageBase64 && typeof mediaType === "string" && mediaType.startsWith("image/")) {
       // Foto (JPG, PNG) oder gescannte PDF ohne Textlayer → Vision (OCR)
-      const prompt = `Du siehst eine Rechnung oder einen Lieferschein. Lies den Text buchstabengenau.
+      const prompt = `${BASE_PROMPT}
 
-Antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder danach):
+------------------------------------
 
-{
-  "lieferant": "Name des Lieferanten/Firma",
-  "datum": "YYYY-MM-DD",
-  "belegnummer": "Beleg-/Rechnungsnummer",
-  "betragNetto": 0.00,
-  "betragBrutto": 0.00,
-  "positionen": [
-    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreis": 0.00, "gesamtpreis": 0.00 }
-  ],
-  "qualitaet": "gut/mittel/schlecht"
-}
-
-STRIKTE REGELN — KEINE AUSNAHMEN:
-- "lieferant": BUCHSTABENGENAU den Firmennamen des Absenders abschreiben — exakt so wie im Briefkopf, Stempel oder Absender-Bereich des Dokuments. Das ist die Firma, die die Rechnung ausgestellt hat. NICHT umformulieren, keine Abkürzungen erfinden.
-- "material": BUCHSTABENGENAU abschreiben wie es im Dokument steht. NICHT umformulieren. NICHT übersetzen. NICHT paraphrasieren. Erfinde KEINE Namen.
-- "positionen": Jede einzelne Zeile/Position — lückenlos, alle Seiten. Nichts weglassen.
-- "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen).
-- "gesamtpreis": Menge × Einzelpreis als reine Zahl. Falls im Dokument angegeben, diesen Wert nehmen.
-- "betragNetto": Lies den Wert, der im Dokument direkt neben/unter einem Label wie "Nettobetrag", "Warenwert", "Betrag exkl. MwSt.", "Zwischensumme", "Summe netto" steht. Das ist der Gesamtbetrag OHNE MwSt. NICHT selber berechnen — nur ablesen. Nicht vorhanden → null.
-- "betragBrutto": Der finale Gesamtbetrag inkl. MwSt. — steht meistens ganz am Ende des Dokuments. Suche nach Labeln wie "Gesamtbetrag", "Gesamtsumme", "Rechnungsbetrag", "Brutto-Gesamtsumme", "Betrag inkl. MwSt.", "Summe inkl. MwSt.", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total". Wenn kein eindeutiges Label gefunden → nimm den letzten / größten Geldbetrag am Ende des Dokuments. NICHT selber berechnen — nur ablesen.
-- "qualitaet": "gut" = klar lesbar | "mittel" = teilweise lesbar | "schlecht" = kaum lesbar.
-- Felder nicht erkennbar → null.`;
+Lies den Text der Rechnung buchstabengenau vom Bild ab.`;
 
       messages = [{
         role: "user",

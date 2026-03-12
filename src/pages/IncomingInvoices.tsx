@@ -398,17 +398,19 @@ export default function IncomingInvoices() {
       }
 
       setExtracted(data);
-      setEditLieferant(data.lieferant || "");
-      setEditDatum(data.datum || "");
-      setEditBelegnummer(data.belegnummer || "");
-      setEditBetrag(data.betragBrutto != null ? String(data.betragBrutto) : (data.betrag != null ? String(data.betrag) : ""));
-      setEditBetragNetto(data.betragNetto != null ? String(data.betragNetto) : "");
-      setEditPositionen((data.positionen || []).map((p: any) => ({
-        material: p.material || "",
-        menge: p.menge != null ? String(p.menge) : "",
-        einheit: p.einheit || "",
-        einzelpreis: (p.einzelpreis ?? p.preis) != null ? String(p.einzelpreis ?? p.preis) : "",
-        gesamtpreis: (p.gesamtpreis ?? p.gesamtbetrag) != null ? String(p.gesamtpreis ?? p.gesamtbetrag) : "",
+      setEditLieferant(data["Lieferant"] || "");
+      setEditDatum(data["Datum"] || "");
+      setEditBelegnummer(data["Belegnummer"] || "");
+      setEditBetrag(data["Betrag Brutto (€)"] != null && data["Betrag Brutto (€)"] !== "" && data["Betrag Brutto (€)"] !== "nicht gefunden"
+        ? String(data["Betrag Brutto (€)"]) : "");
+      setEditBetragNetto(data["Betrag Netto (€)"] != null && data["Betrag Netto (€)"] !== "" && data["Betrag Netto (€)"] !== "nicht gefunden"
+        ? String(data["Betrag Netto (€)"]) : "");
+      setEditPositionen((data["Positionen"] || []).map((p: any) => ({
+        material: p["Material"] || "",
+        menge: p["Menge"] != null ? String(p["Menge"]) : "",
+        einheit: p["Einheit"] || "",
+        einzelpreis: p["Einzelpreis (€ netto)"] != null ? String(p["Einzelpreis (€ netto)"]) : "",
+        gesamtpreis: p["Gesamt (€ netto)"] != null ? String(p["Gesamt (€ netto)"]) : "",
       })));
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Extraktion fehlgeschlagen", description: (err as Error).message });
