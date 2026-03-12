@@ -1,1 +1,4 @@
 project_id = "fxsjhdsitwtjasxbmksr"
+
+[functions.compare-documents]
+verify_jwt = false
