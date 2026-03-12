@@ -122,13 +122,15 @@ serve(async (req) => {
 
     if (pdfText && typeof pdfText === "string" && pdfText.trim().length > 0) {
       // PDF mit eingebettetem Textlayer — direkt als Text an GPT
+      // Limit to 40000 chars to avoid exceeding context window
+      const truncatedText = pdfText.slice(0, 40000);
       const prompt = `${BASE_PROMPT}
 
 ------------------------------------
 
 Hier ist der extrahierte Text der Rechnung:
 
-${pdfText}`;
+${truncatedText}`;
 
       messages = [{ role: "user", content: prompt }];
 
@@ -164,6 +166,7 @@ Lies den Text der Rechnung buchstabengenau vom Bild ab.`;
       body: JSON.stringify({
         model: "gpt-4o",
         max_tokens: 16000,
+        response_format: { type: "json_object" },
         messages,
       }),
     });
@@ -184,8 +187,13 @@ Lies den Text der Rechnung buchstabengenau vom Bild ab.`;
     try {
       extracted = JSON.parse(text);
     } catch {
-      const match = text.match(/\{[\s\S]*\}/);
-      extracted = match ? JSON.parse(match[0]) : {};
+      try {
+        const match = text.match(/\{[\s\S]*\}/);
+        extracted = match ? JSON.parse(match[0]) : {};
+      } catch {
+        console.error("JSON parse failed, returning empty structure. Raw text length:", text.length);
+        extracted = {};
+      }
     }
 
     return new Response(
