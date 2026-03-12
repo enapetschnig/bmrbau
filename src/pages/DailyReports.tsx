@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, FileText, Filter } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function DailyReports() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -57,7 +59,10 @@ export default function DailyReports() {
       query = query.eq("status", filterStatus);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler beim Laden", description: error.message });
+    }
     if (data) setReports(data as any);
     setLoading(false);
   }, [filterType, filterStatus]);

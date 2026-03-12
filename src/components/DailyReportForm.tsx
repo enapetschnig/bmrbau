@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ interface DailyReportFormProps {
 
 export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: DailyReportFormProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
 
@@ -169,7 +171,11 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
 
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
+    if (!user) {
+      toast({ variant: "destructive", title: "Fehler", description: "Sitzung abgelaufen – bitte erneut einloggen" });
+      setSaving(false);
+      return;
+    }
 
     const payload = {
       user_id: user.id,
@@ -246,6 +252,9 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, editData }: Dai
     resetForm();
     onSuccess();
     setSaving(false);
+    if (!editData) {
+      navigate(`/daily-reports/${reportId}`);
+    }
   };
 
   const GESCHOSS_LABELS: Record<string, string> = {
