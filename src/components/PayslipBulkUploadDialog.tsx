@@ -45,6 +45,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [pageThumbnails, setPageThumbnails] = useState<Map<number, string>>(new Map());
 
   const reset = () => {
     setStep(1);
@@ -56,6 +57,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
     setProgress(0);
     setAnalyzing(false);
     setSaving(false);
+    setPageThumbnails(new Map());
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,6 +107,20 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
           .join(" ");
         pageTexts.push(text);
       }
+
+      // 2b. Render page thumbnails for preview
+      const thumbnails = new Map<number, string>();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: 0.4 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        thumbnails.set(i - 1, canvas.toDataURL("image/jpeg", 0.7));
+      }
+      setPageThumbnails(thumbnails);
 
       // 3. Call edge function for AI analysis
       const { data, error } = await supabase.functions.invoke("split-payslips", {
@@ -322,6 +338,19 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
                           Unsicher
                         </Badge>
                       )}
+                    </div>
+                    <div className="flex gap-1 mt-2 overflow-x-auto">
+                      {a.pages.map((pageIdx) => {
+                        const thumb = pageThumbnails.get(pageIdx);
+                        return thumb ? (
+                          <img
+                            key={pageIdx}
+                            src={thumb}
+                            alt={`Seite ${pageIdx + 1}`}
+                            className="h-24 w-auto rounded border border-gray-200 shadow-sm flex-shrink-0"
+                          />
+                        ) : null;
+                      })}
                     </div>
                   </div>
                   <Select
