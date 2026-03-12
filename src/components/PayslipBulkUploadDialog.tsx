@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Check, AlertTriangle, ArrowRight, ArrowLeft, Loader2, FileText, Send } from "lucide-react";
+import { Upload, Check, AlertTriangle, ArrowRight, ArrowLeft, Loader2, FileText, Send, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PDFDocument } from "pdf-lib";
@@ -34,6 +34,7 @@ interface Props {
 export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
 
   const [step, setStep] = useState(1);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -46,6 +47,8 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
   const [pageThumbnails, setPageThumbnails] = useState<Map<number, string>>(new Map());
+  const [lightbox, setLightbox] = useState<{ pageIdx: number; pages: number[] } | null>(null);
+  const [pageFullImages, setPageFullImages] = useState<Map<number, string>>(new Map());
 
   const reset = () => {
     setStep(1);
@@ -58,6 +61,44 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
     setAnalyzing(false);
     setSaving(false);
     setPageThumbnails(new Map());
+    setLightbox(null);
+    setPageFullImages(new Map());
+    pdfDocRef.current = null;
+  };
+
+  const openLightbox = async (pageIdx: number, pages: number[]) => {
+    if (!pageFullImages.has(pageIdx) && pdfDocRef.current) {
+      const page = await pdfDocRef.current.getPage(pageIdx + 1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      setPageFullImages((prev) => new Map(prev).set(pageIdx, dataUrl));
+    }
+    setLightbox({ pageIdx, pages });
+  };
+
+  const removePage = (assignmentIdx: number, pageIdx: number) => {
+    setAssignments((prev) =>
+      prev
+        .map((a, i) =>
+          i === assignmentIdx ? { ...a, pages: a.pages.filter((p) => p !== pageIdx) } : a
+        )
+        .filter((a) => a.pages.length > 0)
+    );
+    setUnassignedPages((prev) => [...prev, pageIdx].sort((a, b) => a - b));
+  };
+
+  const assignUnassignedPage = (pageIdx: number, assignmentIdxStr: string) => {
+    const idx = Number(assignmentIdxStr);
+    setAssignments((prev) =>
+      prev.map((a, i) =>
+        i === idx ? { ...a, pages: [...a.pages, pageIdx].sort((a, b) => a - b) } : a
+      )
+    );
+    setUnassignedPages((prev) => prev.filter((p) => p !== pageIdx));
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +138,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
 
       // 2. Extract text from each page
       const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes.slice(0)) }).promise;
+      pdfDocRef.current = pdfDoc;
       const pageTexts: string[] = [];
 
       for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -240,7 +282,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto relative">
         <DialogHeader>
           <DialogTitle>Sammel-Lohnzettel hochladen — Schritt {step}/3</DialogTitle>
         </DialogHeader>
@@ -314,70 +356,104 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
               {assignments.map((a, i) => (
                 <div
                   key={i}
-                  className={`flex items-center gap-3 p-3 border rounded-lg ${
+                  className={`p-3 border rounded-lg ${
                     a.matched_user_id ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"
                   }`}
                 >
-                  <div className="shrink-0">
-                    {a.matched_user_id ? (
-                      <Check className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{a.employee_name || "Nicht erkannt"}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {a.pages.length === 1
-                          ? `Seite ${a.pages[0] + 1}`
-                          : `Seiten ${a.pages[0] + 1}–${a.pages[a.pages.length - 1] + 1}`}
-                      </Badge>
-                      {a.confidence === "low" && (
-                        <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
-                          Unsicher
-                        </Badge>
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0">
+                      {a.matched_user_id ? (
+                        <Check className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-yellow-600" />
                       )}
                     </div>
-                    <div className="flex gap-1 mt-2 overflow-x-auto">
-                      {a.pages.map((pageIdx) => {
-                        const thumb = pageThumbnails.get(pageIdx);
-                        return thumb ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{a.employee_name || "Nicht erkannt"}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {a.pages.length === 1
+                            ? `Seite ${a.pages[0] + 1}`
+                            : `Seiten ${a.pages[0] + 1}–${a.pages[a.pages.length - 1] + 1}`}
+                        </Badge>
+                        {a.confidence === "low" && (
+                          <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                            Unsicher
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Select
+                      value={a.matched_user_id || ""}
+                      onValueChange={(v) => updateAssignment(i, v)}
+                    >
+                      <SelectTrigger className="w-48 h-8 text-xs">
+                        <SelectValue placeholder="Zuordnen..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.map((emp) => (
+                          <SelectItem key={emp.user_id} value={emp.user_id}>
+                            {emp.vorname} {emp.nachname}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Thumbnails */}
+                  <div className="flex gap-1 mt-2 overflow-x-auto">
+                    {a.pages.map((pageIdx) => {
+                      const thumb = pageThumbnails.get(pageIdx);
+                      return thumb ? (
+                        <div key={pageIdx} className="relative group flex-shrink-0">
                           <img
-                            key={pageIdx}
                             src={thumb}
                             alt={`Seite ${pageIdx + 1}`}
-                            className="h-24 w-auto rounded border border-gray-200 shadow-sm flex-shrink-0"
+                            className="h-24 w-auto rounded border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => openLightbox(pageIdx, a.pages)}
                           />
-                        ) : null;
-                      })}
-                    </div>
+                          <button
+                            className="absolute top-0.5 right-0.5 hidden group-hover:flex w-4 h-4 bg-red-500 text-white rounded-full text-xs items-center justify-center leading-none"
+                            onClick={(e) => { e.stopPropagation(); removePage(i, pageIdx); }}
+                            title="Seite entfernen"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : null;
+                    })}
                   </div>
-                  <Select
-                    value={a.matched_user_id || ""}
-                    onValueChange={(v) => updateAssignment(i, v)}
-                  >
-                    <SelectTrigger className="w-48 h-8 text-xs">
-                      <SelectValue placeholder="Zuordnen..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((emp) => (
-                        <SelectItem key={emp.user_id} value={emp.user_id}>
-                          {emp.vorname} {emp.nachname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               ))}
 
               {unassignedPages.length > 0 && (
-                <div className="p-3 border rounded-lg bg-gray-50 border-gray-200">
+                <div className="p-3 border rounded-lg bg-gray-50 border-gray-200 space-y-2">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-gray-500" />
-                    <span className="text-sm text-muted-foreground">
-                      Nicht zugeordnete Seiten: {unassignedPages.map((p) => p + 1).join(", ")}
-                    </span>
+                    <AlertTriangle className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Nicht zugeordnete Seiten</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {unassignedPages.map((pageIdx) => (
+                      <div key={pageIdx} className="flex flex-col items-center gap-1">
+                        <img
+                          src={pageThumbnails.get(pageIdx)}
+                          alt={`Seite ${pageIdx + 1}`}
+                          className="h-20 w-auto rounded border border-gray-300 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => openLightbox(pageIdx, unassignedPages)}
+                        />
+                        <Select onValueChange={(v) => assignUnassignedPage(pageIdx, v)}>
+                          <SelectTrigger className="w-32 h-6 text-xs">
+                            <SelectValue placeholder="Zuordnen..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assignments.map((a, i) => (
+                              <SelectItem key={i} value={String(i)}>
+                                {a.employee_name || `Eintrag ${i + 1}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -419,6 +495,46 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
                 </>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Lightbox overlay */}
+        {lightbox && (
+          <div
+            className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center rounded-lg"
+            onClick={() => setLightbox(null)}
+          >
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute -top-8 right-0 text-white hover:text-white hover:bg-white/20 h-7 w-7"
+                onClick={() => setLightbox(null)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+              <img
+                src={pageFullImages.get(lightbox.pageIdx) ?? pageThumbnails.get(lightbox.pageIdx)}
+                alt={`Seite ${lightbox.pageIdx + 1}`}
+                className="max-h-[72vh] w-auto rounded shadow-2xl"
+              />
+              <p className="text-center text-white/70 text-xs mt-2">
+                Seite {lightbox.pageIdx + 1}
+              </p>
+            </div>
+            {lightbox.pages.length > 1 && (
+              <div className="flex gap-2 mt-3">
+                {lightbox.pages.map((p) => (
+                  <button
+                    key={p}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      p === lightbox.pageIdx ? "bg-white" : "bg-white/40 hover:bg-white/60"
+                    }`}
+                    onClick={(e) => { e.stopPropagation(); openLightbox(p, lightbox.pages); }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
