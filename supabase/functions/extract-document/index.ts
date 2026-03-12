@@ -48,10 +48,13 @@ Gesamt (€ netto)
 
 WICHTIG:
 
-- Extrahiere ALLE Positionen
+- Extrahiere ALLE Positionen — vollständige Liste ist das oberste Ziel
 - Auch Arbeitspositionen wie "Monteur", "Techniker" zählen als Position
 - Verwende exakt die Bezeichnungen aus der Rechnung
 - Mengen und Preise dürfen nicht gerundet werden
+- Beschreibungen (Material-Feld) auf maximal 100 Zeichen kürzen — Kerninformation behalten
+- Du hast ein begrenztes Ausgabelimit: priorisiere VOLLSTÄNDIGKEIT aller Positionen über detaillierte Beschreibungen
+- Verwende kompaktes JSON (keine unnötigen Leerzeichen in String-Werten)
 
 ------------------------------------
 
@@ -160,7 +163,7 @@ Lies den Text der Rechnung buchstabengenau vom Bild ab.`;
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        max_tokens: 8000,
+        max_tokens: 16000,
         messages,
       }),
     });
