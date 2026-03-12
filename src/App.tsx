@@ -106,7 +106,6 @@ function AppContent() {
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            if (!isAdmin) return;
             const notification = payload.new as {
               title: string;
               message: string;
