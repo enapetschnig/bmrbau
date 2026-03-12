@@ -387,7 +387,7 @@ export default function HoursReport() {
   }, 0);
   const totalKilometer = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.kilometer || 0), 0);
   const totalKmGeld = Math.round(totalKilometer * 0.42 * 100) / 100;
-  const totalDiaeten = uniqueEntriesByDay.filter(e => (e.diaeten_typ && e.diaeten_typ !== "keine") || e.diaeten_anfahrt).length;
+  const totalDiaeten = uniqueEntriesByDay.filter(e => e.diaeten_typ && e.diaeten_typ !== "keine").length;
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {
     const borderStyle = thick ? "medium" : "thin";
@@ -1124,7 +1124,6 @@ export default function HoursReport() {
                                     {[
                                       entry.diaeten_typ === "klein" && "3–9h",
                                       entry.diaeten_typ === "gross" && ">9h",
-                                      entry.diaeten_anfahrt && "Anfahrt",
                                     ].filter(Boolean).join(" + ") || ""}
                                   </TableCell>
                                   <TableCell>

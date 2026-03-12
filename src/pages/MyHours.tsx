@@ -324,14 +324,13 @@ const MyHours = () => {
                     </span>
                   </div>
                 )}
-                {entries.some(e => e.diaeten_typ && e.diaeten_typ !== "keine") || entries.some(e => e.diaeten_anfahrt) ? (
+                {entries.some(e => e.diaeten_typ && e.diaeten_typ !== "keine") ? (
                   <div>
                     <span className="text-muted-foreground">Diäten: </span>
                     <span className="font-bold text-sm">
                       {[
                         entries.filter(e => e.diaeten_typ === "klein").length > 0 && `3–9h (${entries.filter(e => e.diaeten_typ === "klein").length}×)`,
                         entries.filter(e => e.diaeten_typ === "gross").length > 0 && `>9h (${entries.filter(e => e.diaeten_typ === "gross").length}×)`,
-                        entries.filter(e => e.diaeten_anfahrt).length > 0 && `Anfahrt (${entries.filter(e => e.diaeten_anfahrt).length}×)`,
                       ].filter(Boolean).join(", ")}
                     </span>
                   </div>

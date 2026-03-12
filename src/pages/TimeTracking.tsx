@@ -23,6 +23,7 @@ import {
   getWeeklyTargetHours,
   getTotalWorkingHours,
   calculateKilometergeld,
+  calculateDiaeten,
   DEFAULT_SCHEDULE,
   type WeekSchedule,
 } from "@/lib/workingHours";
@@ -65,8 +66,6 @@ interface TimeBlock {
   kilometer: string;
   kmBeschreibung: string;
   zeitTyp: "normal" | "lenkzeit" | "reisezeit" | "fahrt_100km";
-  diaetTyp: "keine" | "klein" | "gross";
-  diaetAnfahrt: boolean;
 }
 
 const createDefaultBlock = (startTime = "", endTime = ""): TimeBlock => ({
@@ -82,8 +81,6 @@ const createDefaultBlock = (startTime = "", endTime = ""): TimeBlock => ({
   kilometer: "",
   kmBeschreibung: "",
   zeitTyp: "normal",
-  diaetTyp: "keine",
-  diaetAnfahrt: false,
 });
 
 const TimeTracking = () => {
@@ -795,9 +792,8 @@ const TimeTracking = () => {
         kilometer: km,
         km_beschreibung: block.kmBeschreibung || null,
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
-        diaeten_typ: isExternalUser ? null : block.diaetTyp,
+        diaeten_typ: isExternalUser ? null : calculateDiaeten(blockHours, false).typ,
         diaeten_betrag: null,
-        diaeten_anfahrt: isExternalUser ? false : block.diaetAnfahrt,
       });
 
       if (insertError) {
@@ -1312,38 +1308,6 @@ const TimeTracking = () => {
                             <Sun className="w-3 h-3 mr-1" />
                             Regelarbeitszeit einfüllen
                           </Button>
-                        )}
-
-                        {/* Diäten */}
-                        {!isExternalUser && (
-                          <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
-                            <Label className="text-xs font-medium text-muted-foreground">Diäten</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(["keine", "klein", "gross"] as const).map((typ) => (
-                                <button
-                                  key={typ}
-                                  type="button"
-                                  onClick={() => updateBlock(block.id, { diaetTyp: typ })}
-                                  className={`px-2.5 py-1 text-xs rounded border transition-colors ${
-                                    block.diaetTyp === typ
-                                      ? "bg-primary text-primary-foreground border-primary"
-                                      : "bg-background border-input hover:bg-muted"
-                                  }`}
-                                >
-                                  {typ === "keine" ? "Keine" : typ === "klein" ? "3–9 Stunden" : "Über 9 Stunden"}
-                                </button>
-                              ))}
-                            </div>
-                            <label className="flex items-center gap-2 text-xs cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={block.diaetAnfahrt}
-                                onChange={(e) => updateBlock(block.id, { diaetAnfahrt: e.target.checked })}
-                                className="rounded"
-                              />
-                              Baustellenanfahrt (einmal täglich)
-                            </label>
-                          </div>
                         )}
 
                         {/* Block hours */}
