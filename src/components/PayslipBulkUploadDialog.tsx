@@ -283,7 +283,8 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto relative">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
+        <div className="relative">
         <DialogHeader>
           <DialogTitle>Sammel-Lohnzettel hochladen — Schritt {step}/3</DialogTitle>
         </DialogHeader>
@@ -538,6 +539,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
             )}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
