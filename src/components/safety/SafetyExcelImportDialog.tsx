@@ -91,6 +91,7 @@ export function SafetyExcelImportDialog({ open, onOpenChange, onImport }: Props)
 
     const parsed: EditableRow[] = (data.items as { category: string; question: string }[])
       .filter((item) => item.question?.trim())
+      .filter((item) => !item.question.toLowerCase().includes("unterschrift"))
       .map((item) => ({
         category: item.category?.trim() || "",
         question: item.question.trim(),
