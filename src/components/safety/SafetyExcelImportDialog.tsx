@@ -59,7 +59,11 @@ export function SafetyExcelImportDialog({ open, onOpenChange, onImport }: Props)
     setAiLoading(false);
 
     if (error || !data?.items) {
-      toast({ variant: "destructive", title: "KI-Analyse fehlgeschlagen", description: error?.message || "Bitte erneut versuchen." });
+      toast({ variant: "destructive", title: "KI-Analyse fehlgeschlagen", description: error?.message || data?.error || "Bitte erneut versuchen." });
+      return;
+    }
+    if (data?.error) {
+      toast({ variant: "destructive", title: "KI-Analyse fehlgeschlagen", description: data.error });
       return;
     }
 
