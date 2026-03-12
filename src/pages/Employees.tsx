@@ -505,42 +505,15 @@ export default function Employees() {
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Regelarbeitszeit</h3>
                     <div className="flex items-center gap-3 mb-3">
-                      <Label className="text-sm whitespace-nowrap">Wochenstunden:</Label>
+                      <Label className="text-sm whitespace-nowrap">Wochenstunden-Soll:</Label>
                       <Input
                         type="number"
                         min="0"
                         max="60"
                         step="0.5"
-                        value={formData.wochen_soll_stunden || 39}
+                        value={formData.wochen_soll_stunden ?? 39}
                         onChange={(e) => {
-                          const newTotal = parseFloat(e.target.value) || 0;
-                          const schedule = (formData.regelarbeitszeit as WeekSchedule) || DEFAULT_SCHEDULE;
-                          const oldTotal = Object.values(schedule).reduce((s, d) => s + (d?.hours ?? 0), 0);
-                          if (oldTotal === 0) return;
-
-                          const newSchedule = { ...schedule };
-                          const timeToMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-                          const minToTime = (mins: number) => {
-                            const h = Math.floor(mins / 60);
-                            const m = Math.round(mins % 60);
-                            return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-                          };
-
-                          for (const dayKey of Object.keys(schedule) as (keyof WeekSchedule)[]) {
-                            const day = schedule[dayKey];
-                            if (!day || day.hours === 0) continue;
-                            const ratio = day.hours / oldTotal;
-                            const newHours = Math.round(newTotal * ratio * 4) / 4; // round to 0.25
-                            const newDay = { ...day, hours: newHours };
-                            // Recalculate end time if start exists
-                            if (day.start) {
-                              const startMin = timeToMin(day.start);
-                              const endMin = startMin + (newHours * 60) + (day.pause || 0);
-                              newDay.end = minToTime(Math.min(endMin, 23 * 60 + 59));
-                            }
-                            newSchedule[dayKey] = newDay;
-                          }
-                          setFormData({ ...formData, regelarbeitszeit: newSchedule, wochen_soll_stunden: newTotal });
+                          setFormData({ ...formData, wochen_soll_stunden: parseFloat(e.target.value) || 0 });
                         }}
                         className="h-9 w-24"
                       />

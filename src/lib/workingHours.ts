@@ -11,6 +11,8 @@ export interface DaySchedule {
   start: string | null;
   end: string | null;
   pause: number;
+  pause_start?: string;
+  pause_end?: string;
   hours: number;
 }
 
@@ -28,10 +30,10 @@ export interface WeekSchedule {
 // Mo/Di: 06:30-17:00 (Pause 30min → 10h), Mi/Do: 07:00-17:00 (Pause 30min → 9,5h)
 // Wochenregelarbeitszeit: 39h
 export const DEFAULT_SCHEDULE: WeekSchedule = {
-  mo: { start: "06:30", end: "17:00", pause: 30, hours: 10 },
-  di: { start: "06:30", end: "17:00", pause: 30, hours: 10 },
-  mi: { start: "07:00", end: "17:00", pause: 30, hours: 9.5 },
-  do: { start: "07:00", end: "17:00", pause: 30, hours: 9.5 },
+  mo: { start: "06:30", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 10 },
+  di: { start: "06:30", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 10 },
+  mi: { start: "07:00", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 9.5 },
+  do: { start: "07:00", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 9.5 },
   fr: { start: null, end: null, pause: 0, hours: 0 },
   sa: { start: null, end: null, pause: 0, hours: 0 },
   so: { start: null, end: null, pause: 0, hours: 0 },
@@ -103,17 +105,29 @@ export function getDefaultWorkTimes(date: Date, schedule?: WeekSchedule | null):
 
   if (!day || !day.start || !day.end || day.hours === 0) return null;
 
-  // Pausenzeit berechnen (standardmäßig in der Mitte der Arbeitszeit)
-  const startMinutes = timeToMinutes(day.start);
-  const endMinutes = timeToMinutes(day.end);
-  const midpoint = Math.floor((startMinutes + endMinutes) / 2);
-  const pauseStartMinutes = midpoint - Math.floor(day.pause / 2);
+  // Pausenzeit: direkt aus Schedule verwenden wenn vorhanden, sonst Mitte der Arbeitszeit
+  let pauseStart: string;
+  let pauseEnd: string;
+  if (day.pause_start && day.pause_end) {
+    pauseStart = day.pause_start;
+    pauseEnd = day.pause_end;
+  } else if (day.pause > 0) {
+    const startMinutes = timeToMinutes(day.start);
+    const endMinutes = timeToMinutes(day.end);
+    const midpoint = Math.floor((startMinutes + endMinutes) / 2);
+    const pauseStartMinutes = midpoint - Math.floor(day.pause / 2);
+    pauseStart = minutesToTime(pauseStartMinutes);
+    pauseEnd = minutesToTime(pauseStartMinutes + day.pause);
+  } else {
+    pauseStart = "";
+    pauseEnd = "";
+  }
 
   return {
     startTime: day.start,
     endTime: day.end,
-    pauseStart: minutesToTime(pauseStartMinutes),
-    pauseEnd: minutesToTime(pauseStartMinutes + day.pause),
+    pauseStart,
+    pauseEnd,
     pauseMinutes: day.pause,
     totalHours: day.hours,
   };

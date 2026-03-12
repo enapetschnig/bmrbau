@@ -34,6 +34,7 @@ type TimeEntry = {
   zeit_typ?: string | null;
   diaeten_typ?: string | null;
   diaeten_betrag?: number | null;
+  diaeten_anfahrt?: boolean | null;
 };
 
 const MyHours = () => {
@@ -323,12 +324,18 @@ const MyHours = () => {
                     </span>
                   </div>
                 )}
-                {entries.reduce((s, e) => s + (e.diaeten_betrag || 0), 0) > 0 && (
+                {entries.some(e => e.diaeten_typ && e.diaeten_typ !== "keine") || entries.some(e => e.diaeten_anfahrt) ? (
                   <div>
                     <span className="text-muted-foreground">Diäten: </span>
-                    <span className="font-bold">€ {entries.reduce((s, e) => s + (e.diaeten_betrag || 0), 0).toFixed(2)}</span>
+                    <span className="font-bold text-sm">
+                      {[
+                        entries.filter(e => e.diaeten_typ === "klein").length > 0 && `3–9h (${entries.filter(e => e.diaeten_typ === "klein").length}×)`,
+                        entries.filter(e => e.diaeten_typ === "gross").length > 0 && `>9h (${entries.filter(e => e.diaeten_typ === "gross").length}×)`,
+                        entries.filter(e => e.diaeten_anfahrt).length > 0 && `Anfahrt (${entries.filter(e => e.diaeten_anfahrt).length}×)`,
+                      ].filter(Boolean).join(", ")}
+                    </span>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 

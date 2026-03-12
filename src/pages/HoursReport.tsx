@@ -45,6 +45,7 @@ interface TimeEntry {
   zeit_typ?: string | null;
   diaeten_typ?: string | null;
   diaeten_betrag?: number | null;
+  diaeten_anfahrt?: boolean | null;
 }
 
 interface Profile {
@@ -381,7 +382,7 @@ export default function HoursReport() {
   }, 0);
   const totalKilometer = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.kilometer || 0), 0);
   const totalKmGeld = Math.round(totalKilometer * 0.42 * 100) / 100;
-  const totalDiaeten = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.diaeten_betrag || 0), 0);
+  const totalDiaeten = uniqueEntriesByDay.filter(e => (e.diaeten_typ && e.diaeten_typ !== "keine") || e.diaeten_anfahrt).length;
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {
     const borderStyle = thick ? "medium" : "thin";
@@ -943,7 +944,7 @@ export default function HoursReport() {
                       {!selectedIsExternal && (
                         <div>
                           <p className="text-sm text-muted-foreground">Diäten</p>
-                          <p className="text-2xl font-bold">€ {totalDiaeten.toFixed(2)}</p>
+                          <p className="text-2xl font-bold">{totalDiaeten} Tag{totalDiaeten !== 1 ? "e" : ""}</p>
                         </div>
                       )}
                     </div>
@@ -1114,8 +1115,12 @@ export default function HoursReport() {
                                   <TableCell className="text-right text-xs">
                                     {entry.kilometer && entry.kilometer > 0 ? `${entry.kilometer}` : ""}
                                   </TableCell>
-                                  <TableCell className="text-right text-xs">
-                                    {entry.diaeten_betrag && entry.diaeten_betrag > 0 ? `€ ${entry.diaeten_betrag.toFixed(2)}` : ""}
+                                  <TableCell className="text-xs">
+                                    {[
+                                      entry.diaeten_typ === "klein" && "3–9h",
+                                      entry.diaeten_typ === "gross" && ">9h",
+                                      entry.diaeten_anfahrt && "Anfahrt",
+                                    ].filter(Boolean).join(" + ") || ""}
                                   </TableCell>
                                   <TableCell>
                                     <span className="flex items-center gap-1">
@@ -1162,7 +1167,7 @@ export default function HoursReport() {
                             {totalKilometer > 0 ? `${totalKilometer.toFixed(0)} km` : ""}
                           </TableCell>
                           <TableCell className="text-right font-bold text-xs">
-                            {totalDiaeten > 0 ? `€ ${totalDiaeten.toFixed(2)}` : ""}
+                            {totalDiaeten > 0 ? `${totalDiaeten} Tage` : ""}
                           </TableCell>
                           <TableCell colSpan={3}></TableCell>
                         </TableRow>

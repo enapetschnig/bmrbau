@@ -22,7 +22,6 @@ import {
   isNonWorkingDay,
   getWeeklyTargetHours,
   getTotalWorkingHours,
-  calculateDiaeten,
   calculateKilometergeld,
   DEFAULT_SCHEDULE,
   type WeekSchedule,
@@ -66,6 +65,8 @@ interface TimeBlock {
   kilometer: string;
   kmBeschreibung: string;
   zeitTyp: "normal" | "lenkzeit" | "reisezeit" | "fahrt_100km";
+  diaetTyp: "keine" | "klein" | "gross";
+  diaetAnfahrt: boolean;
 }
 
 const createDefaultBlock = (startTime = "", endTime = ""): TimeBlock => ({
@@ -81,6 +82,8 @@ const createDefaultBlock = (startTime = "", endTime = ""): TimeBlock => ({
   kilometer: "",
   kmBeschreibung: "",
   zeitTyp: "normal",
+  diaetTyp: "keine",
+  diaetAnfahrt: false,
 });
 
 const TimeTracking = () => {
@@ -773,9 +776,6 @@ const TimeTracking = () => {
         : calculateBlockHours(block);
       const pauseMinutes = isExternalUser ? 0 : calculateBlockPauseMinutes(block);
 
-      // Calculate Diäten for this block (not for external)
-      const isConstruction = block.locationType === "baustelle";
-      const diaeten = isExternalUser ? { typ: null, betrag: 0 } : calculateDiaeten(blockHours, isConstruction);
       const km = block.kilometer ? parseFloat(block.kilometer) : null;
 
       const { error: insertError } = await supabase.from("time_entries").insert({
@@ -795,8 +795,9 @@ const TimeTracking = () => {
         kilometer: km,
         km_beschreibung: block.kmBeschreibung || null,
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
-        diaeten_typ: diaeten.typ,
-        diaeten_betrag: diaeten.betrag,
+        diaeten_typ: isExternalUser ? null : block.diaetTyp,
+        diaeten_betrag: null,
+        diaeten_anfahrt: isExternalUser ? false : block.diaetAnfahrt,
       });
 
       if (insertError) {
@@ -1310,6 +1311,38 @@ const TimeTracking = () => {
                             <Sun className="w-3 h-3 mr-1" />
                             Regelarbeitszeit einfüllen
                           </Button>
+                        )}
+
+                        {/* Diäten */}
+                        {!isExternalUser && (
+                          <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                            <Label className="text-xs font-medium text-muted-foreground">Diäten</Label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(["keine", "klein", "gross"] as const).map((typ) => (
+                                <button
+                                  key={typ}
+                                  type="button"
+                                  onClick={() => updateBlock(block.id, { diaetTyp: typ })}
+                                  className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                                    block.diaetTyp === typ
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background border-input hover:bg-muted"
+                                  }`}
+                                >
+                                  {typ === "keine" ? "Keine" : typ === "klein" ? "3–9 Stunden" : "Über 9 Stunden"}
+                                </button>
+                              ))}
+                            </div>
+                            <label className="flex items-center gap-2 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={block.diaetAnfahrt}
+                                onChange={(e) => updateBlock(block.id, { diaetAnfahrt: e.target.checked })}
+                                className="rounded"
+                              />
+                              Baustellenanfahrt (einmal täglich)
+                            </label>
+                          </div>
                         )}
 
                         {/* Block hours */}
