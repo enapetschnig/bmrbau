@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { Trash2 } from "lucide-react";
 
 export type IncomingDocument = {
   id: string;
@@ -51,12 +53,14 @@ interface DocumentDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   isAdmin: boolean;
   onUpdate: () => void;
+  onDelete?: () => void;
 }
 
-export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, onUpdate }: DocumentDetailDialogProps) {
+export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, onUpdate, onDelete }: DocumentDetailDialogProps) {
   const { toast } = useToast();
   const [showFullImage, setShowFullImage] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [editStatus, setEditStatus] = useState("");
   const [editNotizen, setEditNotizen] = useState("");
@@ -69,6 +73,20 @@ export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, on
       setEditNotizen(document.notizen || "");
       setEditBezahltAm(document.bezahlt_am || "");
     }
+  };
+
+  const handleDelete = async () => {
+    if (!document) return;
+    setDeleting(true);
+    const { error } = await supabase.from("incoming_documents").delete().eq("id", document.id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+    } else {
+      toast({ title: "Dokument gelöscht" });
+      onOpenChange(false);
+      onDelete?.();
+    }
+    setDeleting(false);
   };
 
   const handleSave = async () => {
@@ -242,6 +260,31 @@ export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, on
                 <Button onClick={handleSave} disabled={saving} className="w-full">
                   {saving ? "Speichere..." : "Änderungen speichern"}
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full" disabled={deleting}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Dokument löschen
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Dokument löschen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Das Dokument wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Löschen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>

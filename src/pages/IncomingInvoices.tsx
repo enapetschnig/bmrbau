@@ -1024,12 +1024,17 @@ export default function IncomingInvoices() {
                                 </TableRow>
                               );
                             }
+                            const normNum = (val: string) => {
+                              const n = parseFloat(String(val).replace(",", ".").replace(/[^\d.]/g, ""));
+                              return isNaN(n) ? String(val).trim().toLowerCase() : n;
+                            };
                             return Array.from({ length: maxLen }).map((_, i) => {
                               const ls = lsPos[i];
                               const re = rePos[i];
                               const lsMenge = ls ? `${ls.menge || "–"} ${ls.einheit || ""}`.trim() : null;
                               const reMenge = re ? `${re.menge || "–"} ${re.einheit || ""}`.trim() : null;
-                              const match = lsMenge !== null && reMenge !== null && lsMenge === reMenge;
+                              const match = ls && re &&
+                                normNum(String(ls.menge || "")) === normNum(String(re.menge || ""));
                               return (
                                 <TableRow key={i}>
                                   <TableCell className="text-xs">
@@ -1063,6 +1068,7 @@ export default function IncomingInvoices() {
         onOpenChange={setShowDetailDialog}
         isAdmin={true}
         onUpdate={() => { fetchData(); setShowDetailDialog(false); }}
+        onDelete={() => fetchData()}
       />
     </div>
   );

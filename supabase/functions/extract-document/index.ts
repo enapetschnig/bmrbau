@@ -55,6 +55,9 @@ WICHTIG:
 - Beschreibungen (Material-Feld) auf maximal 100 Zeichen kürzen — Kerninformation behalten
 - Du hast ein begrenztes Ausgabelimit: priorisiere VOLLSTÄNDIGKEIT aller Positionen über detaillierte Beschreibungen
 - Verwende kompaktes JSON (keine unnötigen Leerzeichen in String-Werten)
+- Menge: nur der reine Zahlenwert ohne Einheit (z.B. "10", "1.5", "1000") — die Einheit gehört ausschließlich in das Feld "Einheit"
+- Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
+- Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
 
 ------------------------------------
 
@@ -146,6 +149,9 @@ WICHTIG:
 - Beschreibungen (Material-Feld) auf maximal 100 Zeichen kürzen — Kerninformation behalten
 - Du hast ein begrenztes Ausgabelimit: priorisiere VOLLSTÄNDIGKEIT aller Positionen
 - Verwende kompaktes JSON (keine unnötigen Leerzeichen in String-Werten)
+- Menge: nur der reine Zahlenwert ohne Einheit (z.B. "10", "1.5", "1000") — die Einheit gehört ausschließlich in das Feld "Einheit"
+- Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
+- Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
 
 ------------------------------------
 
