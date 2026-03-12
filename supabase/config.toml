@@ -2,3 +2,6 @@ project_id = "fxsjhdsitwtjasxbmksr"
 
 [functions.compare-documents]
 verify_jwt = false
+
+[functions.extract-document]
+verify_jwt = false
