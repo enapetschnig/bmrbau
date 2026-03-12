@@ -543,7 +543,7 @@ export default function IncomingInvoices() {
               <Upload className="w-4 h-4" /> Hochladen
             </TabsTrigger>
             <TabsTrigger value="abgleich" className="flex items-center gap-2">
-              <GitCompare className="w-4 h-4" /> Abgleich
+              <CheckCircle2 className="w-4 h-4" /> Abgleich
             </TabsTrigger>
           </TabsList>
 
