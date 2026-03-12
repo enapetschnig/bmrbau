@@ -76,13 +76,18 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
 
     try {
       // 1. Fetch employees
-      const { data: empData } = await supabase
+      const { data: empData, error: empError } = await supabase
         .from("employees")
         .select("user_id, vorname, nachname")
         .not("user_id", "is", null);
 
+      if (empError) {
+        toast({ variant: "destructive", title: "Fehler beim Laden der Mitarbeiter", description: empError.message });
+        setAnalyzing(false);
+        return;
+      }
       if (!empData || empData.length === 0) {
-        toast({ variant: "destructive", title: "Keine Mitarbeiter gefunden" });
+        toast({ variant: "destructive", title: "Keine Mitarbeiter gefunden", description: "Es sind keine Mitarbeiter mit verknüpftem Account vorhanden." });
         setAnalyzing(false);
         return;
       }
