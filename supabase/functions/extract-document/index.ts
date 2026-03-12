@@ -38,7 +38,7 @@ Strukturiere diesen Text und antworte NUR mit einem validen JSON-Objekt (kein Ma
   "betragNetto": 0.00,
   "betragBrutto": 0.00,
   "positionen": [
-    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreisNetto": 0.00, "gesamtpreisNetto": 0.00 }
+    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreis": 0.00, "gesamtpreis": 0.00 }
   ],
   "qualitaet": "gut"
 }
@@ -46,8 +46,8 @@ Strukturiere diesen Text und antworte NUR mit einem validen JSON-Objekt (kein Ma
 STRIKTE REGELN — KEINE AUSNAHMEN:
 - "material": BUCHSTABENGENAU aus dem Text übernehmen — kein Paraphrasieren, keine Übersetzung, keine Zusammenfassung. Exakt so wie im Dokument geschrieben.
 - "positionen": JEDE einzelne Position aus dem Text — lückenlos, von Seite 1 bis zur letzten Seite. Nichts weglassen.
-- "einzelpreisNetto": Preis pro Einheit (Netto, ohne MwSt.) als reine Zahl. Direkt aus dem Text lesen.
-- "gesamtpreisNetto": Gesamtpreis der Position (Netto) als reine Zahl. Direkt aus dem Text lesen.
+- "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen, keine Einheit).
+- "gesamtpreis": Gesamtpreis der Position als reine Zahl. Falls im Text vorhanden, diesen Wert nehmen.
 - "betragNetto": Suche im Dokument nach einem Label wie "Nettobetrag", "Netto-Gesamtsumme", "Zwischensumme", "Summe exkl. MwSt.", "Warenwert" o.ä. und lies den danebenstehenden Wert aus. NICHT selber berechnen. Nicht vorhanden → null.
 - "betragBrutto": Suche nach "Gesamtsumme", "Rechnungsbetrag", "Endbetrag", "Bruttobetrag", "Betrag inkl. MwSt.", "Zu zahlen", "Total" o.ä. und lies den danebenstehenden Wert aus. NICHT selber berechnen. Das ist der finale zu zahlende Betrag.
 - Alle Zahlen ohne Währungszeichen und ohne Einheiten. Nicht erkennbare Felder → null.`;
@@ -67,7 +67,7 @@ Antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder 
   "betragNetto": 0.00,
   "betragBrutto": 0.00,
   "positionen": [
-    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreisNetto": 0.00, "gesamtpreisNetto": 0.00 }
+    { "material": "...", "menge": 1.0, "einheit": "Stk", "einzelpreis": 0.00, "gesamtpreis": 0.00 }
   ],
   "qualitaet": "gut/mittel/schlecht"
 }
@@ -75,8 +75,8 @@ Antworte NUR mit einem validen JSON-Objekt (kein Markdown, kein Text davor oder 
 STRIKTE REGELN — KEINE AUSNAHMEN:
 - "material": BUCHSTABENGENAU abschreiben wie es im Dokument steht. NICHT umformulieren. NICHT übersetzen. NICHT paraphrasieren. Erfinde KEINE Namen.
 - "positionen": Jede einzelne Zeile/Position — lückenlos, alle Seiten. Nichts weglassen.
-- "einzelpreisNetto": Preis pro Einheit (Netto, ohne MwSt.) als reine Zahl. Direkt aus dem Dokument lesen.
-- "gesamtpreisNetto": Gesamtpreis der Position (Netto) als reine Zahl. Direkt aus dem Dokument lesen.
+- "einzelpreis": Preis pro Einheit als reine Zahl (kein €-Zeichen).
+- "gesamtpreis": Menge × Einzelpreis als reine Zahl. Falls im Dokument angegeben, diesen Wert nehmen.
 - "betragNetto": Suche nach einem Label wie "Nettobetrag", "Zwischensumme", "Summe exkl. MwSt.", "Warenwert" o.ä. und lies den danebenstehenden Wert aus. NICHT selber berechnen. Nicht vorhanden → null.
 - "betragBrutto": Suche nach "Gesamtsumme", "Rechnungsbetrag", "Endbetrag", "Bruttobetrag", "Zu zahlen", "Total" o.ä. und lies den danebenstehenden Wert aus. NICHT selber berechnen. Das ist der finale zu zahlende Betrag.
 - "qualitaet": "gut" = klar lesbar | "mittel" = teilweise lesbar | "schlecht" = kaum lesbar.

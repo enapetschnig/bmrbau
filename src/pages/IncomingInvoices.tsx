@@ -407,8 +407,8 @@ export default function IncomingInvoices() {
         material: p.material || "",
         menge: p.menge != null ? String(p.menge) : "",
         einheit: p.einheit || "",
-        einzelpreis: (p.einzelpreisNetto ?? p.einzelpreis ?? p.preis) != null ? String(p.einzelpreisNetto ?? p.einzelpreis ?? p.preis) : "",
-        gesamtpreis: (p.gesamtpreisNetto ?? p.gesamtpreis ?? p.gesamtbetrag) != null ? String(p.gesamtpreisNetto ?? p.gesamtpreis ?? p.gesamtbetrag) : "",
+        einzelpreis: (p.einzelpreis ?? p.preis) != null ? String(p.einzelpreis ?? p.preis) : "",
+        gesamtpreis: (p.gesamtpreis ?? p.gesamtbetrag) != null ? String(p.gesamtpreis ?? p.gesamtbetrag) : "",
       })));
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Extraktion fehlgeschlagen", description: (err as Error).message });
