@@ -100,6 +100,21 @@ export function EmployeeEvaluationSheet({ evaluationId, open, onOpenChange, onDo
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
     } else {
+      // Check if all employees have now signed → set status to "abgeschlossen"
+      const [{ count: empCount }, { count: sigCount }] = await Promise.all([
+        supabase.from("safety_evaluation_employees")
+          .select("*", { count: "exact", head: true })
+          .eq("evaluation_id", evaluationId),
+        supabase.from("safety_evaluation_signatures")
+          .select("*", { count: "exact", head: true })
+          .eq("evaluation_id", evaluationId),
+      ]);
+      if (sigCount !== null && empCount !== null && sigCount >= empCount && empCount > 0) {
+        await supabase.from("safety_evaluations")
+          .update({ status: "abgeschlossen" })
+          .eq("id", evaluationId);
+      }
+
       toast({ title: "Erfolgreich unterschrieben", description: "Deine Unterschrift wurde gespeichert." });
       onDone();
       onOpenChange(false);

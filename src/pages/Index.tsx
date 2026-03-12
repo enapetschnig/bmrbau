@@ -1285,7 +1285,7 @@ export default function Index() {
                 </div>
                 <CardTitle className="text-lg sm:text-xl">Eingangsrechnungen</CardTitle>
                 <CardDescription className="text-sm">
-                  Rechnungen prüfen & abgleichen
+                  Rechnungen mit Lieferscheinen abgleichen
                 </CardDescription>
               </CardHeader>
               <CardContent>

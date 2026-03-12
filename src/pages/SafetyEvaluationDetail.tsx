@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, FileSpreadsheet, MessageSquare, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, FileSpreadsheet, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +34,7 @@ type Signature = {
   unterschrift: string;
   unterschrift_name: string;
   unterschrieben_am: string;
+  personal_answers?: Array<{ item_id: string; checked: boolean; bemerkung: string | null }>;
 };
 
 export default function SafetyEvaluationDetail() {
@@ -148,28 +148,6 @@ export default function SafetyEvaluationDetail() {
     }
   };
 
-  const handleSaveDiscussion = async () => {
-    if (!id) return;
-    setSaving(true);
-
-    const newStatus = status === "ausgefuellt" ? "diskutiert" : status;
-    const { error } = await supabase
-      .from("safety_evaluations")
-      .update({
-        diskussion_notizen: diskussionNotizen || null,
-        status: newStatus,
-      })
-      .eq("id", id);
-
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-    } else {
-      toast({ title: "Diskussion gespeichert" });
-      setEvaluation((prev: any) => ({ ...prev, status: newStatus, diskussion_notizen: diskussionNotizen }));
-    }
-    setSaving(false);
-  };
-
   const handleSaveEmployees = async () => {
     if (!id) return;
     setSaving(true);
@@ -250,9 +228,8 @@ export default function SafetyEvaluationDetail() {
       </div>
 
       <Tabs defaultValue="checklist">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="checklist">Checkliste</TabsTrigger>
-          <TabsTrigger value="discussion">Diskussion</TabsTrigger>
           <TabsTrigger value="signatures">
             Unterschriften ({signatures.length}/{employees.length})
           </TabsTrigger>
@@ -335,40 +312,6 @@ export default function SafetyEvaluationDetail() {
           )}
         </TabsContent>
 
-        {/* Discussion Tab */}
-        <TabsContent value="discussion" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <MessageSquare className="w-5 h-5" />
-                Besprechungsnotizen
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {canEdit && status !== "abgeschlossen" ? (
-                <>
-                  <Textarea
-                    value={diskussionNotizen}
-                    onChange={(e) => setDiskussionNotizen(e.target.value)}
-                    placeholder="Notizen zur gemeinsamen Besprechung..."
-                    rows={6}
-                  />
-                  <div className="flex justify-end mt-4">
-                    <Button onClick={handleSaveDiscussion} disabled={saving}>
-                      <Save className="w-4 h-4 mr-1" />
-                      {saving ? "Speichert..." : status === "ausgefuellt" ? "Speichern & als diskutiert markieren" : "Speichern"}
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm whitespace-pre-wrap">
-                  {diskussionNotizen || "Keine Notizen vorhanden"}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Signatures Tab */}
         <TabsContent value="signatures" className="space-y-4">
           <Card>
@@ -383,6 +326,35 @@ export default function SafetyEvaluationDetail() {
                   handleCheckComplete();
                 }}
               />
+
+              {/* Personal answers per employee */}
+              {signatures.some((s) => s.personal_answers && s.personal_answers.length > 0) && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="text-sm font-semibold">Abgehakte Punkte pro Mitarbeiter</h4>
+                  {signatures.map((sig) => {
+                    const answers = sig.personal_answers || [];
+                    const checkedAnswers = answers.filter((a) => a.checked);
+                    if (checkedAnswers.length === 0) return null;
+                    return (
+                      <div key={sig.id} className="border rounded-md p-3 space-y-1">
+                        <p className="text-sm font-medium">{sig.unterschrift_name}</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {checkedAnswers.length} von {answers.length} Punkten abgehakt
+                        </p>
+                        {checkedAnswers.map((a) => {
+                          const item = checklistItems.find((i) => i.id === a.item_id);
+                          return (
+                            <div key={a.item_id} className="flex items-start gap-2 text-xs">
+                              <span className="text-green-600 shrink-0">✓</span>
+                              <span>{item?.question || a.item_id}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

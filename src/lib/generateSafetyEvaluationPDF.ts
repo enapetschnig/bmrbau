@@ -16,6 +16,7 @@ export interface SafetySignature {
   unterschrift: string;
   unterschrift_name: string;
   unterschrieben_am: string;
+  personal_answers?: Array<{ item_id: string; checked: boolean; bemerkung: string | null }>;
 }
 
 export interface SafetyEvaluationData {
@@ -184,6 +185,29 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
           yPos += 3;
         }
       }
+
+      // Personal answers for this employee
+      const checkedAnswers = (sig.personal_answers || []).filter((a) => a.checked);
+      if (checkedAnswers.length > 0) {
+        checkPage(8);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Abgehakte Punkte (${checkedAnswers.length}/${(sig.personal_answers || []).length}):`, margin + 2, yPos);
+        yPos += 4;
+
+        for (const answer of checkedAnswers) {
+          const item = data.checklistItems.find((i) => i.id === answer.item_id);
+          if (!item) continue;
+          checkPage(6);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(0, 0, 0);
+          const lines = doc.splitTextToSize(`✓  ${item.question}`, contentWidth - 10);
+          doc.text(lines, margin + 4, yPos);
+          yPos += lines.length * 4;
+        }
+      }
+
       yPos += 5;
     }
   }

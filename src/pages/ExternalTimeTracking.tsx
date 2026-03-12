@@ -179,7 +179,7 @@ const ExternalTimeTracking = () => {
       });
 
       if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: "Eintrag konnte nicht gespeichert werden" });
+        toast({ variant: "destructive", title: "Fehler", description: error.message || "Eintrag konnte nicht gespeichert werden" });
         setSaving(false);
         return;
       }
