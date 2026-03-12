@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, ShieldCheck, FileSpreadsheet, Download } from "lucide-react";
+import { Plus, ShieldCheck, FileSpreadsheet, Download, X } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -72,6 +72,8 @@ export default function SafetyEvaluations() {
   });
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [newKategorie, setNewKategorie] = useState("");
+  const [newFrage, setNewFrage] = useState("");
 
   // Signature counts per evaluation
   const [signatureCounts, setSignatureCounts] = useState<Record<string, { signed: number; total: number }>>({});
@@ -182,6 +184,22 @@ export default function SafetyEvaluations() {
     setForm({ titel: "", typ: "sicherheitsunterweisung", kategorie: "", project_id: "" });
     setChecklistItems([]);
     setSelectedEmployees([]);
+    setNewKategorie("");
+    setNewFrage("");
+  };
+
+  const addManualItem = () => {
+    if (!newFrage.trim()) return;
+    setChecklistItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}`,
+        category: newKategorie.trim() || "Allgemein",
+        question: newFrage.trim(),
+      },
+    ]);
+    setNewFrage("");
+    setNewKategorie("");
   };
 
   const filtered = evaluations.filter((e) => {
@@ -355,34 +373,55 @@ export default function SafetyEvaluations() {
               </Select>
             </div>
 
-            {/* Checklist Import */}
+            {/* Checklist */}
             <div>
-              <Label>Checkliste</Label>
-              <div className="mt-1.5">
-                {checklistItems.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <p className="text-sm text-muted-foreground">
-                      {checklistItems.length} Prüfpunkte importiert
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowExcelImport(true)}
-                    >
-                      <FileSpreadsheet className="w-4 h-4 mr-1" />
-                      Erneut importieren
-                    </Button>
+              <Label>Checkliste ({checklistItems.length} Prüfpunkte)</Label>
+              <div className="mt-1.5 space-y-2">
+                {/* Existing items */}
+                {checklistItems.length > 0 && (
+                  <div className="border rounded-md p-2 space-y-1 max-h-48 overflow-y-auto">
+                    {checklistItems.map((item, i) => (
+                      <div key={item.id} className="flex items-center gap-2 text-sm">
+                        {item.category && item.category !== "Allgemein" && (
+                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{item.category}</span>
+                        )}
+                        <span className="flex-1 truncate">{item.question}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 shrink-0"
+                          onClick={() => setChecklistItems((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowExcelImport(true)}
-                  >
-                    <FileSpreadsheet className="w-4 h-4 mr-1" />
-                    Aus Excel importieren
-                  </Button>
                 )}
+                {/* Manual add */}
+                <div className="flex gap-2">
+                  <Input
+                    value={newKategorie}
+                    onChange={(e) => setNewKategorie(e.target.value)}
+                    placeholder="Kategorie"
+                    className="w-28 text-sm"
+                  />
+                  <Input
+                    value={newFrage}
+                    onChange={(e) => setNewFrage(e.target.value)}
+                    placeholder="Prüfpunkt hinzufügen…"
+                    className="flex-1 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && addManualItem()}
+                  />
+                  <Button size="sm" variant="outline" onClick={addManualItem} disabled={!newFrage.trim()}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {/* Excel import */}
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setShowExcelImport(true)}>
+                  <FileSpreadsheet className="w-4 h-4 mr-1" />
+                  Aus Excel importieren (KI)
+                </Button>
               </div>
             </div>
 
