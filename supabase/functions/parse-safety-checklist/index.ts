@@ -14,27 +14,40 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const ok = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  let rows: unknown[] = [];
+
   try {
-    const { rows } = await req.json();
+    const body = await req.json();
+    rows = body?.rows ?? [];
+  } catch (e) {
+    console.error("Failed to parse request body:", e);
+    return ok({ items: [], error: `Request body parse error: ${e}` });
+  }
 
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return new Response(JSON.stringify({ error: "rows array required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return ok({ items: [], error: "rows array is empty or missing" });
+  }
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not set" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.error("OPENAI_API_KEY not set");
+    return ok({ items: [], error: "OPENAI_API_KEY not configured" });
+  }
 
-    const content = JSON.stringify(rows, null, 2);
+  // Limit rows to avoid exceeding context window / timeouts
+  const limitedRows = rows.slice(0, 200);
+  // Compact stringify — avoid large payloads
+  const content = JSON.stringify(limitedRows);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  let openAiResponse: Response;
+  try {
+    openAiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -52,28 +65,27 @@ Deno.serve(async (req) => {
         ],
       }),
     });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("OpenAI API error:", err);
-      return new Response(JSON.stringify({ error: "OpenAI API error", detail: err }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const result = await response.json();
-    const parsed = JSON.parse(result.choices?.[0]?.message?.content || "{}");
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-
-    return new Response(JSON.stringify({ items }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error("parse-safety-checklist error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (e) {
+    console.error("OpenAI fetch error:", e);
+    return ok({ items: [], error: `OpenAI network error: ${e}` });
   }
+
+  if (!openAiResponse.ok) {
+    const errText = await openAiResponse.text();
+    console.error("OpenAI API error:", openAiResponse.status, errText);
+    return ok({ items: [], error: `OpenAI error ${openAiResponse.status}: ${errText}` });
+  }
+
+  let items: unknown[] = [];
+  try {
+    const result = await openAiResponse.json();
+    const text = result.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(text);
+    items = Array.isArray(parsed.items) ? parsed.items : [];
+  } catch (e) {
+    console.error("Response parse error:", e);
+    return ok({ items: [], error: `Response parse error: ${e}` });
+  }
+
+  return ok({ items });
 });
