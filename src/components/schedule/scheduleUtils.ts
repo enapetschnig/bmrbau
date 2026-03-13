@@ -2,24 +2,28 @@ import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import type { Assignment, LeaveRequest, CompanyHoliday } from "./scheduleTypes";
 
 export const EMPLOYEE_COLORS = [
-  { bg: "bg-slate-600",   text: "text-white", border: "border-slate-700"   },
-  { bg: "bg-blue-700",    text: "text-white", border: "border-blue-800"    },
-  { bg: "bg-teal-700",    text: "text-white", border: "border-teal-800"    },
-  { bg: "bg-stone-600",   text: "text-white", border: "border-stone-700"   },
-  { bg: "bg-cyan-700",    text: "text-white", border: "border-cyan-800"    },
-  { bg: "bg-indigo-700",  text: "text-white", border: "border-indigo-800"  },
-  { bg: "bg-emerald-700", text: "text-white", border: "border-emerald-800" },
-  { bg: "bg-zinc-600",    text: "text-white", border: "border-zinc-700"    },
-  { bg: "bg-sky-700",     text: "text-white", border: "border-sky-800"     },
-  { bg: "bg-violet-700",  text: "text-white", border: "border-violet-800"  },
+  { bg: "bg-blue-200",    text: "text-blue-900",    border: "border-blue-300"    },
+  { bg: "bg-teal-200",    text: "text-teal-900",    border: "border-teal-300"    },
+  { bg: "bg-rose-200",    text: "text-rose-900",    border: "border-rose-300"    },
+  { bg: "bg-amber-200",   text: "text-amber-900",   border: "border-amber-300"   },
+  { bg: "bg-lime-200",    text: "text-lime-900",    border: "border-lime-300"    },
+  { bg: "bg-purple-200",  text: "text-purple-900",  border: "border-purple-300"  },
+  { bg: "bg-orange-200",  text: "text-orange-900",  border: "border-orange-300"  },
+  { bg: "bg-cyan-200",    text: "text-cyan-900",    border: "border-cyan-300"    },
+  { bg: "bg-pink-200",    text: "text-pink-900",    border: "border-pink-300"    },
+  { bg: "bg-indigo-200",  text: "text-indigo-900",  border: "border-indigo-300"  },
+  { bg: "bg-emerald-200", text: "text-emerald-900", border: "border-emerald-300" },
+  { bg: "bg-yellow-200",  text: "text-yellow-900",  border: "border-yellow-300"  },
+  { bg: "bg-red-200",     text: "text-red-900",     border: "border-red-300"     },
+  { bg: "bg-violet-200",  text: "text-violet-900",  border: "border-violet-300"  },
+  { bg: "bg-sky-200",     text: "text-sky-900",     border: "border-sky-300"     },
+  { bg: "bg-green-200",   text: "text-green-900",   border: "border-green-300"   },
 ];
 
-export function getEmployeeColor(profileId: string) {
-  let hash = 0;
-  for (let i = 0; i < profileId.length; i++) {
-    hash = ((hash << 5) - hash + profileId.charCodeAt(i)) | 0;
-  }
-  return EMPLOYEE_COLORS[Math.abs(hash) % EMPLOYEE_COLORS.length];
+export function getEmployeeColor(profileId: string, allProfileIds: string[]) {
+  const sorted = [...allProfileIds].sort();
+  const idx = sorted.indexOf(profileId);
+  return EMPLOYEE_COLORS[(idx >= 0 ? idx : 0) % EMPLOYEE_COLORS.length];
 }
 
 export const PROJECT_COLORS = [

@@ -86,7 +86,7 @@ export function TeamGanttSection({
 
       {!collapsed &&
         profiles.map((profile) => {
-          const empColor = getEmployeeColor(profile.id);
+          const empColor = getEmployeeColor(profile.id, profiles.map(p => p.id));
           return (
           <div
             key={profile.id}
