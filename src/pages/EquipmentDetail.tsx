@@ -67,7 +67,9 @@ export default function EquipmentDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-      setCanManage(['administrator','vorarbeiter','facharbeiter'].includes(roleData?.role ?? ''));
+      const isAdmin = roleData?.role === "administrator";
+      const { data: empData } = await supabase.from("employees").select("kategorie").eq("user_id", user.id).maybeSingle();
+      setCanManage(isAdmin || ['vorarbeiter','facharbeiter'].includes(empData?.kategorie ?? ''));
     }
 
     const { data: eq } = await supabase.from("equipment").select("*").eq("id", id).single();
