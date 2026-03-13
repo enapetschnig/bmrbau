@@ -21,7 +21,7 @@ type ExtractedData = {
   datum: string | null;
   belegnummer: string | null;
   betrag: number | null;
-  positionen: { material: string; menge: string; einheit: string; preis: string | null }[];
+  positionen: { material: string; menge: string; einheit: string; preis: string | null; gesamtpreis: string | null }[];
   qualitaet: "gut" | "mittel" | "schlecht";
 };
 
@@ -263,6 +263,8 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
           einheit: p["Einheit"] ?? "",
           preis: p["Einzelpreis (€ netto)"] != null && p["Einzelpreis (€ netto)"] !== ""
             ? String(p["Einzelpreis (€ netto)"]) : null,
+          gesamtpreis: p["Gesamt (€ netto)"] != null && p["Gesamt (€ netto)"] !== ""
+            ? String(p["Gesamt (€ netto)"]) : null,
         })),
         qualitaet: "mittel",
       };
@@ -335,7 +337,13 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
       dokument_datum: dokumentDatum || null,
       dokument_nummer: belegnummer.trim() || null,
       betrag: betrag ? parseFloat(betrag) : null,
-      positionen: extracted?.positionen || [],
+      positionen: (extracted?.positionen || []).map(p => ({
+        material: p.material,
+        menge: p.menge,
+        einheit: p.einheit,
+        einzelpreis: p.preis || null,
+        gesamtpreis: p.gesamtpreis || null,
+      })),
       unterschrift: signatureData,
       unterschrift_name: empName || null,
     });

@@ -59,13 +59,29 @@ WICHTIG:
 - Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
 - Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
 
+SPALTENREIHENFOLGE — strikt einhalten:
+Jede Positionszeile hat genau diese Felder in dieser Reihenfolge:
+  Material | Menge | Einheit | Einzelpreis | Gesamt
+
+Definitionen:
+- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text
+- Einheit: Text-Kürzel, z.B. Stk, kg, m, m², t, Palette, Pkg — KEINE Zahl allein
+- Einzelpreis: Preis pro Einheit, z.B. "45.50" — KEIN Gesamtpreis
+- Gesamt: Menge × Einzelpreis, z.B. "455.00"
+
+Beispiel:
+  Zeile: "Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
+  → Material: "Ziegelstein NF", Menge: "500", Einheit: "Stk",
+    Einzelpreis (€ netto): "0.85", Gesamt (€ netto): "425.00"
+
+Verwechsle NIEMALS Menge mit Preis.
+
 ------------------------------------
 
 3. POSITIONEN BERECHNUNG PRÜFEN
 
-Prüfe:
-
-Menge × Einzelpreis ≈ Gesamtpreis
+Prüfe für JEDE Position: Menge × Einzelpreis ≈ Gesamt (Rundungsdifferenzen OK)
+Falls ein Wert nicht plausibel ist, lies die Zeile erneut.
 
 Wenn die Rechnung kleine Rundungsdifferenzen enthält, übernehme trotzdem die Werte aus der Rechnung.
 
@@ -152,6 +168,23 @@ WICHTIG:
 - Menge: nur der reine Zahlenwert ohne Einheit (z.B. "10", "1.5", "1000") — die Einheit gehört ausschließlich in das Feld "Einheit"
 - Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
 - Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
+
+SPALTENREIHENFOLGE — strikt einhalten:
+Jede Positionszeile hat genau diese Felder in dieser Reihenfolge:
+  Material | Menge | Einheit | Einzelpreis | Gesamt
+
+Definitionen:
+- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text
+- Einheit: Text-Kürzel, z.B. Stk, kg, m, m², t, Palette, Pkg — KEINE Zahl allein
+- Einzelpreis: Preis pro Einheit, z.B. "45.50" — KEIN Gesamtpreis
+- Gesamt: Menge × Einzelpreis, z.B. "455.00"
+
+Beispiel:
+  Zeile: "Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
+  → Material: "Ziegelstein NF", Menge: "500", Einheit: "Stk",
+    Einzelpreis (€ netto): "0.85", Gesamt (€ netto): "425.00"
+
+Verwechsle NIEMALS Menge mit Preis. Falls Preise nicht angegeben sind, Felder leer lassen.
 
 ------------------------------------
 
