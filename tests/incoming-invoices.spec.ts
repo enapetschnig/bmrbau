@@ -19,4 +19,10 @@ test.describe("Eingangsrechnungen", () => {
     await page.locator('[role="tab"]').filter({ hasText: /Hochladen|Upload/i }).click();
     await expect(page.locator("text=/Hochladen|Datei/i").first()).toBeVisible({ timeout: 5_000 });
   });
+
+  test("Tab Abgleich wechselt Inhalt", async ({ page }) => {
+    await page.goto("/incoming-invoices");
+    await page.locator('[role="tab"]').filter({ hasText: /Abgleich/i }).click();
+    await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible({ timeout: 5_000 });
+  });
 });

@@ -61,6 +61,7 @@ interface Employee {
   austritt_datum: string | null;
   position: string | null;
   beschaeftigung_art: string | null;
+  wochen_soll_stunden: number | null;
   stundenlohn: number | null;
   iban: string | null;
   bic: string | null;
@@ -1256,48 +1257,6 @@ export default function Admin() {
           </Card>
         </section>
 
-        {/* ===== EINSTELLUNGEN SEKTION ===== */}
-        <section>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <Settings className="h-6 w-6" />
-            Einstellungen
-          </h2>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>E-Mail-Einstellungen</CardTitle>
-              <CardDescription>
-                Konfigurieren Sie die E-Mail-Adressen für automatische Benachrichtigungen
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="disturbance-email">Regiebericht E-Mail-Empfänger</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="disturbance-email"
-                    type="email"
-                    placeholder="office@example.com"
-                    value={regiereportEmail}
-                    onChange={(e) => setRegiereportEmail(e.target.value)}
-                    disabled={loadingSettings}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={saveRegiereportEmail}
-                    disabled={savingSettings || loadingSettings}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {savingSettings ? "Speichert..." : "Speichern"}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Diese E-Mail-Adresse erhält alle Regieberichte als Kopie.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
 
       </main>
 
@@ -1412,27 +1371,16 @@ export default function Admin() {
                     <h3 className="text-lg font-semibold mb-3">Beschäftigung</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label>Position</Label>
+                        <Label>Beschäftigungszeit in Wochenstunden</Label>
                         <Input
-                          value={formData.position || ""}
-                          onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                          type="number"
+                          min="0"
+                          max="60"
+                          step="0.5"
+                          value={formData.wochen_soll_stunden ?? 39}
+                          onChange={(e) => setFormData({ ...formData, wochen_soll_stunden: parseFloat(e.target.value) || 0 })}
+                          placeholder="39"
                         />
-                      </div>
-                      <div>
-                        <Label>Beschäftigungsart</Label>
-                        <Select
-                          value={formData.beschaeftigung_art || ""}
-                          onValueChange={(val) => setFormData({ ...formData, beschaeftigung_art: val })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Wählen..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vollzeit">Vollzeit</SelectItem>
-                            <SelectItem value="teilzeit">Teilzeit</SelectItem>
-                            <SelectItem value="geringfuegig">Geringfügig</SelectItem>
-                          </SelectContent>
-                        </Select>
                       </div>
                       <div>
                         <Label>Eintrittsdatum</Label>
