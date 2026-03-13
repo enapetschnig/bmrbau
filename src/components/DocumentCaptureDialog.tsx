@@ -3,12 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SignaturePad } from "@/components/SignaturePad";
-import { Upload, Loader2, AlertTriangle, CheckCircle2, Trash2, FileText } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, CheckCircle2, Trash2, FileText, Plus } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
@@ -46,6 +46,9 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedData | null>(null);
 
+  // Editable positionen
+  const [editPositionen, setEditPositionen] = useState<ExtractedData["positionen"]>([]);
+
   // Editable fields
   const [lieferant, setLieferant] = useState("");
   const [dokumentDatum, setDokumentDatum] = useState("");
@@ -78,6 +81,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
     setImagePreview(null);
     setUploadedUrl(null);
     setExtracted(null);
+    setEditPositionen([]);
     setLieferant("");
     setDokumentDatum("");
     setBelegnummer("");
@@ -270,6 +274,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
       };
 
       setExtracted(result);
+      setEditPositionen(result.positionen);
       setLieferant(result.lieferant || "");
       setDokumentDatum(result.datum || "");
       setBelegnummer(result.belegnummer || "");
@@ -337,7 +342,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
       dokument_datum: dokumentDatum || null,
       dokument_nummer: belegnummer.trim() || null,
       betrag: betrag ? parseFloat(betrag) : null,
-      positionen: (extracted?.positionen || []).map(p => ({
+      positionen: editPositionen.map(p => ({
         material: p.material,
         menge: p.menge,
         einheit: p.einheit,
@@ -360,11 +365,9 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
     onSuccess?.();
   };
 
-  const DOC_TYPES: { value: DocType; label: string }[] = [
-    { value: "lieferschein", label: "Lieferschein" },
-    { value: "lagerlieferschein", label: "Lagerlieferschein" },
-    { value: "rechnung", label: "Rechnung" },
-  ];
+  // mainType: "lieferschein" or "rechnung" (Lagerlieferschein is a sub-option of lieferschein)
+  const mainType = docType === "rechnung" ? "rechnung" : "lieferschein";
+  const isLagerlieferschein = docType === "lagerlieferschein";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
@@ -381,19 +384,47 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
             <>
               {/* Document Type */}
               <div className="space-y-2">
-                <Label>Dokumenttyp</Label>
-                <div className="flex flex-wrap gap-2">
-                  {DOC_TYPES.map((dt) => (
-                    <Badge
-                      key={dt.value}
-                      variant={docType === dt.value ? "default" : "outline"}
-                      className="cursor-pointer text-sm px-3 py-1.5 select-none"
-                      onClick={() => setDocType(dt.value)}
-                    >
-                      {dt.label}
-                    </Badge>
-                  ))}
+                <Label>Was möchtest du erfassen?</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDocType("lieferschein")}
+                    className={`rounded-xl border-2 p-4 text-center transition-all ${
+                      mainType === "lieferschein"
+                        ? "border-primary bg-primary/10 font-semibold text-primary"
+                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">📦</div>
+                    <div className="text-sm font-medium">Lieferschein</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocType("rechnung")}
+                    className={`rounded-xl border-2 p-4 text-center transition-all ${
+                      mainType === "rechnung"
+                        ? "border-primary bg-primary/10 font-semibold text-primary"
+                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">🧾</div>
+                    <div className="text-sm font-medium">Rechnung</div>
+                  </button>
                 </div>
+                {mainType === "lieferschein" && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox
+                      id="lager-check"
+                      checked={isLagerlieferschein}
+                      onCheckedChange={(checked) =>
+                        setDocType(checked ? "lagerlieferschein" : "lieferschein")
+                      }
+                    />
+                    <label htmlFor="lager-check" className="text-sm text-muted-foreground cursor-pointer select-none">
+                      Lagerbewegung (Lagerlieferschein)
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Project */}
@@ -523,23 +554,67 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess }: Documen
                 </div>
               </div>
 
-              {/* Positions */}
-              {extracted?.positionen && extracted.positionen.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Erkannte Positionen ({extracted.positionen.length})</Label>
-                  <div className="border rounded-lg divide-y text-sm max-h-40 overflow-y-auto">
-                    {extracted.positionen.map((pos, idx) => (
-                      <div key={idx} className="flex items-center justify-between px-3 py-1.5">
-                        <span className="truncate flex-1">{pos.material}</span>
-                        <span className="text-muted-foreground shrink-0 ml-2">
-                          {pos.menge} {pos.einheit}
-                          {pos.preis && ` · €${pos.preis}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Positions — editable */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Positionen ({editPositionen.length})
+                </Label>
+                <div className="border rounded-lg divide-y text-sm max-h-64 overflow-y-auto">
+                  {editPositionen.length === 0 && (
+                    <p className="text-muted-foreground text-xs px-3 py-2">Keine Positionen erkannt — manuell hinzufügen</p>
+                  )}
+                  {editPositionen.map((pos, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5 px-2 py-1.5">
+                      <Input
+                        value={pos.material}
+                        onChange={(e) => {
+                          const next = [...editPositionen];
+                          next[idx] = { ...next[idx], material: e.target.value };
+                          setEditPositionen(next);
+                        }}
+                        className="flex-1 h-7 text-xs"
+                        placeholder="Material"
+                      />
+                      <Input
+                        value={pos.menge}
+                        onChange={(e) => {
+                          const next = [...editPositionen];
+                          next[idx] = { ...next[idx], menge: e.target.value };
+                          setEditPositionen(next);
+                        }}
+                        className="w-16 h-7 text-xs"
+                        placeholder="Menge"
+                      />
+                      <Input
+                        value={pos.einheit}
+                        onChange={(e) => {
+                          const next = [...editPositionen];
+                          next[idx] = { ...next[idx], einheit: e.target.value };
+                          setEditPositionen(next);
+                        }}
+                        className="w-14 h-7 text-xs"
+                        placeholder="Einh."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditPositionen(editPositionen.filter((_, i) => i !== idx))}
+                        className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs h-7"
+                  onClick={() => setEditPositionen([...editPositionen, { material: "", menge: "", einheit: "", preis: null, gesamtpreis: null }])}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Zeile hinzufügen
+                </Button>
+              </div>
 
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleRetakePhoto} className="flex-1">

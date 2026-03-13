@@ -58,23 +58,27 @@ WICHTIG:
 - Menge: nur der reine Zahlenwert ohne Einheit (z.B. "10", "1.5", "1000") — die Einheit gehört ausschließlich in das Feld "Einheit"
 - Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
 - Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
+- POSITIONSNUMMERN IGNORIEREN: Laufende Nummern am Zeilenanfang (z.B. "1.", "2.", "Pos. 1", "#3") gehören NICHT in das Feld "Menge" — sie sind Ordnungsnummern, keine Mengen
+- Die Menge ist IMMER eine physische Mengenangabe (z.B. 5, 10.5, 100) — niemals eine laufende Zeilennummer
+- Lesereihenfolge je Zeile: Pos-Nr. (ignorieren) → Material → Menge → Einheit → Einzelpreis → Gesamt
 
 SPALTENREIHENFOLGE — strikt einhalten:
 Jede Positionszeile hat genau diese Felder in dieser Reihenfolge:
   Material | Menge | Einheit | Einzelpreis | Gesamt
 
 Definitionen:
-- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text
+- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text, KEINE Positionsnummer
 - Einheit: Text-Kürzel, z.B. Stk, kg, m, m², t, Palette, Pkg — KEINE Zahl allein
 - Einzelpreis: Preis pro Einheit, z.B. "45.50" — KEIN Gesamtpreis
 - Gesamt: Menge × Einzelpreis, z.B. "455.00"
 
 Beispiel:
-  Zeile: "Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
+  Zeile: "1. Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
   → Material: "Ziegelstein NF", Menge: "500", Einheit: "Stk",
     Einzelpreis (€ netto): "0.85", Gesamt (€ netto): "425.00"
+  (Die "1." ist die Positionsnummer — wird ignoriert, NICHT als Menge eingetragen)
 
-Verwechsle NIEMALS Menge mit Preis.
+Verwechsle NIEMALS Menge mit Preis oder Positionsnummer.
 
 ------------------------------------
 
@@ -168,23 +172,27 @@ WICHTIG:
 - Menge: nur der reine Zahlenwert ohne Einheit (z.B. "10", "1.5", "1000") — die Einheit gehört ausschließlich in das Feld "Einheit"
 - Tausendertrennzeichen entfernen: "1.000" → "1000", "2.500" → "2500"
 - Dezimalzahlen mit Punkt schreiben: "1,5" → "1.5", "10,25" → "10.25"
+- POSITIONSNUMMERN IGNORIEREN: Laufende Nummern am Zeilenanfang (z.B. "1.", "2.", "Pos. 1", "#3") gehören NICHT in das Feld "Menge" — sie sind Ordnungsnummern, keine Mengen
+- Die Menge ist IMMER eine physische Mengenangabe (z.B. 5, 10.5, 100) — niemals eine laufende Zeilennummer
+- Lesereihenfolge je Zeile: Pos-Nr. (ignorieren) → Material → Menge → Einheit → Einzelpreis → Gesamt
 
 SPALTENREIHENFOLGE — strikt einhalten:
 Jede Positionszeile hat genau diese Felder in dieser Reihenfolge:
   Material | Menge | Einheit | Einzelpreis | Gesamt
 
 Definitionen:
-- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text
+- Menge: reine Zahl, z.B. "10", "1.5", "500" — KEIN Preis, KEIN Text, KEINE Positionsnummer
 - Einheit: Text-Kürzel, z.B. Stk, kg, m, m², t, Palette, Pkg — KEINE Zahl allein
 - Einzelpreis: Preis pro Einheit, z.B. "45.50" — KEIN Gesamtpreis
 - Gesamt: Menge × Einzelpreis, z.B. "455.00"
 
 Beispiel:
-  Zeile: "Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
+  Zeile: "1. Ziegelstein NF | 500 | Stk | 0.85 | 425.00"
   → Material: "Ziegelstein NF", Menge: "500", Einheit: "Stk",
     Einzelpreis (€ netto): "0.85", Gesamt (€ netto): "425.00"
+  (Die "1." ist die Positionsnummer — wird ignoriert, NICHT als Menge eingetragen)
 
-Verwechsle NIEMALS Menge mit Preis. Falls Preise nicht angegeben sind, Felder leer lassen.
+Verwechsle NIEMALS Menge mit Preis oder Positionsnummer. Falls Preise nicht angegeben sind, Felder leer lassen.
 
 ------------------------------------
 
