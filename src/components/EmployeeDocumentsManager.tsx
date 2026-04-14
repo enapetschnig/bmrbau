@@ -27,7 +27,12 @@ const documentTypes = [
   { id: "krankmeldung" as DocumentType, label: "Krankmeldungen", icon: FileX },
 ];
 
+const MONTH_NAMES = ["Jaenner","Februar","Maerz","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
 export default function EmployeeDocumentsManager({ employeeId, userId }: Props) {
+  const [freigabeTag, setFreigabeTag] = useState(10);
+  const [freigabeMonat, setFreigabeMonat] = useState(new Date().getMonth() + 1);
+  const [freigabeJahr, setFreigabeJahr] = useState(new Date().getFullYear());
   const [documents, setDocuments] = useState<Record<DocumentType, Document[]>>({
     lohnzettel: [],
     krankmeldung: [],
@@ -112,16 +117,30 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
       toast({ title: "Erfolg", description: `${files.length} Dokument(e) hochgeladen` });
       fetchDocuments();
 
-      // Notify employee when admin uploads a payslip
+      // Notify employee when admin uploads a payslip + save Freigabetermin
       if (type === "lohnzettel") {
         const targetUserId = userId || employeeId;
-        const firstName = files[0].name;
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+        // Freigabetermin speichern
+        for (const file of Array.from(files)) {
+          const filePath = `${userId || employeeId}/lohnzettel/${Date.now()}_${file.name}`;
+          await supabase.from("payslip_settings").insert({
+            file_path: filePath,
+            user_id: targetUserId,
+            freigabe_tag: freigabeTag,
+            upload_month: freigabeMonat,
+            upload_year: freigabeJahr,
+            uploaded_by: currentUser?.id || targetUserId,
+          });
+        }
+
         await supabase.from("notifications").insert({
           user_id: targetUserId,
           type: "lohnzettel_upload",
-          title: "Neuer Lohnzettel verfügbar",
-          message: `Ein neuer Lohnzettel wurde für Sie hochgeladen.`,
-          metadata: { file_name: firstName, count: files.length },
+          title: "Neuer Lohnzettel verfuegbar",
+          message: `Ein neuer Lohnzettel wurde fuer Sie hochgeladen (sichtbar ab ${freigabeTag}. ${MONTH_NAMES[freigabeMonat - 1]}).`,
+          metadata: { file_name: files[0].name, count: files.length },
         });
       }
     } catch (error: any) {
@@ -208,6 +227,27 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
                     <Label htmlFor={`upload-${type.id}`} className="text-sm sm:text-base">
                       Neue Datei hochladen
                     </Label>
+                    {type.id === "lohnzettel" && (
+                      <div className="flex gap-2 items-end p-3 bg-muted/50 rounded-lg">
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground">Sichtbar ab Tag</Label>
+                          <Input type="number" min="1" max="31" value={freigabeTag} onChange={e => setFreigabeTag(parseInt(e.target.value) || 10)} className="h-9" />
+                        </div>
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground">Monat</Label>
+                          <Select value={freigabeMonat.toString()} onValueChange={v => setFreigabeMonat(parseInt(v))}>
+                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {MONTH_NAMES.map((m, i) => <SelectItem key={i} value={(i+1).toString()}>{m}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-20">
+                          <Label className="text-xs text-muted-foreground">Jahr</Label>
+                          <Input type="number" value={freigabeJahr} onChange={e => setFreigabeJahr(parseInt(e.target.value))} className="h-9" />
+                        </div>
+                      </div>
+                    )}
                     <Input
                       id={`upload-${type.id}`}
                       type="file"

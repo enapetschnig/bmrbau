@@ -131,6 +131,25 @@ export default function Bestellungen() {
           }))
         );
       }
+      // Benachrichtigung an Admins wenn MA bestellt
+      if (!isAdmin) {
+        const { data: admins } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "administrator");
+        if (admins) {
+          for (const admin of admins) {
+            await supabase.from("notifications").insert({
+              user_id: admin.user_id,
+              type: "bestellung_angefragt",
+              title: "Neue Bestellung angefragt",
+              message: `${formData.titel} wurde angefragt.`,
+              metadata: { bestellung_id: (data as Bestellung).id },
+            });
+          }
+        }
+      }
+
       toast({ title: "Bestellung erstellt" });
       setShowForm(false);
       setFormData({ titel: "", beschreibung: "", projectId: "", lieferant: "", typ: "mitarbeiter" });
@@ -144,6 +163,19 @@ export default function Bestellungen() {
     await supabase.from("bestellungen").update({ status: newStatus }).eq("id", id);
     setBestellungen(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
     if (selectedOrder?.id === id) setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null);
+
+    // Benachrichtigung an Ersteller
+    const order = bestellungen.find(b => b.id === id);
+    if (order && order.erstellt_von !== userId) {
+      await supabase.from("notifications").insert({
+        user_id: order.erstellt_von,
+        type: "bestellung_status",
+        title: `Bestellung: ${STATUS_LABELS[newStatus]}`,
+        message: `"${order.titel}" wurde auf "${STATUS_LABELS[newStatus]}" gesetzt.`,
+        metadata: { bestellung_id: id },
+      });
+    }
+
     toast({ title: `Status auf "${STATUS_LABELS[newStatus]}" geaendert` });
   };
 

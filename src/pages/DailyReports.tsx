@@ -140,6 +140,11 @@ export default function DailyReports() {
                       <Badge className={`text-xs ${STATUS_COLORS[report.status] || ""}`}>
                         {report.status === "offen" ? "Offen" : report.status === "gesendet" ? "Gesendet" : "Abgeschlossen"}
                       </Badge>
+                      {report.unterschrift_kunde ? (
+                        <Badge className="text-xs bg-green-100 text-green-800">Kunde unterschrieben</Badge>
+                      ) : report.status === "gesendet" ? (
+                        <Badge className="text-xs bg-red-100 text-red-800">Keine Unterschrift</Badge>
+                      ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {(report.projects as any)?.name || "Unbekanntes Projekt"}
