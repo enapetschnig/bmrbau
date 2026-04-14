@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, Wrench, Search, AlertTriangle, Camera, Receipt, X, Download } from "lucide-react";
+import { Plus, Wrench, Search, AlertTriangle, Camera, Receipt, X, Download, Upload } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -255,6 +255,51 @@ export default function EquipmentPage() {
     XLSX.writeFile(wb, `Geraete_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
+
+    if (rows.length === 0) {
+      toast({ variant: "destructive", title: "Leere Datei" });
+      return;
+    }
+
+    // Kategorie-Reverse-Lookup
+    const katReverse: Record<string, string> = {};
+    Object.entries(KATEGORIE_LABELS).forEach(([k, v]) => { katReverse[v.toLowerCase()] = k; });
+    const zustandReverse: Record<string, string> = {};
+    Object.entries(ZUSTAND_LABELS).forEach(([k, v]) => { zustandReverse[v.toLowerCase()] = k; });
+
+    let imported = 0;
+    for (const row of rows) {
+      const name = row["Name"] || row["name"] || "";
+      if (!name) continue;
+
+      const katLabel = (row["Kategorie"] || row["kategorie"] || "werkzeug").toString().toLowerCase();
+      const zustandLabel = (row["Zustand"] || row["zustand"] || "gut").toString().toLowerCase();
+
+      await supabase.from("equipment").insert({
+        name: name.toString(),
+        kategorie: katReverse[katLabel] || "werkzeug",
+        seriennummer: (row["Seriennummer"] || row["seriennummer"] || null)?.toString() || null,
+        kaufdatum: row["Kaufdatum"] || row["kaufdatum"] || null,
+        zustand: zustandReverse[zustandLabel] || "gut",
+        standort_typ: "lager",
+        wartungsintervall_monate: parseInt(row["Wartungsintervall (Monate)"] || row["wartungsintervall"]) || null,
+      });
+      imported++;
+    }
+
+    toast({ title: `${imported} Geraete importiert` });
+    fetchItems();
+    e.target.value = "";
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <PageHeader title="Geräteverwaltung" />
@@ -266,8 +311,16 @@ export default function EquipmentPage() {
         <div className="flex gap-2">
           {items.length > 0 && (
             <Button size="sm" variant="outline" onClick={exportToExcel}>
-              <Download className="w-4 h-4 mr-1" /> Excel
+              <Download className="w-4 h-4 mr-1" /> Export
             </Button>
+          )}
+          {canManage && (
+            <label className="cursor-pointer inline-flex">
+              <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
+              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }}>
+                <Upload className="w-4 h-4 mr-1" /> Import
+              </Button>
+            </label>
           )}
           {canManage && (
             <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
