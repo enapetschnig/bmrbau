@@ -147,13 +147,16 @@ export type Database = {
       bad_weather_records: {
         Row: {
           arbeitsstunden_vor_schlechtwetter: number | null
+          arbeitsstunden_waehrend_sw: number | null
           beginn_schlechtwetter: string
           created_at: string | null
           datum: string
           ende_schlechtwetter: string
+          gearbeitet_waehrend_sw: boolean | null
           id: string
           notizen: string | null
           project_id: string
+          projekt_adresse: string | null
           schlechtwetter_stunden: number
           updated_at: string | null
           user_id: string
@@ -161,13 +164,16 @@ export type Database = {
         }
         Insert: {
           arbeitsstunden_vor_schlechtwetter?: number | null
+          arbeitsstunden_waehrend_sw?: number | null
           beginn_schlechtwetter: string
           created_at?: string | null
           datum: string
           ende_schlechtwetter: string
+          gearbeitet_waehrend_sw?: boolean | null
           id?: string
           notizen?: string | null
           project_id: string
+          projekt_adresse?: string | null
           schlechtwetter_stunden: number
           updated_at?: string | null
           user_id: string
@@ -175,13 +181,16 @@ export type Database = {
         }
         Update: {
           arbeitsstunden_vor_schlechtwetter?: number | null
+          arbeitsstunden_waehrend_sw?: number | null
           beginn_schlechtwetter?: string
           created_at?: string | null
           datum?: string
           ende_schlechtwetter?: string
+          gearbeitet_waehrend_sw?: boolean | null
           id?: string
           notizen?: string | null
           project_id?: string
+          projekt_adresse?: string | null
           schlechtwetter_stunden?: number
           updated_at?: string | null
           user_id?: string
@@ -793,6 +802,8 @@ export type Database = {
           position: string | null
           regelarbeitszeit: Json | null
           schuhgroesse: string | null
+          schwellenwert: Json | null
+          sichtbarkeit: Json | null
           stundenlohn: number | null
           sv_nummer: string | null
           telefon: string | null
@@ -824,6 +835,8 @@ export type Database = {
           position?: string | null
           regelarbeitszeit?: Json | null
           schuhgroesse?: string | null
+          schwellenwert?: Json | null
+          sichtbarkeit?: Json | null
           stundenlohn?: number | null
           sv_nummer?: string | null
           telefon?: string | null
@@ -855,6 +868,8 @@ export type Database = {
           position?: string | null
           regelarbeitszeit?: Json | null
           schuhgroesse?: string | null
+          schwellenwert?: Json | null
+          sichtbarkeit?: Json | null
           stundenlohn?: number | null
           sv_nummer?: string | null
           telefon?: string | null
@@ -1363,6 +1378,42 @@ export type Database = {
           einheit?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      monthly_signoffs: {
+        Row: {
+          created_at: string
+          id: string
+          invalidated_at: string | null
+          invalidated_reason: string | null
+          month: number
+          signature_data: string | null
+          signed_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invalidated_at?: string | null
+          invalidated_reason?: string | null
+          month: number
+          signature_data?: string | null
+          signed_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invalidated_at?: string | null
+          invalidated_reason?: string | null
+          month?: number
+          signature_data?: string | null
+          signed_at?: string
+          user_id?: string
+          year?: number
         }
         Relationships: []
       }
@@ -2015,6 +2066,7 @@ export type Database = {
       }
       time_entries: {
         Row: {
+          absence_detail: Json | null
           created_at: string
           datum: string
           diaeten_betrag: number | null
@@ -2025,6 +2077,7 @@ export type Database = {
           kilometer: number | null
           km_beschreibung: string | null
           location_type: string | null
+          lohnstunden: number | null
           notizen: string | null
           pause_end: string | null
           pause_minutes: number
@@ -2037,8 +2090,10 @@ export type Database = {
           user_id: string | null
           week_type: string | null
           zeit_typ: string | null
+          zeitausgleich_stunden: number | null
         }
         Insert: {
+          absence_detail?: Json | null
           created_at?: string
           datum: string
           diaeten_betrag?: number | null
@@ -2049,6 +2104,7 @@ export type Database = {
           kilometer?: number | null
           km_beschreibung?: string | null
           location_type?: string | null
+          lohnstunden?: number | null
           notizen?: string | null
           pause_end?: string | null
           pause_minutes?: number
@@ -2061,8 +2117,10 @@ export type Database = {
           user_id?: string | null
           week_type?: string | null
           zeit_typ?: string | null
+          zeitausgleich_stunden?: number | null
         }
         Update: {
+          absence_detail?: Json | null
           created_at?: string
           datum?: string
           diaeten_betrag?: number | null
@@ -2073,6 +2131,7 @@ export type Database = {
           kilometer?: number | null
           km_beschreibung?: string | null
           location_type?: string | null
+          lohnstunden?: number | null
           notizen?: string | null
           pause_end?: string | null
           pause_minutes?: number
@@ -2085,6 +2144,7 @@ export type Database = {
           user_id?: string | null
           week_type?: string | null
           zeit_typ?: string | null
+          zeitausgleich_stunden?: number | null
         }
         Relationships: [
           {

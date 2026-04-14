@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
-import { Trash2, Plus, CalendarOff } from "lucide-react";
+import { Trash2, Plus, CalendarOff, Download } from "lucide-react";
+import { getAustrianHolidays } from "@/lib/austrianHolidays";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -82,6 +83,28 @@ export function CompanyHolidayManager({ holidays, onUpdate, userId }: Props) {
     onUpdate();
   };
 
+  const handleImportHolidays = async () => {
+    const year = newDate ? new Date(newDate).getFullYear() : new Date().getFullYear();
+    const feiertage = getAustrianHolidays(year);
+    const rows = feiertage.map((f) => ({
+      datum: f.datum,
+      bezeichnung: f.bezeichnung,
+      created_by: userId,
+    }));
+
+    const { error } = await supabase
+      .from("company_holidays")
+      .upsert(rows, { onConflict: "datum" });
+
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+
+    onUpdate();
+    toast({ title: `${feiertage.length} Feiertage fuer ${year} importiert` });
+  };
+
   const sorted = [...holidays].sort(
     (a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime()
   );
@@ -130,6 +153,10 @@ export function CompanyHolidayManager({ holidays, onUpdate, userId }: Props) {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            <Button variant="outline" size="sm" className="w-full" onClick={handleImportHolidays}>
+              <Download className="h-4 w-4 mr-2" />
+              AT-Feiertage {newDate ? new Date(newDate).getFullYear() : new Date().getFullYear()} importieren
+            </Button>
           </div>
 
           {/* List */}

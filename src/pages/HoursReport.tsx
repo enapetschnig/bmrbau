@@ -72,6 +72,26 @@ interface ReportExtra {
 
 const EXTRA_SUGGESTIONS = ["Reinigungspauschale", "Werkzeugpauschale", "Schmutzzulage", "Fahrtkostenpauschale"];
 
+/**
+ * Wertet einfache Berechnungsausdruecke aus (z.B. "150 * 0.50" -> 75).
+ * Unterstuetzt: +, -, *, /
+ */
+function parseCalcExpression(expr: string): number | null {
+  const cleaned = expr.replace(/,/g, ".").trim();
+  // Only allow numbers, operators, spaces, and dots
+  if (!/^[\d\s.+\-*/()]+$/.test(cleaned)) return null;
+  try {
+    // Safe evaluation using Function constructor (no eval)
+    const result = new Function(`return (${cleaned})`)();
+    if (typeof result === "number" && isFinite(result)) {
+      return Math.round(result * 100) / 100;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const monthNames = [
   "Jänner", "Februar", "März", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -100,6 +120,9 @@ export default function HoursReport() {
   const [newExtraBetrag, setNewExtraBetrag] = useState("");
   const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
   const [editExtraBetrag, setEditExtraBetrag] = useState("");
+
+  const [kategorieFilter, setKategorieFilter] = useState<string>("alle");
+  const [employeeKategorien, setEmployeeKategorien] = useState<Record<string, string>>({});
 
   const [selectedView, setSelectedView] = useState<"mitarbeiter" | "externe" | null>(() => {
     const tab = searchParams.get("tab");
@@ -186,6 +209,14 @@ export default function HoursReport() {
       });
       setProfiles(profileMap);
     }
+    // Build kategorie map
+    if (externalData) {
+      const katMap: Record<string, string> = {};
+      externalData.forEach((e) => {
+        if (e.user_id) katMap[e.user_id] = e.kategorie || "facharbeiter";
+      });
+      setEmployeeKategorien(katMap);
+    }
   };
 
   const fetchProjects = async () => {
@@ -246,7 +277,7 @@ export default function HoursReport() {
           monat: month,
           jahr: year,
           bezeichnung: newExtraName.trim(),
-          betrag: newExtraBetrag ? parseFloat(newExtraBetrag) : null,
+          betrag: newExtraBetrag ? (parseCalcExpression(newExtraBetrag) ?? (parseFloat(newExtraBetrag) || null)) : null,
           created_by: user.id,
         },
         { onConflict: "user_id,jahr,monat,bezeichnung" }
@@ -635,10 +666,10 @@ export default function HoursReport() {
       return summe;
     };
 
-    // Diverses / Zulagen Block (vor SUMME)
+    // Zusatzaufwendungen Block (vor SUMME)
     if (reportExtras.length > 0) {
       worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
-      worksheetData.push(["Diverses / Zulagen:", "", "", "", "", "", "", "", "", "", "", ""]);
+      worksheetData.push(["Zusatzaufwendungen:", "", "", "", "", "", "", "", "", "", "", ""]);
       reportExtras.forEach(extra => {
         worksheetData.push([
           "", "", "", extra.bezeichnung, "", "", extra.betrag != null ? extra.betrag.toFixed(2) : "", "", "", "", "", "",
@@ -886,20 +917,34 @@ export default function HoursReport() {
               
               <div className="flex flex-col sm:flex-row gap-3">
                 {isAdmin && (
-                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Mitarbeiter auswählen" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      {Object.entries(profiles)
-                        .filter(([_, profile]) => !profile.isExternal)
-                        .map(([id, profile]) => (
-                        <SelectItem key={id} value={id}>
-                          {profile.vorname} {profile.nachname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <>
+                    <Select value={kategorieFilter} onValueChange={setKategorieFilter}>
+                      <SelectTrigger className="h-11 w-40">
+                        <SelectValue placeholder="Kategorie" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="alle">Alle</SelectItem>
+                        <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
+                        <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
+                        <SelectItem value="lehrling">Lehrling</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Mitarbeiter auswählen" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {Object.entries(profiles)
+                          .filter(([_, profile]) => !profile.isExternal)
+                          .filter(([id]) => kategorieFilter === "alle" || employeeKategorien[id] === kategorieFilter)
+                          .map(([id, profile]) => (
+                          <SelectItem key={id} value={id}>
+                            {profile.vorname} {profile.nachname}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
                 )}
                 <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
                   <SelectTrigger className="h-11">
@@ -1179,11 +1224,11 @@ export default function HoursReport() {
                     </Table>
                   </ScrollArea>
 
-                  {/* Diverses / Zulagen */}
+                  {/* Zusatzaufwendungen */}
                   <Card className="mt-4">
                     <CardHeader className="py-3">
-                      <CardTitle className="text-base">Diverses / Zulagen</CardTitle>
-                      <CardDescription className="text-xs">Pauschalen und Zulagen für diesen Monat</CardDescription>
+                      <CardTitle className="text-base">Zusatzaufwendungen</CardTitle>
+                      <CardDescription className="text-xs">Zusatzaufwendungen fuer diesen Monat (Berechnungen moeglich, z.B. 150 * 0.50)</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {reportExtras.length > 0 && (
@@ -1271,7 +1316,7 @@ export default function HoursReport() {
                       )}
 
                       {reportExtras.length === 0 && !isAdmin && (
-                        <p className="text-sm text-muted-foreground text-center py-2">Keine Zulagen vorhanden</p>
+                        <p className="text-sm text-muted-foreground text-center py-2">Keine Zusatzaufwendungen vorhanden</p>
                       )}
                     </CardContent>
                   </Card>

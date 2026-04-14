@@ -26,6 +26,26 @@ export interface WeekSchedule {
   so: DaySchedule;
 }
 
+/**
+ * Schwellenwert = Tages-Obergrenze fuer Lohnstunden.
+ * Stunden bis zum Schwellenwert = Lohnverrechnung (ausbezahlt).
+ * Stunden ueber dem Schwellenwert = Zeitausgleich (nicht ausbezahlt).
+ */
+export interface Schwellenwert {
+  mo: number;
+  di: number;
+  mi: number;
+  do: number;
+  fr: number;
+  sa: number;
+  so: number;
+}
+
+export interface HoursSplit {
+  lohnstunden: number;
+  zeitausgleich: number;
+}
+
 // Standard-Regelarbeitszeit für Facharbeiter bei Schafferhofer Bau
 // Mo/Di: 06:30-17:00 (Pause 30min → 10h), Mi/Do: 07:00-17:00 (Pause 30min → 9,5h)
 // Wochenregelarbeitszeit: 39h
@@ -181,9 +201,50 @@ export function calculateDiaeten(
 
 /**
  * Berechnet Kilometergeld (amtliches Kilometergeld Österreich 2025: 0,42 EUR/km)
+ * Rate kann ueber Admin-Einstellungen konfiguriert werden.
  */
-export function calculateKilometergeld(km: number): number {
-  return Math.round(km * 0.42 * 100) / 100;
+export function calculateKilometergeld(km: number, rate: number = 0.42): number {
+  return Math.round(km * rate * 100) / 100;
+}
+
+/**
+ * Gibt den Schwellenwert fuer einen bestimmten Tag zurueck.
+ * Wenn kein Schwellenwert gesetzt ist, werden die Regelarbeitszeit-Stunden verwendet.
+ */
+export function getSchwellenwert(
+  date: Date,
+  schwellenwert?: Schwellenwert | null,
+  schedule?: WeekSchedule | null
+): number {
+  if (schwellenwert) {
+    const dayKey = getDayKey(date);
+    return schwellenwert[dayKey] ?? 0;
+  }
+  // Fallback: Regelarbeitszeit-Stunden als Schwellenwert
+  return getNormalWorkingHours(date, schedule);
+}
+
+/**
+ * Teilt die Gesamtstunden eines Tages in Lohnstunden und Zeitausgleich auf.
+ * - Lohnstunden: Stunden bis zum Schwellenwert (werden ausbezahlt)
+ * - Zeitausgleich: Stunden ueber dem Schwellenwert (nicht ausbezahlt, gehen ins ZA-Konto)
+ */
+export function splitHours(
+  totalHours: number,
+  date: Date,
+  schedule?: WeekSchedule | null,
+  schwellenwert?: Schwellenwert | null
+): HoursSplit {
+  const threshold = getSchwellenwert(date, schwellenwert, schedule);
+
+  if (totalHours <= threshold) {
+    return { lohnstunden: totalHours, zeitausgleich: 0 };
+  }
+
+  return {
+    lohnstunden: threshold,
+    zeitausgleich: Math.round((totalHours - threshold) * 100) / 100,
+  };
 }
 
 // Hilfsfunktionen

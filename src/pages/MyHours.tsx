@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree, Download } from "lucide-react";
+import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree, Download, AlertTriangle, BarChart3 } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { format, getISOWeek } from "date-fns";
+import { de } from "date-fns/locale";
 
 type ProjectOption = { id: string; name: string; plz: string | null };
 
@@ -35,11 +38,17 @@ type TimeEntry = {
   diaeten_typ?: string | null;
   diaeten_betrag?: number | null;
   diaeten_anfahrt?: boolean | null;
+  lohnstunden?: number | null;
+  zeitausgleich_stunden?: number | null;
+  absence_detail?: Record<string, string> | null;
 };
+
+const ABSENCE_TYPES = ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag", "Zeitausgleich", "Arzttermin", "Begraebnis", "Pflegeurlaub", "Sonstige"];
 
 const MyHours = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const appSettings = useAppSettings();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
@@ -54,12 +63,18 @@ const MyHours = () => {
   const [vacationBalance, setVacationBalance] = useState<{ total: number; used: number } | null>(null);
   const [vacationHistory, setVacationHistory] = useState<{ datum: string; stunden: number }[]>([]);
   const [isExternal, setIsExternal] = useState(false);
+  const [showAuswertung, setShowAuswertung] = useState(false);
+  const [missingDays, setMissingDays] = useState<string[]>([]);
+  const [badWeatherRecords, setBadWeatherRecords] = useState<{ datum: string; schlechtwetter_stunden: number }[]>([]);
+  const [employeeSichtbarkeit, setEmployeeSichtbarkeit] = useState<Record<string, boolean>>({ auswertung: true, zusatzaufwendungen: false, fahrtengeld: true });
 
   useEffect(() => {
     fetchEntries();
     fetchProjects();
     fetchVacationData();
     checkIfExternal();
+    fetchMissingDays();
+    fetchBadWeather();
   }, [selectedMonth]);
 
   const checkIfExternal = async () => {
@@ -67,10 +82,63 @@ const MyHours = () => {
     if (!user) return;
     const { data } = await supabase
       .from("employees")
-      .select("is_external, kategorie")
+      .select("is_external, kategorie, sichtbarkeit")
       .eq("user_id", user.id)
       .maybeSingle();
     setIsExternal(data?.is_external === true || data?.kategorie === "extern");
+    if (data?.sichtbarkeit) {
+      setEmployeeSichtbarkeit(data.sichtbarkeit as Record<string, boolean>);
+    }
+  };
+
+  const fetchMissingDays = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    // Get days where employee was assigned in Plantafel
+    const { data: assignments } = await supabase
+      .from("worker_assignments")
+      .select("datum")
+      .eq("user_id", user.id)
+      .gte("datum", startDate)
+      .lte("datum", endDate);
+
+    // Get days with time entries
+    const { data: entryDates } = await supabase
+      .from("time_entries")
+      .select("datum")
+      .eq("user_id", user.id)
+      .gte("datum", startDate)
+      .lte("datum", endDate);
+
+    const entryDateSet = new Set(entryDates?.map((e) => e.datum) || []);
+    const assignedDates = [...new Set(assignments?.map((a) => a.datum) || [])];
+    const missing = assignedDates.filter((d) => !entryDateSet.has(d));
+    setMissingDays(missing.sort());
+  };
+
+  const fetchBadWeather = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const { data } = await supabase
+      .from("bad_weather_records")
+      .select("datum, schlechtwetter_stunden")
+      .eq("user_id", user.id)
+      .gte("datum", startDate)
+      .lte("datum", endDate);
+
+    setBadWeatherRecords(data || []);
   };
 
   const fetchProjects = async () => {
@@ -273,6 +341,66 @@ const MyHours = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Offene Tage Warnung */}
+            {missingDays.length > 0 && (
+              <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm font-medium">
+                  {missingDays.length} {missingDays.length === 1 ? "Tag wurde" : "Tage wurden"} noch nicht erfasst
+                </span>
+              </div>
+            )}
+
+            {/* Auswertung */}
+            {showAuswertung && employeeSichtbarkeit.auswertung && appSettings.showUeberstunden && (
+              <div className="p-4 mb-4 rounded-lg bg-muted/50 border space-y-2">
+                <h3 className="font-semibold text-sm">Auswertung</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Lohnstunden: </span>
+                    <span className="font-bold">
+                      {entries.reduce((s, e) => s + (e.lohnstunden || e.stunden || 0), 0).toFixed(2)} Std.
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ZA-Stunden: </span>
+                    <span className="font-bold">
+                      {entries.reduce((s, e) => s + (e.zeitausgleich_stunden || 0), 0).toFixed(2)} Std.
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Gesamt: </span>
+                    <span className="font-bold">{totalHours.toFixed(2)} Std.</span>
+                  </div>
+                  {appSettings.showKilometergeld && employeeSichtbarkeit.fahrtengeld && (
+                    <div>
+                      <span className="text-muted-foreground">Fahrtengeld: </span>
+                      <span className="font-bold">
+                        {entries.reduce((s, e) => s + (e.kilometer || 0), 0).toFixed(0)} km
+                        {" "}({"\u20AC"} {(entries.reduce((s, e) => s + (e.kilometer || 0), 0) * appSettings.kilometergeldRate).toFixed(2)})
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Schlechtwetter: </span>
+                    <span className="font-bold">
+                      {badWeatherRecords.reduce((s, r) => s + r.schlechtwetter_stunden, 0).toFixed(1)} Std.
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Diäten: </span>
+                    <span className="font-bold text-xs">
+                      {[
+                        entries.filter(e => e.diaeten_typ === "klein").length > 0 && `3-9h (${entries.filter(e => e.diaeten_typ === "klein").length}x)`,
+                        entries.filter(e => e.diaeten_typ === "gross").length > 0 && `>9h (${entries.filter(e => e.diaeten_typ === "gross").length}x)`,
+                        entries.filter(e => e.zeit_typ === "fahrt_100km").length > 0 && `>100km (${entries.filter(e => e.zeit_typ === "fahrt_100km").length}x)`,
+                      ].filter(Boolean).join(", ") || "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b">
               <div className="flex items-center gap-2">
                 <Label htmlFor="month-select" className="text-sm font-medium">Monat:</Label>
@@ -307,6 +435,11 @@ const MyHours = () => {
                     XLSX.writeFile(wb, `Meine_Stunden_${selectedMonth}.xlsx`);
                   }}>
                     <Download className="w-4 h-4 mr-1" /> Excel
+                  </Button>
+                )}
+                {employeeSichtbarkeit.auswertung && (
+                  <Button variant={showAuswertung ? "default" : "outline"} size="sm" onClick={() => setShowAuswertung(!showAuswertung)}>
+                    <BarChart3 className="w-4 h-4 mr-1" /> Auswertung
                   </Button>
                 )}
               </div>
@@ -356,124 +489,99 @@ const MyHours = () => {
                         <TableHead className="text-right">Aktionen</TableHead>
                       </TableRow>
                     ) : (
-                      <>
-                    <TableRow>
-                      <TableHead>Datum</TableHead>
-                      <TableHead>Ort</TableHead>
-                      <TableHead>Projekt</TableHead>
-                      <TableHead>Tätigkeit</TableHead>
-                      <TableHead colSpan={2} className="text-center">Vormittag</TableHead>
-                      <TableHead className="text-center">Pause</TableHead>
-                      <TableHead colSpan={2} className="text-center">Nachmittag</TableHead>
-                      <TableHead className="text-right">Stunden</TableHead>
-                      <TableHead className="text-right">Aktionen</TableHead>
-                    </TableRow>
-                    <TableRow>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead className="text-center">Beginn</TableHead>
-                      <TableHead className="text-center">Ende</TableHead>
-                      <TableHead className="text-center">von - bis</TableHead>
-                      <TableHead className="text-center">Beginn</TableHead>
-                      <TableHead className="text-center">Ende</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                      </>
+                      <TableRow>
+                        <TableHead>Datum</TableHead>
+                        <TableHead className="text-center">LW</TableHead>
+                        <TableHead className="text-right">Lohn-Std.</TableHead>
+                        {appSettings.showUeberstunden && <TableHead className="text-right">ZA-Std.</TableHead>}
+                        <TableHead className="text-right">Gesamt</TableHead>
+                        <TableHead className="text-center">SW</TableHead>
+                        <TableHead>Abwesenheit</TableHead>
+                        {appSettings.showKilometergeld && employeeSichtbarkeit.fahrtengeld && <TableHead className="text-right">km</TableHead>}
+                        <TableHead>Projekt</TableHead>
+                        <TableHead>Taetigkeit</TableHead>
+                        <TableHead className="text-right">Aktionen</TableHead>
+                      </TableRow>
                     )}
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry) => isExternal ? (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {new Date(entry.datum).toLocaleDateString("de-DE")}
-                        </TableCell>
-                        <TableCell>{entry.projects?.name || '-'}</TableCell>
-                        <TableCell>{entry.taetigkeit}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {entry.stunden.toFixed(2)} h
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {entry.kilometer ? `${entry.kilometer} km` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => navigate(`/time-tracking?date=${entry.datum}`)}
-                            disabled={!isEditable(entry.datum)}
-                            className="h-8"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {new Date(entry.datum).toLocaleDateString("de-DE")}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            {entry.location_type === 'werkstatt' ? (
-                              <>
-                                <Warehouse className="w-4 h-4 text-muted-foreground" />
-                                <span>Lager</span>
-                              </>
-                            ) : (
-                              <>
-                                <Building2 className="w-4 h-4 text-muted-foreground" />
-                                <span>Baustelle</span>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{entry.projects?.name || '-'}</TableCell>
-                        <TableCell>{entry.taetigkeit}</TableCell>
-                        <TableCell className="text-center">
-                          {entry.start_time?.substring(0, 5) || '-'}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {calculateMorningEnd(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {formatPauseTime(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {calculateAfternoonStart(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {entry.pause_minutes && entry.pause_minutes > 0
-                            ? entry.end_time?.substring(0, 5) || '-'
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {entry.stunden.toFixed(2)} h
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => navigate(`/time-tracking?date=${entry.datum}`)}
-                            disabled={!isEditable(entry.datum)}
-                            className="h-8"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {entries.map((entry) => {
+                      if (isExternal) {
+                        return (
+                          <TableRow key={entry.id}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {new Date(entry.datum).toLocaleDateString("de-DE")}
+                            </TableCell>
+                            <TableCell>{entry.projects?.name || '-'}</TableCell>
+                            <TableCell>{entry.taetigkeit}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {entry.stunden.toFixed(2)} h
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {entry.kilometer ? `${entry.kilometer} km` : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" variant="ghost" onClick={() => navigate(`/time-tracking?date=${entry.datum}`)} disabled={!isEditable(entry.datum)} className="h-8">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+                      const dateObj = new Date(entry.datum);
+                      const dayName = format(dateObj, "EE", { locale: de });
+                      const lw = getISOWeek(dateObj);
+                      const swRecord = badWeatherRecords.find((r) => r.datum === entry.datum);
+                      const isAbsence = ABSENCE_TYPES.includes(entry.taetigkeit);
+                      const isMissing = missingDays.includes(entry.datum);
+                      return (
+                        <TableRow key={entry.id} className={isMissing ? "bg-red-50" : ""}>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            {format(dateObj, "dd.MM.")} <span className="text-muted-foreground text-xs">{dayName}</span>
+                          </TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground">{lw}</TableCell>
+                          <TableCell className="text-right">{(entry.lohnstunden ?? entry.stunden)?.toFixed(1)}</TableCell>
+                          {appSettings.showUeberstunden && (
+                            <TableCell className="text-right">
+                              {(entry.zeitausgleich_stunden || 0) > 0
+                                ? <span className="text-blue-600 font-medium">{entry.zeitausgleich_stunden?.toFixed(1)}</span>
+                                : "-"}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-right font-semibold">{entry.stunden.toFixed(1)}</TableCell>
+                          <TableCell className="text-center text-xs">
+                            {swRecord ? <span className="text-orange-600">{swRecord.schlechtwetter_stunden}h</span> : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {isAbsence ? (
+                              <Badge variant="secondary" className="text-xs">{entry.taetigkeit}</Badge>
+                            ) : "-"}
+                          </TableCell>
+                          {appSettings.showKilometergeld && employeeSichtbarkeit.fahrtengeld && (
+                            <TableCell className="text-right text-xs">
+                              {entry.kilometer ? `${entry.kilometer}` : "-"}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-xs">{entry.projects?.name || "-"}</TableCell>
+                          <TableCell className="text-xs">{!isAbsence ? (entry.taetigkeit || "-") : "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="ghost" onClick={() => navigate(`/time-tracking?date=${entry.datum}`)} disabled={!isEditable(entry.datum)} className="h-8">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={isExternal ? 3 : 10} className="text-right font-semibold">
-                        Gesamtstunden:
+                      <TableCell colSpan={isExternal ? 3 : 4} className="text-right font-semibold">
+                        Gesamt:
                       </TableCell>
-                      <TableCell className="text-right font-bold text-lg">
-                        {totalHours.toFixed(2)} h
+                      <TableCell className="text-right font-bold">
+                        {totalHours.toFixed(1)} h
                       </TableCell>
-                      {isExternal && <TableCell colSpan={2} />}
+                      <TableCell colSpan={isExternal ? 2 : (appSettings.showUeberstunden ? 6 : 5)} />
                     </TableRow>
                   </TableFooter>
                 </Table>

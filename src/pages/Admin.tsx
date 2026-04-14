@@ -71,6 +71,8 @@ interface Employee {
   notizen: string | null;
   land: string | null;
   kategorie?: string | null;
+  schwellenwert?: Record<string, number> | null;
+  sichtbarkeit?: Record<string, boolean> | null;
 }
 
 export default function Admin() {
@@ -109,6 +111,12 @@ export default function Admin() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
+  // Stundenerfassung system settings
+  const [kilometergeldRate, setKilometergeldRate] = useState("0.42");
+  const [showUeberstunden, setShowUeberstunden] = useState(true);
+  const [showKilometergeld, setShowKilometergeld] = useState(true);
+  const [showZusatzaufwendungen, setShowZusatzaufwendungen] = useState(false);
+
   // Pending user activation states
   const [pendingKategorie, setPendingKategorie] = useState<Record<string, string>>({});
 
@@ -121,14 +129,24 @@ export default function Admin() {
     try {
       const { data, error } = await supabase
         .from("app_settings")
-        .select("value")
-        .eq("key", "disturbance_report_email")
-        .maybeSingle();
+        .select("key, value")
+        .in("key", [
+          "disturbance_report_email",
+          "kilometergeld_rate",
+          "show_ueberstunden",
+          "show_kilometergeld",
+          "show_zusatzaufwendungen",
+        ]);
 
       if (error) {
         console.error("Error fetching app settings:", error);
       } else if (data) {
-        setRegiereportEmail(data.value);
+        const map = new Map(data.map((d) => [d.key, d.value]));
+        if (map.has("disturbance_report_email")) setRegiereportEmail(map.get("disturbance_report_email")!);
+        if (map.has("kilometergeld_rate")) setKilometergeldRate(map.get("kilometergeld_rate")!);
+        if (map.has("show_ueberstunden")) setShowUeberstunden(map.get("show_ueberstunden") !== "false");
+        if (map.has("show_kilometergeld")) setShowKilometergeld(map.get("show_kilometergeld") !== "false");
+        if (map.has("show_zusatzaufwendungen")) setShowZusatzaufwendungen(map.get("show_zusatzaufwendungen") === "true");
       }
     } catch (err) {
       console.error("Error fetching app settings:", err);
@@ -1167,6 +1185,86 @@ export default function Admin() {
         </section>
         )}
 
+        {/* ===== STUNDENERFASSUNG-EINSTELLUNGEN ===== */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Settings className="h-6 w-6" />
+            Stundenerfassung-Einstellungen
+          </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Globale Einstellungen</CardTitle>
+              <CardDescription>
+                Diese Einstellungen gelten systemweit fuer alle Mitarbeiter.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Kilometergeld (EUR/km)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={kilometergeldRate}
+                    onChange={(e) => setKilometergeldRate(e.target.value)}
+                    placeholder="0.42"
+                  />
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-3">
+                <h4 className="font-medium">Sichtbarkeit fuer Mitarbeiter</h4>
+                <p className="text-sm text-muted-foreground">
+                  Steuert welche Bereiche alle Mitarbeiter in der App sehen koennen.
+                </p>
+                {[
+                  { checked: showUeberstunden, setter: setShowUeberstunden, label: "Ueberstunden / Zeitausgleichsstunden anzeigen" },
+                  { checked: showKilometergeld, setter: setShowKilometergeld, label: "Kilometergeld anzeigen" },
+                  { checked: showZusatzaufwendungen, setter: setShowZusatzaufwendungen, label: "Zusatzaufwendungen anzeigen" },
+                ].map(({ checked, setter, label }) => (
+                  <div key={label} className="flex items-center justify-between p-3 rounded-lg border">
+                    <span className="text-sm">{label}</span>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300"
+                      checked={checked}
+                      onChange={(e) => setter(e.target.checked)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  disabled={savingSettings}
+                  onClick={async () => {
+                    setSavingSettings(true);
+                    try {
+                      const settings = [
+                        { key: "kilometergeld_rate", value: kilometergeldRate },
+                        { key: "show_ueberstunden", value: showUeberstunden.toString() },
+                        { key: "show_kilometergeld", value: showKilometergeld.toString() },
+                        { key: "show_zusatzaufwendungen", value: showZusatzaufwendungen.toString() },
+                      ];
+                      for (const s of settings) {
+                        await supabase.from("app_settings").upsert(s, { onConflict: "key" });
+                      }
+                      toast({ title: "Einstellungen gespeichert" });
+                    } catch (err: any) {
+                      toast({ variant: "destructive", title: "Fehler", description: err.message });
+                    } finally {
+                      setSavingSettings(false);
+                    }
+                  }}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {savingSettings ? "Speichert..." : "Einstellungen speichern"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* ===== MENÜ-EINSTELLUNGEN ===== */}
         <section>
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -1414,6 +1512,76 @@ export default function Admin() {
                           onChange={(e) => setFormData({ ...formData, sv_nummer: e.target.value })}
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Zeitausgleich-Schwellenwert</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Tagesgrenze: Stunden bis zum Schwellenwert werden ausbezahlt, darueber liegende Stunden gehen in den Zeitausgleich.
+                    </p>
+                    <div className="grid grid-cols-7 gap-2">
+                      {(["mo", "di", "mi", "do", "fr", "sa", "so"] as const).map((day) => {
+                        const labels: Record<string, string> = { mo: "Mo", di: "Di", mi: "Mi", do: "Do", fr: "Fr", sa: "Sa", so: "So" };
+                        const sw = (formData.schwellenwert as Record<string, number> | null) || {};
+                        return (
+                          <div key={day} className="text-center">
+                            <Label className="text-xs">{labels[day]}</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="24"
+                              step="0.5"
+                              className="text-center text-sm"
+                              value={sw[day] ?? ""}
+                              placeholder="-"
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                                const updated = { ...sw };
+                                if (val === undefined) {
+                                  delete updated[day];
+                                } else {
+                                  updated[day] = val;
+                                }
+                                setFormData({ ...formData, schwellenwert: Object.keys(updated).length > 0 ? updated : null });
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Sichtbarkeit fuer Mitarbeiter</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Steuert welche Bereiche der Mitarbeiter in &quot;Meine Stunden&quot; sehen kann.
+                    </p>
+                    <div className="space-y-3">
+                      {[
+                        { key: "auswertung", label: "Auswertung (Stundenueberblick)" },
+                        { key: "zusatzaufwendungen", label: "Zusatzaufwendungen" },
+                        { key: "fahrtengeld", label: "Fahrtengeld" },
+                      ].map(({ key, label }) => {
+                        const vis = (formData.sichtbarkeit as Record<string, boolean> | null) || { auswertung: true, zusatzaufwendungen: false, fahrtengeld: true };
+                        return (
+                          <div key={key} className="flex items-center justify-between">
+                            <Label>{label}</Label>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300"
+                              checked={vis[key] ?? false}
+                              onChange={(e) => {
+                                setFormData({ ...formData, sichtbarkeit: { ...vis, [key]: e.target.checked } });
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 

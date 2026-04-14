@@ -128,6 +128,17 @@ export default function Index() {
     }
     const dateStr = checkDate.toISOString().split("T")[0];
 
+    // Nur nachfragen wenn der Mitarbeiter an diesem Tag in der Plantafel eingeteilt war
+    const { count: assignmentCount } = await supabase
+      .from("worker_assignments")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("datum", dateStr);
+
+    if (!assignmentCount || assignmentCount === 0) {
+      return; // Nicht in Plantafel eingeteilt -> keine Nachfrage
+    }
+
     const { count } = await supabase
       .from("time_entries")
       .select("*", { count: "exact", head: true })

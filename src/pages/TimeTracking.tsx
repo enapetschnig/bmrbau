@@ -24,6 +24,7 @@ import {
   getTotalWorkingHours,
   calculateKilometergeld,
   calculateDiaeten,
+  splitHours,
   DEFAULT_SCHEDULE,
   type WeekSchedule,
 } from "@/lib/workingHours";
@@ -122,13 +123,15 @@ const TimeTracking = () => {
 
   const [absenceData, setAbsenceData] = useState({
     date: new Date().toISOString().split('T')[0],
-    type: "urlaub" as "urlaub" | "krankenstand" | "weiterbildung" | "feiertag" | "za",
+    type: "urlaub" as "urlaub" | "krankenstand" | "weiterbildung" | "feiertag" | "za" | "arzttermin" | "begraebnis" | "pflegeurlaub" | "sonstige",
     document: null as File | null,
     customHours: "" as string,
     isFullDay: true,
     absenceStartTime: "07:00",
     absenceEndTime: "16:00",
     absencePauseMinutes: "30",
+    verwandtschaftsgrad: "",
+    sonstigerGrund: "",
   });
 
   const [editMode, setEditMode] = useState(false);
@@ -148,6 +151,7 @@ const TimeTracking = () => {
 
   // Employee schedule for individual working hours
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
+  const [employeeSchwellenwert, setEmployeeSchwellenwert] = useState<import("@/lib/workingHours").Schwellenwert | null>(null);
   const [isExternalUser, setIsExternalUser] = useState(false);
 
   const fetchEmployeeSchedule = useCallback(async () => {
@@ -156,16 +160,46 @@ const TimeTracking = () => {
     const userId = targetUserId || user.id;
     const { data } = await supabase
       .from("employees")
-      .select("regelarbeitszeit, wochen_soll_stunden, is_external, kategorie")
+      .select("regelarbeitszeit, wochen_soll_stunden, is_external, kategorie, schwellenwert")
       .eq("user_id", userId)
       .single();
     if (data?.regelarbeitszeit) {
       setEmployeeSchedule(data.regelarbeitszeit as unknown as WeekSchedule);
     }
+    if (data?.schwellenwert) {
+      setEmployeeSchwellenwert(data.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert);
+    }
     setIsExternalUser(data?.is_external === true || data?.kategorie === "extern");
   }, [targetUserId]);
 
   useEffect(() => { fetchEmployeeSchedule(); }, [fetchEmployeeSchedule]);
+
+  // Auto-fill project from Plantafel when no entries exist for the day
+  useEffect(() => {
+    const autoFillFromPlantafel = async () => {
+      if (existingDayEntries.length > 0 || loadingDayEntries) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const userId = targetUserId || user.id;
+
+      const { data: assignment } = await supabase
+        .from("worker_assignments")
+        .select("project_id")
+        .eq("user_id", userId)
+        .eq("datum", selectedDate)
+        .limit(1)
+        .maybeSingle();
+
+      if (assignment?.project_id && timeBlocks.length > 0 && !timeBlocks[0].projectId) {
+        setTimeBlocks((prev) => {
+          const updated = [...prev];
+          updated[0] = { ...updated[0], projectId: assignment.project_id };
+          return updated;
+        });
+      }
+    };
+    autoFillFromPlantafel();
+  }, [selectedDate, existingDayEntries, loadingDayEntries]);
 
   // Fetch existing entries for selected date
   const fetchExistingDayEntries = async (date: string) => {
@@ -600,7 +634,22 @@ const TimeTracking = () => {
       });
     }
 
-    const absenceLabel = absenceData.type === "urlaub" ? "Urlaub" : absenceData.type === "krankenstand" ? "Krankenstand" : absenceData.type === "weiterbildung" ? "Weiterbildung" : absenceData.type === "za" ? "Zeitausgleich" : "Feiertag";
+    const ABSENCE_LABELS: Record<string, string> = {
+      urlaub: "Urlaub", krankenstand: "Krankenstand", weiterbildung: "Weiterbildung",
+      feiertag: "Feiertag", za: "Zeitausgleich", arzttermin: "Arzttermin",
+      begraebnis: "Begraebnis", pflegeurlaub: "Pflegeurlaub", sonstige: "Sonstige",
+    };
+    const absenceLabel = ABSENCE_LABELS[absenceData.type] || absenceData.type;
+
+    // Build absence_detail for types that need extra metadata
+    let absenceDetail: Record<string, string> | null = null;
+    if (absenceData.type === "begraebnis" && absenceData.verwandtschaftsgrad) {
+      absenceDetail = { verwandtschaftsgrad: absenceData.verwandtschaftsgrad };
+    } else if (absenceData.type === "pflegeurlaub" && absenceData.verwandtschaftsgrad) {
+      absenceDetail = { verwandtschaftsgrad: absenceData.verwandtschaftsgrad };
+    } else if (absenceData.type === "sonstige" && absenceData.sonstigerGrund) {
+      absenceDetail = { grund: absenceData.sonstigerGrund };
+    }
 
     const { error } = await supabase.from("time_entries").insert({
       user_id: user.id,
@@ -614,6 +663,7 @@ const TimeTracking = () => {
       location_type: "baustelle",
       notizen: documentPath ? `Krankmeldung: ${documentPath}` : null,
       week_type: null,
+      absence_detail: absenceDetail,
     });
 
     if (!error) {
@@ -628,6 +678,8 @@ const TimeTracking = () => {
         absenceStartTime: "07:00",
         absenceEndTime: "16:00",
         absencePauseMinutes: "30",
+        verwandtschaftsgrad: "",
+        sonstigerGrund: "",
       });
       fetchExistingDayEntries(selectedDate);
     } else {
@@ -767,11 +819,26 @@ const TimeTracking = () => {
     let totalEntriesCreated = 0;
     let hasError = false;
 
-    for (const block of timeBlocks) {
-      const blockHours = isExternalUser
-        ? parseFloat(block.manualHours) || 0
-        : calculateBlockHours(block);
+    // Calculate total hours for the day (all blocks) for Schwellenwert splitting
+    const allBlockHours = timeBlocks.map((b) =>
+      isExternalUser ? parseFloat(b.manualHours) || 0 : calculateBlockHours(b)
+    );
+    const dayTotalHours = allBlockHours.reduce((sum, h) => sum + h, 0);
+    const dateObj = new Date(selectedDate);
+    const daySplit = splitHours(dayTotalHours, dateObj, employeeSchedule, employeeSchwellenwert);
+
+    // Distribute lohnstunden/zeitausgleich proportionally across blocks
+    let remainingLohn = daySplit.lohnstunden;
+
+    for (let bi = 0; bi < timeBlocks.length; bi++) {
+      const block = timeBlocks[bi];
+      const blockHours = allBlockHours[bi];
       const pauseMinutes = isExternalUser ? 0 : calculateBlockPauseMinutes(block);
+
+      // Proportional split: lohnstunden first, rest is ZA
+      const blockLohn = Math.min(blockHours, remainingLohn);
+      const blockZA = Math.round((blockHours - blockLohn) * 100) / 100;
+      remainingLohn = Math.round((remainingLohn - blockLohn) * 100) / 100;
 
       const km = block.kilometer ? parseFloat(block.kilometer) : null;
 
@@ -794,6 +861,8 @@ const TimeTracking = () => {
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
         diaeten_typ: isExternalUser ? null : calculateDiaeten(blockHours, false).typ,
         diaeten_betrag: null,
+        lohnstunden: blockLohn > 0 ? blockLohn : null,
+        zeitausgleich_stunden: blockZA > 0 ? blockZA : null,
       });
 
       if (insertError) {
@@ -1412,58 +1481,58 @@ const TimeTracking = () => {
               
               <div>
                 <Label>Art</Label>
-                <RadioGroup 
-                  value={absenceData.type} 
-                  onValueChange={(value: "urlaub" | "krankenstand" | "weiterbildung" | "feiertag" | "za") => setAbsenceData({ ...absenceData, type: value })}
+                <RadioGroup
+                  value={absenceData.type}
+                  onValueChange={(value: typeof absenceData.type) => setAbsenceData({ ...absenceData, type: value, verwandtschaftsgrad: "", sonstigerGrund: "" })}
                   className="grid grid-cols-3 gap-2 mt-2"
                 >
-                  <div>
-                    <RadioGroupItem value="urlaub" id="urlaub" className="peer sr-only" />
-                    <Label 
-                      htmlFor="urlaub" 
-                      className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
-                    >
-                      🏖️ Urlaub
-                    </Label>
-                  </div>
-                  <div>
-                    <RadioGroupItem value="krankenstand" id="krankenstand" className="peer sr-only" />
-                    <Label 
-                      htmlFor="krankenstand" 
-                      className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
-                    >
-                      🏥 Kranken.
-                    </Label>
-                  </div>
-                  <div>
-                    <RadioGroupItem value="za" id="za" className="peer sr-only" />
-                    <Label 
-                      htmlFor="za" 
-                      className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
-                    >
-                      ⏰ ZA
-                    </Label>
-                  </div>
-                  <div>
-                    <RadioGroupItem value="weiterbildung" id="weiterbildung" className="peer sr-only" />
-                    <Label 
-                      htmlFor="weiterbildung" 
-                      className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
-                    >
-                      📚 Weiterbild.
-                    </Label>
-                  </div>
-                  <div>
-                    <RadioGroupItem value="feiertag" id="feiertag" className="peer sr-only" />
-                    <Label 
-                      htmlFor="feiertag" 
-                      className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
-                    >
-                      🎉 Feiertag
-                    </Label>
-                  </div>
+                  {[
+                    { value: "urlaub", label: "Urlaub", short: "U" },
+                    { value: "krankenstand", label: "Kranken.", short: "K" },
+                    { value: "za", label: "ZA", short: "ZA" },
+                    { value: "weiterbildung", label: "Weiterbild.", short: "WB" },
+                    { value: "feiertag", label: "Feiertag", short: "F" },
+                    { value: "arzttermin", label: "Arzttermin", short: "A" },
+                    { value: "begraebnis", label: "Begraebnis", short: "BEG" },
+                    { value: "pflegeurlaub", label: "Pflegeurlaub", short: "PF" },
+                    { value: "sonstige", label: "Sonstige", short: "SO" },
+                  ].map(({ value, label, short }) => (
+                    <div key={value}>
+                      <RadioGroupItem value={value} id={value} className="peer sr-only" />
+                      <Label
+                        htmlFor={value}
+                        className="flex h-14 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-2 hover:bg-accent peer-data-[state=checked]:border-primary text-sm"
+                      >
+                        <span className="font-semibold mr-1 text-muted-foreground">{short}</span> {label}
+                      </Label>
+                    </div>
+                  ))}
                 </RadioGroup>
               </div>
+
+              {/* Verwandtschaftsgrad fuer Begraebnis / Pflegeurlaub */}
+              {(absenceData.type === "begraebnis" || absenceData.type === "pflegeurlaub") && (
+                <div>
+                  <Label>Verwandtschaftsgrad</Label>
+                  <Input
+                    value={absenceData.verwandtschaftsgrad}
+                    onChange={(e) => setAbsenceData({ ...absenceData, verwandtschaftsgrad: e.target.value })}
+                    placeholder="z.B. Grossvater, Tante, Schwiegermutter..."
+                  />
+                </div>
+              )}
+
+              {/* Grund fuer Sonstige */}
+              {absenceData.type === "sonstige" && (
+                <div>
+                  <Label>Grund</Label>
+                  <Input
+                    value={absenceData.sonstigerGrund}
+                    onChange={(e) => setAbsenceData({ ...absenceData, sonstigerGrund: e.target.value })}
+                    placeholder="Grund der Abwesenheit..."
+                  />
+                </div>
+              )}
 
               {/* Ganzer Tag toggle */}
               <div className="flex items-center justify-between">
