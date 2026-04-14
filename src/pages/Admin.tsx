@@ -1552,6 +1552,36 @@ export default function Admin() {
                   <Separator />
 
                   <div>
+                    <h3 className="text-lg font-semibold mb-3">Mitarbeiterkategorie</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Kategorie</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={formData.kategorie || "facharbeiter"}
+                          onChange={(e) => setFormData({ ...formData, kategorie: e.target.value })}
+                        >
+                          <option value="lehrling">Lehrling</option>
+                          <option value="facharbeiter">Facharbeiter</option>
+                          <option value="vorarbeiter">Vorarbeiter</option>
+                          <option value="extern">Extern</option>
+                        </select>
+                      </div>
+                      {formData.kategorie === "lehrling" && (
+                        <div>
+                          <Label>Arbeitszeitmodell</Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            14-Tage-Zyklus: Woche 1 = 5 Tage, Woche 2 = 4 Tage (Kurz/Lang abwechselnd).
+                            Wird automatisch ueber die Regelarbeitszeit gesteuert.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
                     <h3 className="text-lg font-semibold mb-3">Zeitausgleich-Schwellenwert</h3>
                     <p className="text-sm text-muted-foreground mb-3">
                       Tagesgrenze: Stunden bis zum Schwellenwert werden ausbezahlt, darueber liegende Stunden gehen in den Zeitausgleich.
