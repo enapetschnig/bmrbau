@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { FileViewer } from "@/components/FileViewer";
+import { Nachkalkulation } from "@/components/Nachkalkulation";
 
 type DocumentType = "plans" | "reports" | "photos" | "chef" | "polier";
 
@@ -477,6 +478,13 @@ const ProjectDetail = () => {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Nachkalkulation nur im Polierordner */}
+        {type === "polier" && projectId && (
+          <div className="mt-4">
+            <Nachkalkulation projectId={projectId} />
+          </div>
+        )}
       </main>
 
       <FileViewer
