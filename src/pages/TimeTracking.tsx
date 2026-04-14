@@ -118,6 +118,9 @@ const TimeTracking = () => {
     ende: "16:00",
     arbeitsstundenVorher: "",
     notizen: "",
+    projektAdresse: "",
+    gearbeitetWaehrendSW: false,
+    arbeitsstundenWaehrendSW: "",
   });
   const [badWeatherArt, setBadWeatherArt] = useState<string[]>([]);
 
@@ -921,6 +924,10 @@ const TimeTracking = () => {
     const [eh, em] = badWeatherData.ende.split(":").map(Number);
     const stunden = Math.max(0, Math.round(((eh * 60 + em) - (bh * 60 + bm)) / 60 * 100) / 100);
 
+    const swWaehrendStunden = badWeatherData.gearbeitetWaehrendSW
+      ? (parseFloat(badWeatherData.arbeitsstundenWaehrendSW) || stunden)
+      : 0;
+
     const { error } = await supabase.from("bad_weather_records").insert({
       user_id: targetUserId || user.id,
       project_id: badWeatherData.projectId,
@@ -931,6 +938,9 @@ const TimeTracking = () => {
       arbeitsstunden_vor_schlechtwetter: parseFloat(badWeatherData.arbeitsstundenVorher) || 0,
       wetter_art: badWeatherArt,
       notizen: badWeatherData.notizen.trim() || null,
+      projekt_adresse: badWeatherData.projektAdresse.trim() || null,
+      gearbeitet_waehrend_sw: badWeatherData.gearbeitetWaehrendSW,
+      arbeitsstunden_waehrend_sw: swWaehrendStunden,
     });
 
     if (error) {
@@ -938,7 +948,7 @@ const TimeTracking = () => {
     } else {
       toast({ title: "Gespeichert", description: `Schlechtwetter-Eintrag (${stunden}h) erstellt` });
       setShowBadWeatherDialog(false);
-      setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "" });
+      setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "", projektAdresse: "", gearbeitetWaehrendSW: false, arbeitsstundenWaehrendSW: "" });
       setBadWeatherArt([]);
     }
     setSavingBadWeather(false);
@@ -1729,7 +1739,7 @@ const TimeTracking = () => {
         <Dialog open={showBadWeatherDialog} onOpenChange={(open) => {
           setShowBadWeatherDialog(open);
           if (!open) {
-            setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "" });
+            setBadWeatherData({ projectId: "", beginn: "08:00", ende: "16:00", arbeitsstundenVorher: "", notizen: "", projektAdresse: "", gearbeitetWaehrendSW: false, arbeitsstundenWaehrendSW: "" });
             setBadWeatherArt([]);
           }
         }}>
@@ -1747,7 +1757,10 @@ const TimeTracking = () => {
             <div className="space-y-4">
               <div>
                 <Label>Baustelle / Projekt *</Label>
-                <Select value={badWeatherData.projectId} onValueChange={(v) => setBadWeatherData({ ...badWeatherData, projectId: v })}>
+                <Select value={badWeatherData.projectId} onValueChange={(v) => {
+                  const proj = projects.find(p => p.id === v);
+                  setBadWeatherData({ ...badWeatherData, projectId: v, projektAdresse: proj?.plz ? `PLZ ${proj.plz}` : badWeatherData.projektAdresse });
+                }}>
                   <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
                   <SelectContent>
                     {projects.filter(p => p.status === "aktiv" || p.status === "in_planung").map((p) => (
@@ -1829,11 +1842,47 @@ const TimeTracking = () => {
               </div>
 
               <div>
+                <Label>Projektadresse *</Label>
+                <Input
+                  value={badWeatherData.projektAdresse}
+                  onChange={(e) => setBadWeatherData({ ...badWeatherData, projektAdresse: e.target.value })}
+                  placeholder="Adresse der Baustelle"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <Label>Wurde waehrend Schlechtwetter gearbeitet?</Label>
+                <Switch
+                  checked={badWeatherData.gearbeitetWaehrendSW}
+                  onCheckedChange={(checked) => setBadWeatherData({ ...badWeatherData, gearbeitetWaehrendSW: checked })}
+                />
+              </div>
+
+              {badWeatherData.gearbeitetWaehrendSW && (
+                <div>
+                  <Label>Arbeitsstunden waehrend Schlechtwetter (zaehlen als Zeitausgleich)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={badWeatherData.arbeitsstundenWaehrendSW}
+                    onChange={(e) => setBadWeatherData({ ...badWeatherData, arbeitsstundenWaehrendSW: e.target.value })}
+                    placeholder={(() => {
+                      if (!badWeatherData.beginn || !badWeatherData.ende) return "0";
+                      const [bh, bm] = badWeatherData.beginn.split(":").map(Number);
+                      const [eh, em] = badWeatherData.ende.split(":").map(Number);
+                      return Math.max(0, ((eh * 60 + em) - (bh * 60 + bm)) / 60).toFixed(1);
+                    })()}
+                  />
+                </div>
+              )}
+
+              <div>
                 <Label>Notizen</Label>
                 <Input
                   value={badWeatherData.notizen}
                   onChange={(e) => setBadWeatherData({ ...badWeatherData, notizen: e.target.value })}
-                  placeholder="Zusätzliche Informationen..."
+                  placeholder="Zusaetzliche Informationen..."
                 />
               </div>
 

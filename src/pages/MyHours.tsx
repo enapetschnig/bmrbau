@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { MonthlySignoff } from "@/components/MonthlySignoff";
 import { format, getISOWeek } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -441,6 +442,15 @@ const MyHours = () => {
                   <Button variant={showAuswertung ? "default" : "outline"} size="sm" onClick={() => setShowAuswertung(!showAuswertung)}>
                     <BarChart3 className="w-4 h-4 mr-1" /> Auswertung
                   </Button>
+                )}
+                {!isExternal && (
+                  <MonthlySignoff
+                    year={parseInt(selectedMonth.split("-")[0])}
+                    month={parseInt(selectedMonth.split("-")[1])}
+                    totalHours={totalHours}
+                    lohnstunden={entries.reduce((s, e) => s + (e.lohnstunden ?? e.stunden ?? 0), 0)}
+                    zaStunden={entries.reduce((s, e) => s + (e.zeitausgleich_stunden ?? 0), 0)}
+                  />
                 )}
               </div>
               <div className="flex flex-wrap gap-4 text-sm sm:text-base">
