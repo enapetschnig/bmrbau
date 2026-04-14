@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, Send, ChevronUp, Trash2 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Camera, Send, ChevronUp, Trash2, X, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +29,7 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -401,15 +403,14 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
                     </p>
                   )}
 
-                  {/* Image */}
+                  {/* Image - klickbar fuer Vollbild-Vorschau */}
                   {msg.image_url && (
-                    <a href={msg.image_url} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={msg.image_url}
-                        alt="Foto"
-                        className="rounded-lg max-w-full max-h-64 object-cover mb-1 cursor-pointer hover:opacity-90"
-                      />
-                    </a>
+                    <img
+                      src={msg.image_url}
+                      alt="Foto"
+                      className="rounded-lg max-w-full max-h-64 object-cover mb-1 cursor-pointer hover:opacity-90"
+                      onClick={(e) => { e.stopPropagation(); setPreviewImage(msg.image_url); }}
+                    />
                   )}
 
                   {/* Text */}
@@ -482,6 +483,55 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
           </Button>
         </div>
       </div>
+
+      {/* Bild-Vorschau Lightbox */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 bg-black/95">
+          <div className="flex justify-between items-center px-4 py-2">
+            <span className="text-white text-sm">Bild-Vorschau</span>
+            <div className="flex gap-2">
+              {previewImage && (
+                <a href={previewImage} download className="text-white hover:text-gray-300">
+                  <Download className="h-5 w-5" />
+                </a>
+              )}
+              <button onClick={() => setPreviewImage(null)} className="text-white hover:text-gray-300">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+            {previewImage && (
+              <img src={previewImage} alt="Vorschau" className="max-w-full max-h-full object-contain rounded-lg" />
+            )}
+          </div>
+          {/* Swipe durch Chat-Bilder */}
+          {(() => {
+            const allImages = messages.filter(m => m.image_url).map(m => m.image_url!);
+            const currentIdx = previewImage ? allImages.indexOf(previewImage) : -1;
+            if (allImages.length <= 1) return null;
+            return (
+              <div className="flex justify-center gap-4 pb-4">
+                <button
+                  className="text-white hover:text-gray-300 disabled:opacity-30"
+                  disabled={currentIdx <= 0}
+                  onClick={() => setPreviewImage(allImages[currentIdx - 1])}
+                >
+                  <ChevronLeft className="h-8 w-8" />
+                </button>
+                <span className="text-white text-sm self-center">{currentIdx + 1} / {allImages.length}</span>
+                <button
+                  className="text-white hover:text-gray-300 disabled:opacity-30"
+                  disabled={currentIdx >= allImages.length - 1}
+                  onClick={() => setPreviewImage(allImages[currentIdx + 1])}
+                >
+                  <ChevronRight className="h-8 w-8" />
+                </button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
