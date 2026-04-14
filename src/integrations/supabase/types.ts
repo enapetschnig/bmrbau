@@ -598,6 +598,60 @@ export type Database = {
         }
         Relationships: []
       }
+      document_library_categories: {
+        Row: {
+          id: string
+          key: string
+          label: string
+          sort_order: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          label: string
+          sort_order?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          label?: string
+          sort_order?: number | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      document_library_links: {
+        Row: {
+          id: string
+          category_key: string
+          title: string
+          url: string
+          sort_order: number | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          category_key: string
+          title: string
+          url: string
+          sort_order?: number | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          category_key?: string
+          title?: string
+          url?: string
+          sort_order?: number | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
           archived: boolean | null

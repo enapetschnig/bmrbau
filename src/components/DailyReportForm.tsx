@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 
-type Project = { id: string; name: string; plz: string | null };
+type Project = { id: string; name: string; plz: string | null; baustellenart?: string | null };
 type Employee = { id: string; user_id: string; name: string };
 
 type Activity = {
@@ -80,7 +80,7 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
   const fetchProjects = useCallback(async () => {
     const { data } = await supabase
       .from("projects")
-      .select("id, name, plz")
+      .select("id, name, plz, baustellenart")
       .eq("status", "aktiv")
       .order("name");
     if (data) setProjects(data);
@@ -285,7 +285,16 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
           {/* Project */}
           <div>
             <Label>Projekt *</Label>
-            <Select value={projectId} onValueChange={setProjectId}>
+            <Select value={projectId} onValueChange={(v) => {
+              setProjectId(v);
+              // Auto-select report type based on Baustellenart
+              const proj = projects.find(p => p.id === v);
+              if (proj?.baustellenart === "regie" && !editData) {
+                // Regie -> Regiebericht (wird in separatem Modul erstellt, hier Tagesbericht)
+              } else if (proj?.baustellenart === "pauschale" && !editData) {
+                setReportType("tagesbericht");
+              }
+            }}>
               <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
               <SelectContent>
                 {projects.map((p) => (
