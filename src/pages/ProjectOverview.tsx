@@ -470,6 +470,57 @@ const ProjectOverview = () => {
     navigate(`/projects/${projectId}/photos`);
   };
 
+  const [downloading, setDownloading] = useState(false);
+  const handleProjectZipDownload = async () => {
+    if (!projectId || !isAdmin) return;
+    setDownloading(true);
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    const folder = zip.folder(projectName || "Projekt")!;
+
+    const buckets = [
+      { name: "Plaene_Auftraege", bucket: "project-plans" },
+      { name: "Regieberichte", bucket: "project-reports" },
+      { name: "Fotos", bucket: "project-photos" },
+      { name: "Chefordner", bucket: "project-chef" },
+      { name: "Polierordner", bucket: "project-polier" },
+    ];
+
+    for (const b of buckets) {
+      const { data: files } = await supabase.storage.from(b.bucket).list(projectId);
+      if (!files || files.length === 0) continue;
+      const subFolder = folder.folder(b.name)!;
+      for (const file of files) {
+        const { data } = await supabase.storage.from(b.bucket).download(`${projectId}/${file.name}`);
+        if (data) subFolder.file(file.name, data);
+      }
+    }
+
+    // Kontakte als Excel
+    if (contacts.length > 0) {
+      const XLSX = await import("xlsx-js-style");
+      const wsData = contacts.map(c => ({
+        Name: c.name, Firma: c.firma || "", Rolle: c.rolle || "",
+        Telefon: c.telefon || "", Email: c.email || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Kontakte");
+      const excelBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      folder.file("Kontakte.xlsx", excelBuffer);
+    }
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${projectName || "Projekt"}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setDownloading(false);
+    toast({ title: "Download abgeschlossen" });
+  };
+
   const visibleCategories = categories.filter((category) => {
     if (category.adminOnly && !isAdmin) return false;
     if (category.polierOnly && !isAdmin && !isVorarbeiter) return false;
@@ -513,6 +564,16 @@ const ProjectOverview = () => {
                 >
                   <Shield className="h-4 w-4" />
                   <span className="hidden sm:inline">Zugriff</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleProjectZipDownload}
+                  disabled={downloading}
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">{downloading ? "Laedt..." : "ZIP"}</span>
                 </Button>
               </div>
             )}
