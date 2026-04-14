@@ -335,7 +335,7 @@ export default function IncomingInvoices() {
         inv.lieferant || "–",
         inv.dokument_nummer || "–",
         inv.project_name || "–",
-        inv.betrag != null ? Number(inv.betrag) : 0,
+        inv.betrag != null ? Number(inv.betrag).toFixed(2).replace(".", ",") : "0,00",
         abgleichText,
         STATUS_LABELS[inv.status]?.label || inv.status,
         inv.employee_name || "–",
@@ -343,7 +343,7 @@ export default function IncomingInvoices() {
     }
 
     rows.push([]);
-    rows.push(["", "", "", "GESAMT", filtered.reduce((s, d) => s + (d.betrag ? Number(d.betrag) : 0), 0), "", "", ""]);
+    rows.push(["", "", "", "GESAMT", filtered.reduce((s, d) => s + (d.betrag ? Number(d.betrag) : 0), 0).toFixed(2).replace(".", ","), "", "", ""]);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws["!cols"] = [{ wch: 12 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 20 }];

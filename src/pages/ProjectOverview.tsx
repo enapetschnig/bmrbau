@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle, Download } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle, Download, Upload } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -380,6 +381,55 @@ const ProjectOverview = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportContactsExcel = () => {
+    const data = contacts.map(c => ({
+      Name: c.name, Firma: c.firma || "", Rolle: c.rolle || "",
+      Telefon: c.telefon || "", Email: c.email || "",
+      Phase: c.phase === "planungsphase" ? "Planungsphase" : c.phase === "beide" ? "Alle Phasen" : "Bauphase",
+      Notizen: c.notizen || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 18 }, { wch: 25 }, { wch: 15 }, { wch: 30 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Kontakte");
+    XLSX.writeFile(wb, `Kontakte_${projectName.replace(/\s+/g, "_")}.xlsx`);
+  };
+
+  const importContactsExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !projectId) return;
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
+
+    // Bestehende Kontakte loeschen (laut Dokument: "beim Import werden alle ueberschrieben")
+    await supabase.from("project_contacts").delete().eq("project_id", projectId);
+
+    let imported = 0;
+    for (const row of rows) {
+      const name = (row["Name"] || row["name"] || "").toString().trim();
+      if (!name) continue;
+      const phaseRaw = (row["Phase"] || row["phase"] || "bauphase").toString().toLowerCase();
+      const phase = phaseRaw.includes("plan") ? "planungsphase" : phaseRaw.includes("alle") || phaseRaw.includes("beide") ? "beide" : "bauphase";
+
+      await supabase.from("project_contacts").insert({
+        project_id: projectId,
+        name,
+        firma: (row["Firma"] || row["firma"] || "").toString() || null,
+        rolle: (row["Rolle"] || row["rolle"] || "").toString() || null,
+        telefon: (row["Telefon"] || row["telefon"] || "").toString() || null,
+        email: (row["Email"] || row["email"] || row["E-Mail"] || "").toString() || null,
+        phase,
+        notizen: (row["Notizen"] || row["notizen"] || "").toString() || null,
+      });
+      imported++;
+    }
+    toast({ title: `${imported} Kontakte importiert` });
+    fetchContacts();
+    e.target.value = "";
+  };
+
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
@@ -544,11 +594,26 @@ const ProjectOverview = () => {
                 Projektkontakte
                 {contacts.length > 0 && <span className="text-sm font-normal text-muted-foreground">({contacts.length})</span>}
               </CardTitle>
-              {isAdmin && (
-                <Button size="sm" variant="outline" onClick={() => setShowContactDialog(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Kontakt
-                </Button>
-              )}
+              <div className="flex gap-1">
+                {contacts.length > 0 && (
+                  <Button size="sm" variant="ghost" onClick={exportContactsExcel} title="Excel-Export">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+                {isAdmin && (
+                  <>
+                    <label className="cursor-pointer">
+                      <input type="file" accept=".xlsx,.xls" onChange={importContactsExcel} className="hidden" />
+                      <Button size="sm" variant="ghost" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Excel-Import">
+                        <Upload className="h-4 w-4" />
+                      </Button>
+                    </label>
+                    <Button size="sm" variant="outline" onClick={() => setShowContactDialog(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Kontakt
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           {contacts.length > 0 ? (

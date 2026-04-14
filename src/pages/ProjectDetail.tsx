@@ -81,6 +81,7 @@ const ProjectDetail = () => {
   const [projectName, setProjectName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState("aktuell");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewerState, setViewerState] = useState<{
     open: boolean;
@@ -302,7 +303,11 @@ const ProjectDetail = () => {
   if (!type) return <div>Ungueltiger Dokumenttyp</div>;
   if (loading) return <div className="min-h-screen flex items-center justify-center"><p>Laedt...</p></div>;
 
-  const filteredFiles = getFilteredFiles();
+  const filteredFiles = getFilteredFiles().sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+  });
   const isArchivTab = activeTab === "archiv";
   const currentTabConfig = tabs.find((t) => t.key === activeTab);
 
@@ -384,9 +389,9 @@ const ProjectDetail = () => {
                     </div>
                   )}
 
-                  {/* Alle auswaehlen */}
+                  {/* Alle auswaehlen + Sortierung */}
                   {filteredFiles.length > 0 && (
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center justify-between gap-2 mb-2">
                       <button
                         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                         onClick={() => toggleSelectAll(filteredFiles)}
@@ -395,6 +400,12 @@ const ProjectDetail = () => {
                           ? <CheckSquare className="h-4 w-4" />
                           : <Square className="h-4 w-4" />}
                         Alle auswaehlen
+                      </button>
+                      <button
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")}
+                      >
+                        {sortOrder === "desc" ? "Neueste zuerst" : "Aelteste zuerst"}
                       </button>
                     </div>
                   )}
