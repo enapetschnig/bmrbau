@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle, Download } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -354,6 +354,32 @@ const ProjectOverview = () => {
     toast({ title: "Kopiert", description: "Kontaktdaten in Zwischenablage" });
   };
 
+  const exportContactVCF = (c: Contact) => {
+    const nameParts = c.name.split(" ");
+    const lastName = nameParts.pop() || "";
+    const firstName = nameParts.join(" ");
+    const vcf = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      `N:${lastName};${firstName};;;`,
+      `FN:${c.name}`,
+      c.firma ? `ORG:${c.firma}` : "",
+      c.rolle ? `TITLE:${c.rolle}` : "",
+      c.telefon ? `TEL;TYPE=WORK:${c.telefon}` : "",
+      c.email ? `EMAIL:${c.email}` : "",
+      `NOTE:Projekt: ${projectName}`,
+      "END:VCARD",
+    ].filter(Boolean).join("\r\n");
+
+    const blob = new Blob([vcf], { type: "text/vcard" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${c.name.replace(/\s+/g, "_")}.vcf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
@@ -548,6 +574,9 @@ const ProjectOverview = () => {
                   <div className="flex gap-1 shrink-0">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyContact(c)} title="Kontakt kopieren">
                       <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportContactVCF(c)} title="Als VCF exportieren (WhatsApp/Kontakte)">
+                      <Download className="h-3.5 w-3.5" />
                     </Button>
                     {isAdmin && (
                       <>

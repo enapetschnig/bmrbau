@@ -808,36 +808,24 @@ const Projects = () => {
                 )}
                 
                 <div className={`grid ${isAdmin ? 'grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Pläne</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.plans || 0}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Berichte</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.reports || 0}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <Image className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Fotos</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.photos || 0}
-                    </span>
-                  </div>
-                  {isAdmin && (
-                    <div className="flex flex-col items-center gap-1 p-2">
-                      <Lock className="w-5 h-5 text-primary" />
-                      <span className="text-xs font-medium">Chef</span>
+                  {[
+                    { key: "plans", label: "Plaene", icon: <FileText className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/plans` },
+                    { key: "reports", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}` },
+                    { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos` },
+                    ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/chef` }] : []),
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-primary/10 cursor-pointer transition-colors"
+                      onClick={(e) => { e.stopPropagation(); navigate(item.path); }}
+                    >
+                      {item.icon}
+                      <span className="text-xs font-medium">{item.label}</span>
                       <span className="text-xs text-muted-foreground">
-                        {project.fileCount?.chef || 0}
+                        {(project.fileCount as any)?.[item.key] || 0}
                       </span>
                     </div>
-                  )}
+                  ))}
                 </div>
 
                 <DropdownMenu>
