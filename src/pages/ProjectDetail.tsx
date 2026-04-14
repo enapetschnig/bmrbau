@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { FileViewer } from "@/components/FileViewer";
 
-type DocumentType = "plans" | "reports" | "photos" | "chef";
+type DocumentType = "plans" | "reports" | "photos" | "chef" | "polier";
 
 type StorageFile = {
   name: string;
@@ -34,6 +34,7 @@ const bucketMap: Record<DocumentType, string> = {
   reports: "project-reports",
   photos: "project-photos",
   chef: "project-chef",
+  polier: "project-polier",
 };
 
 const titleMap: Record<DocumentType, string> = {
@@ -41,6 +42,7 @@ const titleMap: Record<DocumentType, string> = {
   reports: "Regieberichte",
   photos: "Fotos",
   chef: "Chefordner",
+  polier: "Polierordner",
 };
 
 // Tab-Konfiguration pro Typ
@@ -60,6 +62,10 @@ const tabConfig: Record<DocumentType, { key: string; label: string; subType?: st
     { key: "archiv", label: "Archiv" },
   ],
   chef: [
+    { key: "aktuell", label: "Alle Dateien" },
+    { key: "archiv", label: "Archiv" },
+  ],
+  polier: [
     { key: "aktuell", label: "Alle Dateien" },
     { key: "archiv", label: "Archiv" },
   ],

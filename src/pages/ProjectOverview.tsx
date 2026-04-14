@@ -13,12 +13,13 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 type DocumentCategory = {
-  type: "plans" | "reports" | "photos" | "chef";
+  type: "plans" | "reports" | "photos" | "chef" | "polier";
   title: string;
   description: string;
   icon: React.ReactNode;
   count: number;
   adminOnly?: boolean;
+  polierOnly?: boolean;
 };
 
 type Contact = {
@@ -41,6 +42,7 @@ const ProjectOverview = () => {
     erreichbarkeit: string | null; besonderheiten: string | null; hinweise: string | null;
   } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isVorarbeiter, setIsVorarbeiter] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [categories, setCategories] = useState<DocumentCategory[]>([
     {
@@ -65,8 +67,16 @@ const ProjectOverview = () => {
       count: 0,
     },
     {
+      type: "polier",
+      title: "Polierordner",
+      description: "Interner Datenaustausch Polier & Chef",
+      icon: <FileText className="h-8 w-8" />,
+      count: 0,
+      polierOnly: true,
+    },
+    {
       type: "chef",
-      title: "🔒 Chefordner",
+      title: "Chefordner",
       description: "Vertrauliche Chef-Dokumente",
       icon: <Lock className="h-8 w-8" />,
       count: 0,
@@ -242,6 +252,14 @@ const ProjectOverview = () => {
       .maybeSingle();
 
     setIsAdmin(!!data);
+
+    // Check if Vorarbeiter
+    const { data: empData } = await supabase
+      .from("employees")
+      .select("kategorie")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setIsVorarbeiter(empData?.kategorie === "vorarbeiter");
   };
 
   const fetchProjectName = async () => {
@@ -249,7 +267,7 @@ const ProjectOverview = () => {
 
     const { data } = await supabase
       .from("projects")
-      .select("name, adresse, plz, bauherr, bauherr_kontakt, bauleiter, budget, start_datum, end_datum, beschreibung, kunde_telefon, kunde_email, erreichbarkeit, besonderheiten, hinweise")
+      .select("name, adresse, plz, bauherr, bauherr_kontakt, bauherr2, bauherr2_kontakt, baustellenart, anfahrt_ueber_100km, bauleiter, budget, start_datum, end_datum, beschreibung, kunde_telefon, kunde_email, erreichbarkeit, besonderheiten, hinweise")
       .eq("id", projectId)
       .single();
 
@@ -344,11 +362,15 @@ const ProjectOverview = () => {
       reports: "project-reports",
       photos: "project-photos",
       chef: "project-chef",
+      polier: "project-polier",
     };
 
     const updatedCategories = await Promise.all(
       categories.map(async (category) => {
         if (category.type === "chef" && !isAdmin) {
+          return { ...category, count: 0 };
+        }
+        if (category.type === "polier" && !isAdmin && !isVorarbeiter) {
           return { ...category, count: 0 };
         }
 
@@ -372,9 +394,11 @@ const ProjectOverview = () => {
     navigate(`/projects/${projectId}/photos`);
   };
 
-  const visibleCategories = categories.filter(
-    (category) => !category.adminOnly || isAdmin
-  );
+  const visibleCategories = categories.filter((category) => {
+    if (category.adminOnly && !isAdmin) return false;
+    if (category.polierOnly && !isAdmin && !isVorarbeiter) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -678,7 +702,22 @@ const ProjectOverview = () => {
             </Card>
           ))}
 
-          {/* 6. Chefordner (Admin only) */}
+          {/* 6. Polierordner (Vorarbeiter + Admin) */}
+          {visibleCategories.filter(c => c.type === "polier").map((category) => (
+            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="text-primary">{category.icon}</div>
+                  <div className="text-2xl font-bold">{category.count}</div>
+                </div>
+                <CardTitle className="text-xl">{category.title}</CardTitle>
+                <CardDescription>{category.description}</CardDescription>
+              </CardHeader>
+              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+            </Card>
+          ))}
+
+          {/* 7. Chefordner (Admin only) */}
           {visibleCategories.filter(c => c.type === "chef").map((category) => (
             <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
               <CardHeader>
