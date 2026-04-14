@@ -247,6 +247,31 @@ const Projects = () => {
         );
       }
 
+      // Standard-Kontakte (Notfallnummern) einfuegen
+      const { data: defaultContactsSetting } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "default_project_contacts")
+        .maybeSingle();
+      if (defaultContactsSetting?.value) {
+        try {
+          const defaultContacts = JSON.parse(defaultContactsSetting.value);
+          if (Array.isArray(defaultContacts) && defaultContacts.length > 0) {
+            await supabase.from("project_contacts").insert(
+              defaultContacts.map((c: any, i: number) => ({
+                project_id: inserted.id,
+                name: c.name || "",
+                rolle: c.rolle || null,
+                telefon: c.telefon || null,
+                email: c.email || null,
+                phase: "beide",
+                sort_order: 100 + i,
+              }))
+            );
+          }
+        } catch { /* JSON parse error - skip */ }
+      }
+
       // Save project access for selected employees
       if (accessEmployeeIds.length > 0) {
         await supabase.from("project_access").insert(
