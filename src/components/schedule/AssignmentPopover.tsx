@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Trash2 } from "lucide-react";
+import { Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { Profile, Project, Assignment } from "./scheduleTypes";
+import type { Profile, Project, Assignment, CompanyHoliday } from "./scheduleTypes";
 
 interface Props {
   open: boolean;
@@ -27,9 +28,11 @@ interface Props {
   date: Date | null;
   days?: Date[];
   assignment: Assignment | null;
+  existingAssignments?: Assignment[];
   projects: Project[];
+  holidays?: CompanyHoliday[];
   onAssign: (userId: string, date: Date, projectId: string, notizen?: string) => void;
-  onRemove: (userId: string, date: Date) => void;
+  onRemove: (userId: string, date: Date, assignmentId?: string) => void;
 }
 
 export function AssignmentPopover({
@@ -39,7 +42,9 @@ export function AssignmentPopover({
   date,
   days,
   assignment,
+  existingAssignments = [],
   projects,
+  holidays = [],
   onAssign,
   onRemove,
 }: Props) {
@@ -82,9 +87,44 @@ export function AssignmentPopover({
         </DialogHeader>
 
         <div className="space-y-3 pt-2">
+          {/* BU/Feiertag Hinweis */}
+          {!isRangeMode && holidays.some(h => h.datum === format(date, "yyyy-MM-dd")) && (
+            <div className="flex items-center gap-2 p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                Dieser Tag ist als <strong>{holidays.find(h => h.datum === format(date, "yyyy-MM-dd"))?.bezeichnung || "Betriebsurlaub/Feiertag"}</strong> eingetragen. Planung ist trotzdem moeglich.
+              </span>
+            </div>
+          )}
+
+          {/* Bestehende Zuordnungen */}
+          {existingAssignments.length > 0 && !isRangeMode && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground font-medium">Bestehende Zuordnungen:</p>
+              {existingAssignments.map((a) => {
+                const proj = projects.find(p => p.id === a.project_id);
+                return (
+                  <div key={a.id} className="flex items-center justify-between gap-2 p-1.5 rounded bg-muted/50 text-sm">
+                    <Badge variant="secondary" className="text-xs">{proj?.name || "–"}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive"
+                      onClick={() => {
+                        onRemove(profile.id, date, a.id);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <Select value={selectedProject} onValueChange={setSelectedProject}>
             <SelectTrigger className="h-10">
-              <SelectValue placeholder="Projekt zuweisen..." />
+              <SelectValue placeholder="Projekt hinzufuegen..." />
             </SelectTrigger>
             <SelectContent>
               {projects.map((p) => (
@@ -96,27 +136,12 @@ export function AssignmentPopover({
           </Select>
 
           <Textarea
-            placeholder="Notiz für den Mitarbeiter (optional)..."
+            placeholder="Notiz fuer den Mitarbeiter (optional)..."
             value={notizen}
             onChange={(e) => setNotizen(e.target.value)}
-            rows={3}
+            rows={2}
             className="text-sm resize-none"
           />
-
-          {assignment && !isRangeMode && (
-            <Button
-              variant="destructive"
-              size="sm"
-              className="w-full"
-              onClick={() => {
-                onRemove(profile.id, date);
-                onOpenChange(false);
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1" />
-              Zuweisung entfernen
-            </Button>
-          )}
         </div>
 
         <DialogFooter>

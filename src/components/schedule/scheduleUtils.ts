@@ -55,10 +55,15 @@ export function getProjectColorClass(projectId: string): string {
 }
 
 export const RESOURCE_SUGGESTIONS = [
+  "Deckenschalung (m\u00B2)",
+  "Wandschalung",
   "Aluschalung",
   "Eisenschalung",
-  "Deckenschalung (m\u00B2)",
-  "Transport",
+  "Zieges\u00E4ge",
+  "Mannschaftscontainer",
+  "Kran 1 - 30m Ausladung",
+  "Kran 2 - 34m Ausladung",
+  "Transportbedarf",
   "Bagger",
   "Dumper",
   "Eisen",
@@ -73,6 +78,17 @@ export function getAssignmentForDay(
   date: Date
 ): Assignment | undefined {
   return assignments.find(
+    (a) => a.user_id === userId && isSameDay(parseISO(a.datum), date)
+  );
+}
+
+/** Gibt ALLE Zuordnungen eines Mitarbeiters fuer einen Tag zurueck (Multi-Projekt) */
+export function getAssignmentsForDay(
+  assignments: Assignment[],
+  userId: string,
+  date: Date
+): Assignment[] {
+  return assignments.filter(
     (a) => a.user_id === userId && isSameDay(parseISO(a.datum), date)
   );
 }

@@ -3,9 +3,11 @@ import { ChevronDown, ChevronRight, Users } from "lucide-react";
 import { GanttBar } from "./GanttBar";
 import {
   getAssignmentForDay,
+  getAssignmentsForDay,
   isOnLeave,
   isCompanyHoliday,
   getEmployeeColor,
+  getProjectColor,
 } from "./scheduleUtils";
 import type {
   Profile,
@@ -104,16 +106,13 @@ export function TeamGanttSection({
             {days.map((day, dayIdx) => {
               const holiday = isCompanyHoliday(holidays, day);
               const leave = isOnLeave(leaveRequests, profile.id, day);
-              const assignment = getAssignmentForDay(
+              const dayAssignments = getAssignmentsForDay(
                 assignments,
                 profile.id,
                 day
               );
-              const projectName = assignment
-                ? projectMap[assignment.project_id]
-                : null;
-              const editable = assignment
-                ? canEditProject(assignment.project_id)
+              const editable = dayAssignments.length > 0
+                ? dayAssignments.some(a => canEditProject(a.project_id))
                 : true;
 
               const isDragSelected =
@@ -133,12 +132,12 @@ export function TeamGanttSection({
                       ? "opacity-60"
                       : ""
                   } ${
-                    isDragSelected && !holiday && !leave
+                    isDragSelected
                       ? "bg-blue-100 ring-1 ring-inset ring-blue-400"
                       : ""
                   }`}
                   onMouseDown={() => {
-                    if (!holiday && !leave && editable && (onCellClick || onRangeSelect)) {
+                    if (!leave && editable && (onCellClick || onRangeSelect)) {
                       setDragUserId(profile.id);
                       setDragStartIdx(dayIdx);
                       setDragEndIdx(dayIdx);
@@ -150,12 +149,7 @@ export function TeamGanttSection({
                     }
                   }}
                 >
-                  {holiday ? (
-                    <GanttBar
-                      label={holiday.bezeichnung || "Feiertag"}
-                      variant="holiday"
-                    />
-                  ) : leave ? (
+                  {leave ? (
                     <GanttBar
                       label={
                         leave.type === "urlaub"
@@ -168,11 +162,24 @@ export function TeamGanttSection({
                       }
                       variant="leave"
                     />
-                  ) : assignment ? (
+                  ) : dayAssignments.length > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      {holiday && (
+                        <div className="text-[9px] text-gray-500 text-center truncate">{holiday.bezeichnung}</div>
+                      )}
+                      {dayAssignments.map((assignment) => (
+                        <GanttBar
+                          key={assignment.id}
+                          projectId={assignment.project_id}
+                          label={projectMap[assignment.project_id] || "–"}
+                          colorOverride={empColor}
+                        />
+                      ))}
+                    </div>
+                  ) : holiday ? (
                     <GanttBar
-                      projectId={assignment.project_id}
-                      label={projectName || "–"}
-                      colorOverride={empColor}
+                      label={holiday.bezeichnung || "Feiertag"}
+                      variant="holiday"
                     />
                   ) : (
                     <div

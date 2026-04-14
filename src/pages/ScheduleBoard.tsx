@@ -15,7 +15,7 @@ import type {
   DailyTarget,
   ScheduleMode,
 } from "@/components/schedule/scheduleTypes";
-import { getAssignmentForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
+import { getAssignmentForDay, getAssignmentsForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
@@ -92,49 +92,55 @@ export default function ScheduleBoard() {
   // --- Assignment handlers ---
   const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string) => {
     const datum = format(date, "yyyy-MM-dd");
-    const existing = getAssignmentForDay(assignments, uid, date);
 
-    if (existing) {
-      const { error } = await supabase
-        .from("worker_assignments")
-        .update({ project_id: projectId, notizen: notizen ?? null })
-        .eq("id", existing.id);
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
-      }
-      setAssignments((prev) =>
-        prev.map((a) =>
-          a.id === existing.id ? { ...a, project_id: projectId, notizen: notizen ?? null } : a
-        )
-      );
-    } else {
-      const { data, error } = await supabase
-        .from("worker_assignments")
-        .insert({ user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null })
-        .select()
-        .single();
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
-      }
-      if (data) setAssignments((prev) => [...prev, data as Assignment]);
-    }
-  };
-
-  const handleRemove = async (uid: string, date: Date) => {
-    const existing = getAssignmentForDay(assignments, uid, date);
-    if (!existing) return;
-
-    const { error } = await supabase
+    // Upsert: wenn gleicher MA + Tag + Projekt existiert -> update, sonst insert
+    const { data, error } = await supabase
       .from("worker_assignments")
-      .delete()
-      .eq("id", existing.id);
+      .upsert(
+        { user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null },
+        { onConflict: "user_id,datum,project_id" }
+      )
+      .select()
+      .single();
+
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
       return;
     }
-    setAssignments((prev) => prev.filter((a) => a.id !== existing.id));
+    if (data) {
+      setAssignments((prev) => {
+        const existing = prev.find((a) => a.id === (data as Assignment).id);
+        if (existing) return prev.map((a) => a.id === existing.id ? (data as Assignment) : a);
+        return [...prev, data as Assignment];
+      });
+    }
+  };
+
+  const handleRemove = async (uid: string, date: Date, assignmentId?: string) => {
+    if (assignmentId) {
+      // Remove specific assignment by ID
+      const { error } = await supabase
+        .from("worker_assignments")
+        .delete()
+        .eq("id", assignmentId);
+      if (error) {
+        toast({ variant: "destructive", title: "Fehler", description: error.message });
+        return;
+      }
+      setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+    } else {
+      // Remove all assignments for this user on this date (legacy fallback)
+      const existing = assignments.filter(
+        (a) => a.user_id === uid && a.datum === format(date, "yyyy-MM-dd")
+      );
+      if (existing.length === 0) return;
+
+      for (const a of existing) {
+        await supabase.from("worker_assignments").delete().eq("id", a.id);
+      }
+      const ids = new Set(existing.map((a) => a.id));
+      setAssignments((prev) => prev.filter((a) => !ids.has(a.id)));
+    }
   };
 
   // --- Daily target handlers ---
@@ -312,6 +318,10 @@ export default function ScheduleBoard() {
     popoverUserId && popoverDate
       ? getAssignmentForDay(assignments, popoverUserId, popoverDate)
       : null;
+  const popoverExistingAssignments =
+    popoverUserId && popoverDate
+      ? getAssignmentsForDay(assignments, popoverUserId, popoverDate)
+      : [];
 
   const sheetProject = projects.find((p) => p.id === sheetProjectId) || null;
   const sheetTarget = sheetProjectId && sheetDatum
@@ -432,7 +442,9 @@ export default function ScheduleBoard() {
         date={popoverDate}
         days={popoverDays.length > 1 ? popoverDays : undefined}
         assignment={popoverAssignment || null}
+        existingAssignments={popoverExistingAssignments}
         projects={projects}
+        holidays={companyHolidays}
         onAssign={async (uid, date, projectId, notizen) => {
           const daysToAssign = popoverDays.length > 1 ? popoverDays : [date];
           for (const d of daysToAssign) {

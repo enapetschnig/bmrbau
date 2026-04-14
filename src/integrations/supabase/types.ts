@@ -2273,6 +2273,51 @@ export type Database = {
         }
         Relationships: []
       }
+      yearly_plan_blocks: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string
+          end_week: number
+          id: string
+          partie: string | null
+          project_id: string | null
+          sort_order: number | null
+          start_week: number
+          title: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by: string
+          end_week: number
+          id?: string
+          partie?: string | null
+          project_id?: string | null
+          sort_order?: number | null
+          start_week: number
+          title: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string
+          end_week?: number
+          id?: string
+          partie?: string | null
+          project_id?: string | null
+          sort_order?: number | null
+          start_week?: number
+          title?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       worker_assignments: {
         Row: {
           created_at: string | null

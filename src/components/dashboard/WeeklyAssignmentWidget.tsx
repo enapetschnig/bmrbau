@@ -43,8 +43,11 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
   const [loading, setLoading] = useState(true);
 
   const weekStart = startOfISOWeek(new Date());
-  const weekEnd = addDays(weekStart, 4);
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  const weekEnd = addDays(weekStart, 6); // Include weekend
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const row1Days = weekDays.slice(0, 4); // Mo-Do
+  const row2Days = weekDays.slice(4, 7); // Fr-So
+  const [todayTarget, setTodayTarget] = useState<string | null>(null);
 
   useEffect(() => {
     const fetch = async () => {
@@ -87,6 +90,19 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
       if (holidayData) setHolidays(holidayData);
       if (leaveData) setLeaves(leaveData as LeaveDay[]);
 
+      // Fetch today's target
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      const todayAssign = assignData?.find((a: any) => a.datum === todayStr);
+      if (todayAssign) {
+        const { data: targetData } = await supabase
+          .from("project_daily_targets")
+          .select("tagesziel")
+          .eq("project_id", todayAssign.project_id)
+          .eq("datum", todayStr)
+          .maybeSingle();
+        if (targetData?.tagesziel) setTodayTarget(targetData.tagesziel);
+      }
+
       setLoading(false);
     };
 
@@ -100,6 +116,48 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
     assignments.length > 0 || holidays.length > 0 || leaves.length > 0;
   if (!hasAnyData) return null;
 
+  const renderDay = (day: Date) => {
+    const dayAssigns = assignments.filter((a) => isSameDay(parseISO(a.datum), day));
+    const holiday = holidays.find((h) => isSameDay(parseISO(h.datum), day));
+    const leave = leaves.find((l) =>
+      isWithinInterval(day, { start: parseISO(l.start_date), end: parseISO(l.end_date) })
+    );
+    const isToday = isSameDay(day, new Date());
+
+    return (
+      <div key={day.toISOString()} className="text-center">
+        <div className={`text-[10px] font-medium mb-1 ${isToday ? "text-primary font-bold" : "text-muted-foreground"}`}>
+          {format(day, "EEE", { locale: de })}
+        </div>
+        {leave ? (
+          <div className="rounded-md bg-green-100 text-green-800 text-[10px] px-1 py-2 border border-green-300">
+            {leave.type === "urlaub" ? "Urlaub" : leave.type === "krankenstand" ? "Krank" : leave.type === "za" ? "ZA" : leave.type}
+          </div>
+        ) : dayAssigns.length > 0 ? (
+          <div className="space-y-0.5">
+            {holiday && <div className="text-[8px] text-gray-400">{holiday.bezeichnung}</div>}
+            {dayAssigns.map((assign) => {
+              const color = getProjectColor(assign.project_id);
+              return (
+                <div key={assign.project_id} className={`rounded-md ${color?.bg} ${color?.text} text-[10px] px-1 py-1.5 border ${color?.border}`}>
+                  <div className="truncate">{assign.project_name}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : holiday ? (
+          <div className="rounded-md bg-gray-100 text-gray-500 text-[10px] px-1 py-2 border border-gray-200">
+            {holiday.bezeichnung || "Feiertag"}
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-muted-foreground/20 text-muted-foreground text-[10px] px-1 py-2">
+            –
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="mb-6">
       <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -107,63 +165,23 @@ export function WeeklyAssignmentWidget({ userId }: Props) {
         Meine Einteilung – KW {getISOWeek(weekStart)}
       </h2>
       <Card>
-        <CardContent className="p-3">
-          <div className="grid grid-cols-5 gap-1.5">
-            {weekDays.map((day) => {
-              const assign = assignments.find((a) =>
-                isSameDay(parseISO(a.datum), day)
-              );
-              const holiday = holidays.find((h) =>
-                isSameDay(parseISO(h.datum), day)
-              );
-              const leave = leaves.find((l) =>
-                isWithinInterval(day, {
-                  start: parseISO(l.start_date),
-                  end: parseISO(l.end_date),
-                })
-              );
-
-              const color = assign ? getProjectColor(assign.project_id) : null;
-
-              return (
-                <div key={day.toISOString()} className="text-center">
-                  <div className="text-[10px] font-medium text-muted-foreground mb-1">
-                    {format(day, "EEE", { locale: de })}
-                  </div>
-                  {holiday ? (
-                    <div className="rounded-md bg-gray-100 text-gray-500 text-[10px] px-1 py-2 border border-gray-200">
-                      {holiday.bezeichnung || "Feiertag"}
-                    </div>
-                  ) : leave ? (
-                    <div className="rounded-md bg-green-100 text-green-800 text-[10px] px-1 py-2 border border-green-300">
-                      {leave.type === "urlaub"
-                        ? "Urlaub"
-                        : leave.type === "krankenstand"
-                        ? "Krank"
-                        : leave.type === "za"
-                        ? "ZA"
-                        : leave.type}
-                    </div>
-                  ) : assign ? (
-                    <div
-                      className={`rounded-md ${color?.bg} ${color?.text} text-[10px] px-1 py-2 border ${color?.border}`}
-                    >
-                      <div className="truncate">{assign.project_name}</div>
-                      {assign.notizen && (
-                        <div className="text-[9px] opacity-75 mt-0.5 break-words whitespace-normal leading-tight">
-                          {assign.notizen}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed border-muted-foreground/20 text-muted-foreground text-[10px] px-1 py-2">
-                      –
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        <CardContent className="p-3 space-y-2">
+          {/* Zeile 1: Mo-Do */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {row1Days.map((day) => renderDay(day))}
           </div>
+          {/* Zeile 2: Fr-So */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {row2Days.map((day) => renderDay(day))}
+            <div /> {/* Leere 4. Spalte fuer Alignment */}
+          </div>
+          {/* Tagesziel */}
+          {todayTarget && (
+            <div className="pt-1 border-t mt-2">
+              <p className="text-xs text-muted-foreground">Tagesziel:</p>
+              <p className="text-sm font-medium">{todayTarget}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
