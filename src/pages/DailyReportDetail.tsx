@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Camera, Upload, Trash2, Pencil, CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,8 @@ export default function DailyReportDetail() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [serialCapture, setSerialCapture] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showSignDialog, setShowSignDialog] = useState(false);
 
@@ -167,6 +169,24 @@ export default function DailyReportDetail() {
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
+  // Auto-Rotation: Bild auf Canvas zeichnen mit korrekter Orientierung
+  const autoRotateImage = async (file: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        // CSS-basierte EXIF-Orientierung wird von modernen Browsern automatisch angewendet
+        // Wir zeichnen das Bild auf Canvas um die Orientierung zu fixieren
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => resolve(blob || file), "image/jpeg", 0.9);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !id) return;
@@ -176,12 +196,14 @@ export default function DailyReportDetail() {
     if (!user) { setUploading(false); return; }
 
     for (const file of Array.from(files)) {
+      // Auto-Rotation anwenden
+      const rotatedBlob = file.type.startsWith("image/") ? await autoRotateImage(file) : file;
       const ext = file.name.split(".").pop();
       const filePath = `${id}/${crypto.randomUUID()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("daily-report-photos")
-        .upload(filePath, file);
+        .upload(filePath, rotatedBlob);
 
       if (uploadError) {
         toast({ variant: "destructive", title: "Upload-Fehler", description: uploadError.message });
@@ -199,6 +221,11 @@ export default function DailyReportDetail() {
     setUploading(false);
     fetchReport();
     e.target.value = "";
+
+    // Serienaufnahme: nach Upload automatisch Kamera wieder oeffnen
+    if (serialCapture && photoInputRef.current) {
+      setTimeout(() => photoInputRef.current?.click(), 300);
+    }
   };
 
   const deletePhoto = async (photo: Photo) => {
@@ -388,22 +415,38 @@ export default function DailyReportDetail() {
                 )}
               </CardTitle>
               {!isSigned && (
-                <label className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <Upload className="w-4 h-4 mr-1" />
-                      {uploading ? "Lade hoch..." : "Foto hochladen"}
-                    </span>
+                <div className="flex gap-2">
+                  <label className="cursor-pointer">
+                    <Button variant="outline" size="sm" asChild>
+                      <span>
+                        <Upload className="w-4 h-4 mr-1" />
+                        {uploading ? "Lade hoch..." : "Foto hochladen"}
+                      </span>
+                    </Button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={uploading}
+                    />
+                  </label>
+                  <Button
+                    variant={serialCapture ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setSerialCapture(!serialCapture);
+                      if (!serialCapture) {
+                        toast({ title: "Serienaufnahme aktiviert", description: "Nach jedem Foto oeffnet sich die Kamera erneut" });
+                      }
+                    }}
+                  >
+                    <Camera className="w-4 h-4 mr-1" />
+                    Serie {serialCapture ? "an" : "aus"}
                   </Button>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handlePhotoUpload}
-                    disabled={uploading}
-                  />
-                </label>
+                </div>
               )}
             </div>
           </CardHeader>
