@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import { AppLayout } from "./components/AppLayout";
 import TimeTracking from "./pages/TimeTracking";
 import ExternalTimeTracking from "./pages/ExternalTimeTracking";
 import Projects from "./pages/Projects";
@@ -133,46 +134,52 @@ function AppContent() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Index />} />
+        {/* Ohne Sidebar */}
         <Route path="/auth" element={<Auth />} />
-        <Route path="/time-tracking" element={<TimeTracking />} />
-        <Route path="/external-time-tracking" element={<ExternalTimeTracking />} />
-        {/* Ab Facharbeiter */}
-        <Route path="/projects" element={<ProtectedRoute minRole="facharbeiter"><Projects /></ProtectedRoute>} />
-        <Route path="/projects/:projectId" element={<ProtectedRoute minRole="facharbeiter"><ProjectOverview /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/chat" element={<ProtectedRoute minRole="extern"><ProjectChatPage /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/:type" element={<ProtectedRoute minRole="facharbeiter"><ProjectDetail /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/orders" element={<ProtectedRoute minRole="facharbeiter"><OrderManagement /></ProtectedRoute>} />
-        {/* Alle eingeloggten */}
-        <Route path="/company-chat" element={<CompanyChatPage />} />
-        <Route path="/my-hours" element={<MyHours />} />
-        <Route path="/my-documents" element={<MyDocuments />} />
-        <Route path="/my-safety" element={<MySafety />} />
-        {/* Ab Vorarbeiter */}
-        <Route path="/reports" element={<ProtectedRoute minRole="vorarbeiter"><Reports /></ProtectedRoute>} />
-        <Route path="/disturbances" element={<ProtectedRoute minRole="vorarbeiter"><Disturbances /></ProtectedRoute>} />
-        <Route path="/disturbances/:id" element={<ProtectedRoute minRole="vorarbeiter"><DisturbanceDetail /></ProtectedRoute>} />
-        <Route path="/bad-weather" element={<ProtectedRoute minRole="vorarbeiter"><BadWeather /></ProtectedRoute>} />
-        <Route path="/daily-reports" element={<ProtectedRoute minRole="vorarbeiter"><DailyReports /></ProtectedRoute>} />
-        <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="vorarbeiter"><DailyReportDetail /></ProtectedRoute>} />
-        <Route path="/documents" element={<ProtectedRoute minRole="vorarbeiter"><DocumentLibrary /></ProtectedRoute>} />
-        <Route path="/safety-evaluations" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
-        <Route path="/safety-evaluations/:id" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluationDetail /></ProtectedRoute>} />
-        {/* Nur Admin */}
-        <Route path="/admin" element={<ProtectedRoute minRole="admin"><Admin /></ProtectedRoute>} />
-        <Route path="/hours-report" element={<ProtectedRoute minRole="admin"><HoursReport /></ProtectedRoute>} />
-        <Route path="/employees" element={<ProtectedRoute minRole="admin"><Employees /></ProtectedRoute>} />
-        <Route path="/legal-work-time" element={<ProtectedRoute minRole="admin"><LegalWorkTimeReport /></ProtectedRoute>} />
-        <Route path="/equipment" element={<ProtectedRoute minRole="admin"><EquipmentPage /></ProtectedRoute>} />
-        <Route path="/equipment/:id" element={<ProtectedRoute minRole="admin"><EquipmentDetail /></ProtectedRoute>} />
-        <Route path="/bestellungen" element={<ProtectedRoute minRole="facharbeiter"><Bestellungen /></ProtectedRoute>} />
-        <Route path="/cloud-data" element={<ProtectedRoute minRole="admin"><CloudData /></ProtectedRoute>} />
-        <Route path="/schedule" element={<ProtectedRoute minRole="vorarbeiter"><ScheduleBoard /></ProtectedRoute>} />
-        <Route path="/incoming-invoices" element={<ProtectedRoute minRole="admin"><IncomingInvoices /></ProtectedRoute>} />
-        <Route path="/incoming-documents" element={<ProtectedRoute minRole="facharbeiter"><IncomingDocuments /></ProtectedRoute>} />
-        <Route path="/warehouse" element={<ProtectedRoute minRole="facharbeiter"><Warehouse /></ProtectedRoute>} />
-        {/* Sonstige */}
-        <Route path="/notepad" element={<Notepad />} />
+
+        {/* Mit Sidebar (AppLayout) */}
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Index />} />
+          <Route path="/time-tracking" element={<TimeTracking />} />
+          <Route path="/external-time-tracking" element={<ExternalTimeTracking />} />
+          {/* Ab Facharbeiter */}
+          <Route path="/projects" element={<ProtectedRoute minRole="facharbeiter"><Projects /></ProtectedRoute>} />
+          <Route path="/projects/:projectId" element={<ProtectedRoute minRole="facharbeiter"><ProjectOverview /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/chat" element={<ProtectedRoute minRole="extern"><ProjectChatPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/:type" element={<ProtectedRoute minRole="facharbeiter"><ProjectDetail /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/orders" element={<ProtectedRoute minRole="facharbeiter"><OrderManagement /></ProtectedRoute>} />
+          {/* Alle eingeloggten */}
+          <Route path="/company-chat" element={<CompanyChatPage />} />
+          <Route path="/my-hours" element={<MyHours />} />
+          <Route path="/my-documents" element={<MyDocuments />} />
+          <Route path="/my-safety" element={<MySafety />} />
+          {/* Ab Vorarbeiter */}
+          <Route path="/reports" element={<ProtectedRoute minRole="vorarbeiter"><Reports /></ProtectedRoute>} />
+          <Route path="/disturbances" element={<ProtectedRoute minRole="vorarbeiter"><Disturbances /></ProtectedRoute>} />
+          <Route path="/disturbances/:id" element={<ProtectedRoute minRole="vorarbeiter"><DisturbanceDetail /></ProtectedRoute>} />
+          <Route path="/bad-weather" element={<ProtectedRoute minRole="vorarbeiter"><BadWeather /></ProtectedRoute>} />
+          <Route path="/daily-reports" element={<ProtectedRoute minRole="vorarbeiter"><DailyReports /></ProtectedRoute>} />
+          <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="vorarbeiter"><DailyReportDetail /></ProtectedRoute>} />
+          <Route path="/documents" element={<ProtectedRoute minRole="vorarbeiter"><DocumentLibrary /></ProtectedRoute>} />
+          <Route path="/safety-evaluations" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
+          <Route path="/safety-evaluations/:id" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluationDetail /></ProtectedRoute>} />
+          {/* Nur Admin */}
+          <Route path="/admin" element={<ProtectedRoute minRole="admin"><Admin /></ProtectedRoute>} />
+          <Route path="/hours-report" element={<ProtectedRoute minRole="admin"><HoursReport /></ProtectedRoute>} />
+          <Route path="/employees" element={<ProtectedRoute minRole="admin"><Employees /></ProtectedRoute>} />
+          <Route path="/legal-work-time" element={<ProtectedRoute minRole="admin"><LegalWorkTimeReport /></ProtectedRoute>} />
+          <Route path="/equipment" element={<ProtectedRoute minRole="admin"><EquipmentPage /></ProtectedRoute>} />
+          <Route path="/equipment/:id" element={<ProtectedRoute minRole="admin"><EquipmentDetail /></ProtectedRoute>} />
+          <Route path="/bestellungen" element={<ProtectedRoute minRole="facharbeiter"><Bestellungen /></ProtectedRoute>} />
+          <Route path="/cloud-data" element={<ProtectedRoute minRole="admin"><CloudData /></ProtectedRoute>} />
+          <Route path="/schedule" element={<ProtectedRoute minRole="vorarbeiter"><ScheduleBoard /></ProtectedRoute>} />
+          <Route path="/incoming-invoices" element={<ProtectedRoute minRole="admin"><IncomingInvoices /></ProtectedRoute>} />
+          <Route path="/incoming-documents" element={<ProtectedRoute minRole="facharbeiter"><IncomingDocuments /></ProtectedRoute>} />
+          <Route path="/warehouse" element={<ProtectedRoute minRole="facharbeiter"><Warehouse /></ProtectedRoute>} />
+          {/* Sonstige */}
+          <Route path="/notepad" element={<Notepad />} />
+        </Route>
+
         <Route path="*" element={<NotFound />} />
       </Routes>
 

@@ -57,7 +57,7 @@ export function DesktopSidebar({ isAdmin, menuVisible, userName }: Props) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
         {visibleItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path);
           return (
             <button
               key={item.key}

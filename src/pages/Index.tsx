@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WeeklyAssignmentWidget } from "@/components/dashboard/WeeklyAssignmentWidget";
-import { DesktopSidebar } from "@/components/DesktopSidebar";
+// DesktopSidebar now handled by AppLayout
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type Project = {
@@ -823,12 +823,8 @@ export default function Index() {
         </div>
       </header>
 
-      <div className="flex">
-      {/* Desktop Sidebar */}
-      <DesktopSidebar isAdmin={isAdmin} menuVisible={menuVisible} userName={userName || "Benutzer"} />
-
       {/* Main Content */}
-      <main className="flex-1 min-w-0 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-w-7xl mx-auto">
+      <main className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-w-7xl mx-auto">
 
         {/* Dashboard-Nachricht (Admin editierbar) */}
         {dashboardMessage && (
@@ -1662,7 +1658,6 @@ export default function Index() {
           </div>
         )}
       </main>
-      </div>
     </div>
   );
 }
