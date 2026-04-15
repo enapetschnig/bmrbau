@@ -326,7 +326,7 @@ const MyHours = () => {
             <img 
               src="/schafferhofer-logo.png"
               alt="Schafferhofer Bau"
-              className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain"
+              className="h-12 sm:h-16 w-auto max-w-[160px] sm:max-w-[200px] cursor-pointer hover:opacity-80 transition-opacity object-contain"
               onClick={() => navigate("/")}
             />
           </div>
