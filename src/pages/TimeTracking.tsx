@@ -664,7 +664,7 @@ const TimeTracking = () => {
       absenceDetail = { grund: absenceData.sonstigerGrund };
     }
 
-    const { error } = await supabase.from("time_entries").insert({
+    const absenceEntry: Record<string, any> = {
       user_id: user.id,
       datum: absenceData.date,
       project_id: null,
@@ -676,8 +676,10 @@ const TimeTracking = () => {
       location_type: "baustelle",
       notizen: documentPath ? `Krankmeldung: ${documentPath}` : null,
       week_type: null,
-      absence_detail: absenceDetail,
-    });
+    };
+    if (absenceDetail) absenceEntry.absence_detail = absenceDetail;
+
+    const { error } = await supabase.from("time_entries").insert(absenceEntry);
 
     if (!error) {
       toast({ title: "Erfolg", description: `${absenceLabel} erfasst` });
@@ -855,14 +857,14 @@ const TimeTracking = () => {
 
       const km = block.kilometer ? parseFloat(block.kilometer) : null;
 
-      const { error: insertError } = await supabase.from("time_entries").insert({
+      const entryData: Record<string, any> = {
         user_id: targetUserId || user.id,
         datum: selectedDate,
         project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
-        taetigkeit: block.taetigkeit,
+        taetigkeit: block.taetigkeit || null,
         stunden: blockHours,
-        start_time: isExternalUser ? null : block.startTime,
-        end_time: isExternalUser ? null : block.endTime,
+        start_time: isExternalUser ? "00:00" : block.startTime,
+        end_time: isExternalUser ? "00:00" : block.endTime,
         pause_minutes: pauseMinutes,
         pause_start: isExternalUser ? null : (block.pauseStart || null),
         pause_end: isExternalUser ? null : (block.pauseEnd || null),
@@ -874,9 +876,12 @@ const TimeTracking = () => {
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
         diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
         diaeten_betrag: null,
-        lohnstunden: blockLohn > 0 ? blockLohn : null,
-        zeitausgleich_stunden: blockZA > 0 ? blockZA : null,
-      });
+      };
+      // Neue Spalten nur senden wenn sie vorhanden sein koennten (nach Migration)
+      if (blockLohn > 0) entryData.lohnstunden = blockLohn;
+      if (blockZA > 0) entryData.zeitausgleich_stunden = blockZA;
+
+      const { error: insertError } = await supabase.from("time_entries").insert(entryData);
 
       if (insertError) {
         hasError = true;
@@ -901,14 +906,14 @@ const TimeTracking = () => {
           empRemainingLohn = Math.round((empRemainingLohn - blockLohn) * 100) / 100;
           const km = block.kilometer ? parseFloat(block.kilometer) : null;
 
-          await supabase.from("time_entries").insert({
+          const empEntry: Record<string, any> = {
             user_id: empUserId,
             datum: selectedDate,
             project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
-            taetigkeit: block.taetigkeit,
+            taetigkeit: block.taetigkeit || null,
             stunden: blockHours,
-            start_time: isExternalUser ? null : block.startTime,
-            end_time: isExternalUser ? null : block.endTime,
+            start_time: isExternalUser ? "00:00" : block.startTime,
+            end_time: isExternalUser ? "00:00" : block.endTime,
             pause_minutes: pauseMinutes,
             pause_start: isExternalUser ? null : (block.pauseStart || null),
             pause_end: isExternalUser ? null : (block.pauseEnd || null),
@@ -917,9 +922,10 @@ const TimeTracking = () => {
             km_beschreibung: block.kmBeschreibung || null,
             zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
             diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
-            lohnstunden: blockLohn > 0 ? blockLohn : null,
-            zeitausgleich_stunden: blockZA > 0 ? blockZA : null,
-          });
+          };
+          if (blockLohn > 0) empEntry.lohnstunden = blockLohn;
+          if (blockZA > 0) empEntry.zeitausgleich_stunden = blockZA;
+          await supabase.from("time_entries").insert(empEntry);
         }
       }
       totalEntriesCreated += selectedAdditionalEmployees.length * timeBlocks.length;
@@ -976,7 +982,7 @@ const TimeTracking = () => {
       ? (parseFloat(badWeatherData.arbeitsstundenWaehrendSW) || stunden)
       : 0;
 
-    const { error } = await supabase.from("bad_weather_records").insert({
+    const swEntry: Record<string, any> = {
       user_id: targetUserId || user.id,
       project_id: badWeatherData.projectId,
       datum: selectedDate,
@@ -986,10 +992,15 @@ const TimeTracking = () => {
       arbeitsstunden_vor_schlechtwetter: parseFloat(badWeatherData.arbeitsstundenVorher) || 0,
       wetter_art: badWeatherArt,
       notizen: badWeatherData.notizen.trim() || null,
-      projekt_adresse: badWeatherData.projektAdresse.trim() || null,
-      gearbeitet_waehrend_sw: badWeatherData.gearbeitetWaehrendSW,
-      arbeitsstunden_waehrend_sw: swWaehrendStunden,
-    });
+    };
+    // Neue Felder nur senden wenn befuellt
+    if (badWeatherData.projektAdresse.trim()) swEntry.projekt_adresse = badWeatherData.projektAdresse.trim();
+    if (badWeatherData.gearbeitetWaehrendSW) {
+      swEntry.gearbeitet_waehrend_sw = true;
+      swEntry.arbeitsstunden_waehrend_sw = swWaehrendStunden;
+    }
+
+    const { error } = await supabase.from("bad_weather_records").insert(swEntry);
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
