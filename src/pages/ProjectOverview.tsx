@@ -593,7 +593,7 @@ const ProjectOverview = () => {
                   disabled={downloading}
                 >
                   <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">{downloading ? "Laedt..." : "ZIP"}</span>
+                  <span className="hidden sm:inline">{downloading ? "Lädt..." : "ZIP"}</span>
                 </Button>
               </div>
             )}
@@ -819,7 +819,7 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">Plaene / Auftraege</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
             </Card>
           ))}
 
@@ -835,7 +835,7 @@ const ProjectOverview = () => {
               <CardTitle className="text-xl">Lieferscheine & Rechnungen</CardTitle>
               <CardDescription>Lieferscheine und Rechnungen verwalten</CardDescription>
             </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
           </Card>
 
           {/* 4. Berichte (Tages-, Regie-, Zwischenberichte) */}
@@ -851,7 +851,7 @@ const ProjectOverview = () => {
               <CardTitle className="text-xl">Berichte</CardTitle>
               <CardDescription>Tages-, Regie- und Zwischenberichte</CardDescription>
             </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
           </Card>
 
           {visibleCategories.filter(c => c.type === "reports").map((category) => (
@@ -864,7 +864,7 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
             </Card>
           ))}
 
@@ -879,7 +879,7 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
             </Card>
           ))}
 
@@ -890,7 +890,7 @@ const ProjectOverview = () => {
               <CardTitle className="text-xl">Bestellungen</CardTitle>
               <CardDescription>Material bestellen und verwalten</CardDescription>
             </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
           </Card>
 
           {/* 7. Polierordner (Vorarbeiter + Admin) */}
@@ -904,7 +904,7 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
             </Card>
           ))}
 
@@ -919,7 +919,7 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Oeffnen</Button></CardContent>
+              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
             </Card>
           ))}
         </div>
@@ -1079,7 +1079,7 @@ const ProjectOverview = () => {
                     value={editForm.baustellenart}
                     onChange={(e) => setEditForm(f => ({ ...f, baustellenart: e.target.value }))}
                   >
-                    <option value="">-- Auswaehlen --</option>
+                    <option value="">-- Auswählen --</option>
                     <option value="regie">Regie</option>
                     <option value="pauschale">Pauschale</option>
                   </select>

@@ -208,7 +208,7 @@ const ProjectDetail = () => {
     if (!error) {
       // Auch DB-Record loeschen
       await supabase.from("documents").delete().eq("file_url", filePath);
-      toast({ title: "Geloescht" });
+      toast({ title: "Gelöscht" });
       fetchFiles();
       fetchDocRecords();
     }
@@ -305,7 +305,7 @@ const ProjectDetail = () => {
   };
 
   if (!type) return <div>Ungueltiger Dokumenttyp</div>;
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><p>Laedt...</p></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><p>Lädt...</p></div>;
 
   const filteredFiles = getFilteredFiles()
     .filter((f) => {
@@ -354,7 +354,7 @@ const ProjectDetail = () => {
                         <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
                           <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                           <p className="text-sm font-medium">
-                            {uploading ? "Laedt hoch..." : "Dateien auswaehlen oder hierher ziehen"}
+                            {uploading ? "Lädt hoch..." : "Dateien auswählen oder hierher ziehen"}
                           </p>
                         </div>
                       </label>
@@ -373,7 +373,7 @@ const ProjectDetail = () => {
                   {/* Aktions-Leiste bei Auswahl */}
                   {selectedFiles.size > 0 && (
                     <div className="flex items-center gap-2 mb-3 p-2 bg-muted rounded-lg">
-                      <Badge variant="secondary">{selectedFiles.size} ausgewaehlt</Badge>
+                      <Badge variant="secondary">{selectedFiles.size} ausgewählt</Badge>
                       {!isArchivTab && (
                         <Button size="sm" variant="outline" onClick={handleArchiveSelected}>
                           <Archive className="h-3.5 w-3.5 mr-1" /> Archivieren
@@ -401,7 +401,7 @@ const ProjectDetail = () => {
                     </div>
                   )}
 
-                  {/* Alle auswaehlen + Sortierung */}
+                  {/* Alle auswählen + Sortierung */}
                   {filteredFiles.length > 0 && (
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <button
@@ -411,7 +411,7 @@ const ProjectDetail = () => {
                         {selectedFiles.size === filteredFiles.length
                           ? <CheckSquare className="h-4 w-4" />
                           : <Square className="h-4 w-4" />}
-                        Alle auswaehlen
+                        Alle auswählen
                       </button>
                       <div className="flex items-center gap-2">
                         <input

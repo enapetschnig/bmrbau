@@ -104,7 +104,7 @@ export default function DocumentLibrary() {
 
   const handleDelete = async (category: string, fileName: string) => {
     const { error } = await supabase.storage.from("document-library").remove([`${category}/${fileName}`]);
-    if (!error) { toast({ title: "Geloescht" }); fetchAllFiles(categories); }
+    if (!error) { toast({ title: "Gelöscht" }); fetchAllFiles(categories); }
   };
 
   // Category CRUD
@@ -161,7 +161,7 @@ export default function DocumentLibrary() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Zurueck</span>
+              <span className="hidden sm:inline">Zurück</span>
             </Button>
             <img src="/schafferhofer-logo.png" alt="Schafferhofer Bau"
               className="h-14 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] cursor-pointer hover:opacity-80 transition-opacity object-contain"
@@ -205,7 +205,7 @@ export default function DocumentLibrary() {
                     <div className="flex gap-2 mb-4">
                       <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png" onChange={handleUpload} className="hidden" />
                       <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                        <Upload className="h-4 w-4 mr-1" /> {uploading ? "Laedt..." : "Dokument"}
+                        <Upload className="h-4 w-4 mr-1" /> {uploading ? "Lädt..." : "Dokument"}
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => { setLinkForm({ title: "", url: "" }); setShowLinkDialog(true); }}>
                         <LinkIcon className="h-4 w-4 mr-1" /> Link

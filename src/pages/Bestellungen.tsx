@@ -281,7 +281,7 @@ export default function Bestellungen() {
             <div>
               <Label>Projekt</Label>
               <Select value={formData.projectId} onValueChange={v => setFormData({ ...formData, projectId: v })}>
-                <SelectTrigger><SelectValue placeholder="Projekt waehlen (optional)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Projekt wählen (optional)" /></SelectTrigger>
                 <SelectContent>
                   {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
