@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ImageEditor } from "@/components/ImageEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,7 @@ const ProjectDetail = () => {
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [dateFilter, setDateFilter] = useState("");
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewerState, setViewerState] = useState<{
     open: boolean;
@@ -212,6 +214,42 @@ const ProjectDetail = () => {
       fetchFiles();
       fetchDocRecords();
     }
+  };
+
+  // Bearbeitetes Bild als neue Datei im Bucket speichern
+  const handleEditedImageSave = async (blob: Blob) => {
+    if (!projectId || !type) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const bucket = bucketMap[type];
+    const fileName = `edited_${Date.now()}.jpg`;
+    const filePath = `${projectId}/${fileName}`;
+
+    const { error } = await supabase.storage.from(bucket).upload(filePath, blob, {
+      contentType: "image/jpeg",
+    });
+
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+
+    // DB-Record erstellen
+    await supabase.from("documents").insert({
+      name: fileName,
+      project_id: projectId,
+      typ: type,
+      sub_type: tabs.find(t => t.key === activeTab)?.subType || null,
+      file_url: filePath,
+      user_id: user.id,
+      archived: false,
+    });
+
+    toast({ title: "Bearbeitetes Bild gespeichert" });
+    setEditingImage(null);
+    fetchFiles();
+    fetchDocRecords();
   };
 
   const handleArchiveSelected = async () => {
@@ -523,9 +561,19 @@ const ProjectDetail = () => {
             <span className="text-white text-sm">Bild-Vorschau</span>
             <div className="flex gap-2">
               {lightboxImage && (
-                <a href={lightboxImage} download className="text-white hover:text-gray-300">
-                  <Download className="h-5 w-5" />
-                </a>
+                <>
+                  <button
+                    onClick={() => setEditingImage(lightboxImage)}
+                    className="text-white hover:text-gray-300 flex items-center gap-1 px-2 py-1 bg-white/10 rounded"
+                    title="Bild bearbeiten"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span className="text-xs hidden sm:inline">Bearbeiten</span>
+                  </button>
+                  <a href={lightboxImage} download className="text-white hover:text-gray-300">
+                    <Download className="h-5 w-5" />
+                  </a>
+                </>
               )}
               <button onClick={() => setLightboxImage(null)} className="text-white hover:text-gray-300">
                 <X className="h-5 w-5" />
@@ -560,6 +608,17 @@ const ProjectDetail = () => {
         filePath={viewerState.filePath}
         bucketName={type ? bucketMap[type] : ""}
       />
+
+      {/* Image Editor */}
+      {editingImage && (
+        <ImageEditor
+          open={!!editingImage}
+          onClose={() => setEditingImage(null)}
+          imageUrl={editingImage}
+          onSave={handleEditedImageSave}
+          title="Bild bearbeiten"
+        />
+      )}
     </div>
   );
 };

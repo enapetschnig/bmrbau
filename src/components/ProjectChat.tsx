@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Camera, Send, ChevronUp, Trash2, X, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Camera, Send, ChevronUp, Trash2, X, ChevronLeft, ChevronRight, Download, Pencil } from "lucide-react";
+import { ImageEditor } from "@/components/ImageEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,6 +35,7 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
   const [initialLoad, setInitialLoad] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<string | null>(null);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -257,6 +259,35 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
       sendNotifications(text.substring(0, 100));
     }
     setSending(false);
+  };
+
+  // Bearbeitetes Bild als neue Nachricht speichern
+  const handleEditedImageSave = async (blob: Blob) => {
+    if (!currentUserId) return;
+    const fileName = `edited_${Date.now()}.jpg`;
+    const filePath = `${projectId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("project-chat")
+      .upload(filePath, blob, { cacheControl: "3600", contentType: "image/jpeg" });
+
+    if (uploadError) {
+      toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: uploadError.message });
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("project-chat").getPublicUrl(filePath);
+
+    await supabase.from("project_messages").insert({
+      project_id: projectId,
+      user_id: currentUserId,
+      image_url: urlData.publicUrl,
+      message: "✏️ Bearbeitet",
+    });
+
+    toast({ title: "Bearbeitetes Bild geteilt" });
+    setEditingImage(null);
+    setPreviewImage(null);
   };
 
   // Send photo
@@ -582,9 +613,19 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
             <span className="text-white text-sm">Bild-Vorschau</span>
             <div className="flex gap-2">
               {previewImage && (
-                <a href={previewImage} download className="text-white hover:text-gray-300">
-                  <Download className="h-5 w-5" />
-                </a>
+                <>
+                  <button
+                    onClick={() => setEditingImage(previewImage)}
+                    className="text-white hover:text-gray-300 flex items-center gap-1 px-2 py-1 bg-white/10 rounded"
+                    title="Bild bearbeiten"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span className="text-xs hidden sm:inline">Bearbeiten</span>
+                  </button>
+                  <a href={previewImage} download className="text-white hover:text-gray-300">
+                    <Download className="h-5 w-5" />
+                  </a>
+                </>
               )}
               <button onClick={() => setPreviewImage(null)} className="text-white hover:text-gray-300">
                 <X className="h-5 w-5" />
@@ -623,6 +664,17 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Image Editor */}
+      {editingImage && (
+        <ImageEditor
+          open={!!editingImage}
+          onClose={() => setEditingImage(null)}
+          imageUrl={editingImage}
+          onSave={handleEditedImageSave}
+          title="Bild bearbeiten und teilen"
+        />
+      )}
     </div>
   );
 }
