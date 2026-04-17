@@ -135,17 +135,44 @@ export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, on
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Photo */}
-            <div
-              className="cursor-pointer rounded-lg border overflow-hidden bg-muted"
-              onClick={() => setShowFullImage(true)}
-            >
-              <img
-                src={document.photo_url}
-                alt="Dokument"
-                className="w-full max-h-48 object-contain"
-              />
-            </div>
+            {/* Dokument-Vorschau (Bild oder PDF) */}
+            {(() => {
+              const isPdf = /\.pdf(\?|$)/i.test(document.photo_url);
+              if (isPdf) {
+                return (
+                  <div className="rounded-lg border overflow-hidden bg-muted">
+                    <iframe
+                      src={`${document.photo_url}#toolbar=1`}
+                      title="PDF-Vorschau"
+                      className="w-full h-96"
+                    />
+                    <div className="px-3 py-2 text-xs text-muted-foreground flex justify-between items-center border-t">
+                      <span>PDF-Dokument</span>
+                      <a
+                        href={document.photo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        In neuem Tab öffnen
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  className="cursor-pointer rounded-lg border overflow-hidden bg-muted"
+                  onClick={() => setShowFullImage(true)}
+                >
+                  <img
+                    src={document.photo_url}
+                    alt="Dokument"
+                    className="w-full max-h-96 object-contain"
+                  />
+                </div>
+              );
+            })()}
 
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -291,10 +318,24 @@ export function DocumentDetailDialog({ document, open, onOpenChange, isAdmin, on
         </DialogContent>
       </Dialog>
 
-      {/* Full-size image dialog */}
+      {/* Full-size Vorschau */}
       <Dialog open={showFullImage} onOpenChange={setShowFullImage}>
-        <DialogContent className="max-w-4xl max-h-[95vh] overflow-auto p-2">
-          <img src={document.photo_url} alt="Dokument" className="w-full rounded" />
+        <DialogContent className="max-w-5xl h-[95vh] p-2 flex flex-col">
+          {(() => {
+            const isPdf = /\.pdf(\?|$)/i.test(document.photo_url);
+            if (isPdf) {
+              return (
+                <iframe
+                  src={`${document.photo_url}#toolbar=1`}
+                  title="PDF-Vorschau"
+                  className="flex-1 w-full rounded"
+                />
+              );
+            }
+            return (
+              <img src={document.photo_url} alt="Dokument" className="w-full max-h-full object-contain rounded" />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </>

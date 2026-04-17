@@ -60,13 +60,7 @@ const ProjectOverview = () => {
       icon: <FileText className="h-8 w-8" />,
       count: 0,
     },
-    {
-      type: "reports",
-      title: "Regieberichte",
-      description: "Bautagebücher und Stundenberichte",
-      icon: <FileCheck className="h-8 w-8" />,
-      count: 0,
-    },
+    // Regieberichte entfernt - gibt bereits "Berichte" Karte (Tages-/Regie-/Zwischenberichte)
     {
       type: "polier",
       title: "Polierordner",
@@ -854,19 +848,7 @@ const ProjectOverview = () => {
             <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
           </Card>
 
-          {visibleCategories.filter(c => c.type === "reports").map((category) => (
-            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="text-primary">{category.icon}</div>
-                  <div className="text-2xl font-bold">{category.count}</div>
-                </div>
-                <CardTitle className="text-xl">{category.title}</CardTitle>
-                <CardDescription>{category.description}</CardDescription>
-              </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-            </Card>
-          ))}
+          {/* Regieberichte-Karte entfernt - ersetzt durch "Berichte" oben */}
 
           {/* 5. Fotos */}
           {visibleCategories.filter(c => c.type === "photos").map((category) => (
