@@ -102,7 +102,25 @@ export default function Index() {
   const [dashboardMessage, setDashboardMessage] = useState("");
   const [editingMessage, setEditingMessage] = useState(false);
   const [editMessageText, setEditMessageText] = useState("");
-  const [weatherData, setWeatherData] = useState<{ temp: number; description: string; icon: string; location: string; projectName: string } | null>(null);
+  type WeatherDayDetail = {
+    date: string;
+    label: string;
+    min: number;
+    max: number;
+    description: string;
+    icon: string;
+    weatherCode: number;
+    hourly: { time: string; temp: number; weatherCode: number; precipitation: number; wind: number }[];
+  };
+  const [weatherData, setWeatherData] = useState<{
+    temp: number;
+    description: string;
+    icon: string;
+    location: string;
+    projectName: string;
+    forecast: WeatherDayDetail[];
+  } | null>(null);
+  const [weatherDialogDay, setWeatherDialogDay] = useState<WeatherDayDetail | null>(null);
   const [todayGoal, setTodayGoal] = useState<{ projectName: string; tagesziel: string; projectId: string } | null>(null);
 
   // Role-based visibility helper
@@ -618,19 +636,63 @@ export default function Index() {
         }
 
         const resp = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=Europe/Vienna`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+          `&current=temperature_2m,weather_code` +
+          `&daily=temperature_2m_min,temperature_2m_max,weather_code` +
+          `&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m` +
+          `&forecast_days=3&timezone=Europe/Vienna`
         );
         const weather = await resp.json();
+        const describe = (code: number) =>
+          code <= 3 ? "Sonnig" : code <= 48 ? "Bewölkt" : code <= 67 ? "Regen" : code <= 77 ? "Schnee" : "Gewitter";
+        const iconFor = (code: number) =>
+          code <= 3 ? "☀️" : code <= 48 ? "☁️" : code <= 67 ? "🌧️" : code <= 77 ? "❄️" : "⛈️";
+
         if (weather?.current) {
-          const code = weather.current.weather_code;
-          const desc = code <= 3 ? "Sonnig" : code <= 48 ? "Bewoelkt" : code <= 67 ? "Regen" : code <= 77 ? "Schnee" : "Gewitter";
-          const icon = code <= 3 ? "☀️" : code <= 48 ? "☁️" : code <= 67 ? "🌧️" : code <= 77 ? "❄️" : "⛈️";
+          const currentCode = weather.current.weather_code;
+          // 3-Tage-Vorhersage aufbauen
+          const forecast: WeatherDayDetail[] = [];
+          const dayLabels = ["Heute", "Morgen", "Übermorgen"];
+          const daily = weather.daily;
+          const hourly = weather.hourly;
+
+          for (let i = 0; i < 3 && daily?.time?.[i]; i++) {
+            const dayDate = daily.time[i]; // YYYY-MM-DD
+            // Stunden-Daten fuer diesen Tag filtern
+            const dayHourly: WeatherDayDetail["hourly"] = [];
+            if (hourly?.time) {
+              for (let h = 0; h < hourly.time.length; h++) {
+                if (String(hourly.time[h]).startsWith(dayDate)) {
+                  dayHourly.push({
+                    time: hourly.time[h],
+                    temp: Math.round(hourly.temperature_2m[h]),
+                    weatherCode: hourly.weather_code[h],
+                    precipitation: hourly.precipitation?.[h] ?? 0,
+                    wind: Math.round(hourly.wind_speed_10m?.[h] ?? 0),
+                  });
+                }
+              }
+            }
+            const dcode = daily.weather_code[i];
+            forecast.push({
+              date: dayDate,
+              label: dayLabels[i],
+              min: Math.round(daily.temperature_2m_min[i]),
+              max: Math.round(daily.temperature_2m_max[i]),
+              description: describe(dcode),
+              icon: iconFor(dcode),
+              weatherCode: dcode,
+              hourly: dayHourly,
+            });
+          }
+
           setWeatherData({
             temp: Math.round(weather.current.temperature_2m),
-            description: desc,
-            icon,
+            description: describe(currentCode),
+            icon: iconFor(currentCode),
             location,
             projectName: proj.name || "Baustelle",
+            forecast,
           });
         }
       } catch { /* Wetter optional */ }
@@ -934,19 +996,36 @@ export default function Index() {
           </div>
         )}
 
-        {/* Wetterdaten — von der heute zugeteilten Baustelle */}
+        {/* Wetter — 3-Tage-Vorhersage fuer heute zugeteilte Baustelle */}
         {weatherData && (
-          <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-            <span className="text-3xl">{weatherData.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">
-                {weatherData.temp}°C · {weatherData.description}
-                <span className="text-muted-foreground"> — {weatherData.projectName}</span>
+          <div className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 overflow-hidden">
+            <div className="px-3 py-2 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
+              <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                {weatherData.projectName}
+                {weatherData.location && <span className="text-muted-foreground"> · {weatherData.location}</span>}
               </p>
-              {weatherData.location && (
-                <p className="text-xs text-muted-foreground truncate">{weatherData.location}</p>
-              )}
+              <p className="text-xs text-muted-foreground">aktuell {weatherData.temp}°C</p>
             </div>
+            <div className="grid grid-cols-3 divide-x divide-blue-200 dark:divide-blue-800">
+              {weatherData.forecast.map((day) => (
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => setWeatherDialogDay(day)}
+                  className="p-3 text-center hover:bg-blue-100 dark:hover:bg-blue-950/40 transition-colors"
+                >
+                  <p className="text-xs font-medium text-blue-900 dark:text-blue-100">{day.label}</p>
+                  <span className="text-3xl block my-1">{day.icon}</span>
+                  <p className="text-sm font-semibold">{day.min}° / {day.max}°</p>
+                  <p className="text-xs text-muted-foreground truncate">{day.description}</p>
+                </button>
+              ))}
+            </div>
+            {weatherData.forecast.length > 0 && (
+              <p className="text-[10px] text-center text-muted-foreground py-1 border-t border-blue-200 dark:border-blue-800">
+                Zum Anzeigen der Stunden-Vorhersage tippen
+              </p>
+            )}
           </div>
         )}
 
@@ -1744,6 +1823,51 @@ export default function Index() {
           </div>
         )}
       </main>
+
+      {/* Wetter-Detail-Dialog mit Stunden-Vorhersage */}
+      <Dialog open={!!weatherDialogDay} onOpenChange={(o) => !o && setWeatherDialogDay(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {weatherDialogDay && (
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl">{weatherDialogDay.icon}</span>
+                  <div>
+                    <div>{weatherDialogDay.label} · {new Date(weatherDialogDay.date).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })}</div>
+                    <div className="text-sm font-normal text-muted-foreground">
+                      {weatherDialogDay.min}° / {weatherDialogDay.max}° · {weatherDialogDay.description}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {weatherDialogDay && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground mb-2">Stunden-Vorhersage</p>
+              <div className="divide-y">
+                {weatherDialogDay.hourly.map((h) => {
+                  const hour = new Date(h.time).getHours();
+                  const icon = h.weatherCode <= 3 ? "☀️" : h.weatherCode <= 48 ? "☁️" : h.weatherCode <= 67 ? "🌧️" : h.weatherCode <= 77 ? "❄️" : "⛈️";
+                  return (
+                    <div key={h.time} className="flex items-center justify-between py-1.5 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono w-10 text-muted-foreground">{String(hour).padStart(2, "0")}:00</span>
+                        <span className="text-lg">{icon}</span>
+                        <span className="font-medium">{h.temp}°C</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {h.precipitation > 0 && <span>💧 {h.precipitation.toFixed(1)}mm</span>}
+                        {h.wind > 0 && <span>💨 {h.wind}km/h</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

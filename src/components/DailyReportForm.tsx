@@ -57,6 +57,7 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
   const [temperaturMin, setTemperaturMin] = useState<number | null>(null);
   const [temperaturMax, setTemperaturMax] = useState<number | null>(null);
   const [wetter, setWetter] = useState<string[]>([]);
+  const [autoFilledFields, setAutoFilledFields] = useState<{ temp: boolean; wetter: boolean }>({ temp: false, wetter: false });
   const [geschoss, setGeschoss] = useState<string[]>([]);
   const [beschreibung, setBeschreibung] = useState("");
   const [notizen, setNotizen] = useState("");
@@ -100,9 +101,10 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
   useEffect(() => {
     if (!autoWeather) return;
     if (editData) return; // beim Bearbeiten nicht ueberschreiben
-    if (temperaturMin === null) setTemperaturMin(autoWeather.min);
-    if (temperaturMax === null) setTemperaturMax(autoWeather.max);
-    // Wetter-Chips nur setzen, wenn noch keine ausgewaehlt sind
+    let tempFilled = false;
+    let wetterFilled = false;
+    if (temperaturMin === null) { setTemperaturMin(autoWeather.min); tempFilled = true; }
+    if (temperaturMax === null) { setTemperaturMax(autoWeather.max); tempFilled = true; }
     if (wetter.length === 0) {
       const code = autoWeather.weatherCode;
       const chip =
@@ -112,9 +114,30 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
         : code <= 77 ? "schnee"
         : "gewitter";
       setWetter([chip]);
+      wetterFilled = true;
+    }
+    if (tempFilled || wetterFilled) {
+      setAutoFilledFields(prev => ({
+        temp: prev.temp || tempFilled,
+        wetter: prev.wetter || wetterFilled,
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoWeather]);
+
+  // Wrapper die Auto-Fill Flag zuruecksetzen wenn User manuell editiert
+  const handleTempMinChange = (v: number | null) => {
+    setTemperaturMin(v);
+    setAutoFilledFields(prev => ({ ...prev, temp: false }));
+  };
+  const handleTempMaxChange = (v: number | null) => {
+    setTemperaturMax(v);
+    setAutoFilledFields(prev => ({ ...prev, temp: false }));
+  };
+  const handleWetterChange = (v: string[]) => {
+    setWetter(v);
+    setAutoFilledFields(prev => ({ ...prev, wetter: false }));
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -368,6 +391,7 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
                     : code <= 77 ? "schnee"
                     : "gewitter";
                   setWetter([chip]);
+                  setAutoFilledFields({ temp: true, wetter: true });
                 }}
                 title="Wetter übernehmen"
               >
@@ -380,13 +404,29 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
           )}
 
           {/* Weather */}
-          <WeatherSelector value={wetter} onChange={setWetter} />
-          <TemperatureInput
-            minValue={temperaturMin}
-            maxValue={temperaturMax}
-            onMinChange={setTemperaturMin}
-            onMaxChange={setTemperaturMax}
-          />
+          <div className="space-y-1">
+            {autoFilledFields.wetter && (
+              <div className="inline-flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/30 px-2 py-0.5 rounded-full">
+                <CloudSun className="w-3 h-3" />
+                Automatisch aus Wetterdaten
+              </div>
+            )}
+            <WeatherSelector value={wetter} onChange={handleWetterChange} />
+          </div>
+          <div className="space-y-1">
+            {autoFilledFields.temp && (
+              <div className="inline-flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/30 px-2 py-0.5 rounded-full">
+                <CloudSun className="w-3 h-3" />
+                Automatisch aus Wetterdaten
+              </div>
+            )}
+            <TemperatureInput
+              minValue={temperaturMin}
+              maxValue={temperaturMax}
+              onMinChange={handleTempMinChange}
+              onMaxChange={handleTempMaxChange}
+            />
+          </div>
 
           {/* Geschoss */}
           <GeschossSelector value={geschoss} onChange={setGeschoss} />
