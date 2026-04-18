@@ -109,8 +109,10 @@ export default function SafetyErinnerungen() {
       empMap.set(e.user_id, `${e.vorname || ""} ${e.nachname || ""}`.trim());
     }
 
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0); // Mitternacht lokal, damit parseISO("2026-05-01") und heute die gleiche Tagesgrenze nutzen
     for (const c of latestMap.values()) {
-      const tage = differenceInDays(parseISO(c.gueltig_bis), new Date());
+      const tage = differenceInDays(parseISO(c.gueltig_bis + "T00:00:00"), heute);
       if (tage > 60) continue;
       rows.push({
         kind: "zertifikat",

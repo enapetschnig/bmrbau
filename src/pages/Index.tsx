@@ -44,6 +44,10 @@ type RecentTimeEntry = {
   } | null;
 };
 
+// Firmenchat ist derzeit auf Wunsch der BMR-Leitung deaktiviert.
+// Projekt-Chats bleiben weiterhin nutzbar. Einschalten via "true".
+const ENABLE_COMPANY_CHAT = false;
+
 const formatChatTime = (timestamp: string) => {
   const date = new Date(timestamp);
   const now = new Date();
@@ -306,7 +310,9 @@ export default function Index() {
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
 
-    setChatPreviews(previews);
+    // Firmenchat aktuell deaktiviert -> nur Projekt-Chats anzeigen
+    const filtered = ENABLE_COMPANY_CHAT ? previews : previews.filter((p) => p.type !== "company");
+    setChatPreviews(filtered);
   };
 
   const ROLE_LABELS: Record<string, string> = {
@@ -884,7 +890,7 @@ export default function Index() {
                   <MessageCircle className="h-5 w-5 text-green-600" /> Chats
                 </CardTitle>
                 {isAdmin && (
-                  <Button variant="outline" size="sm" onClick={() => { setChatDialogMode("select"); setShowChatDialog(true); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setChatDialogMode(ENABLE_COMPANY_CHAT ? "select" : "project"); setShowChatDialog(true); }}>
                     <Plus className="h-4 w-4 mr-1" /> Chat öffnen
                   </Button>
                 )}
@@ -942,7 +948,7 @@ export default function Index() {
           <div
             className="mb-6 flex items-center gap-4 rounded-xl border-2 border-green-400 bg-green-50 dark:bg-green-950/20 p-4 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors shadow-sm"
             onClick={() => {
-              setChatDialogMode("select");
+              setChatDialogMode(ENABLE_COMPANY_CHAT ? "select" : "project");
               setShowChatDialog(true);
             }}
           >
@@ -952,7 +958,7 @@ export default function Index() {
             <div className="flex-1">
               <p className="font-semibold text-green-900 dark:text-green-100">Chat starten</p>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Firmen-Chat oder Projekt-Chat öffnen
+                {ENABLE_COMPANY_CHAT ? "Firmen-Chat oder Projekt-Chat öffnen" : "Projekt-Chat öffnen"}
               </p>
             </div>
             <ArrowRight className="h-5 w-5 text-green-600 shrink-0" />
@@ -978,21 +984,23 @@ export default function Index() {
               </DialogTitle>
             </DialogHeader>
 
-            {/* Step 1: Select type */}
+            {/* Step 1: Select type — bei deaktiviertem Firmen-Chat nur Projekt-Chat */}
             {chatDialogMode === "select" && (
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <Card
-                  className="cursor-pointer hover:shadow-md transition-all hover:border-green-500/50 border-2"
-                  onClick={() => { loadChatEmployees(); setChatDialogMode("company"); }}
-                >
-                  <CardContent className="p-4 text-center space-y-2">
-                    <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto">
-                      <Megaphone className="h-6 w-6 text-green-600" />
-                    </div>
-                    <p className="font-semibold text-sm">Firmen-Chat</p>
-                    <p className="text-xs text-muted-foreground">An Mitarbeiter senden</p>
-                  </CardContent>
-                </Card>
+              <div className={ENABLE_COMPANY_CHAT ? "grid grid-cols-2 gap-3 pt-2" : "pt-2"}>
+                {ENABLE_COMPANY_CHAT && (
+                  <Card
+                    className="cursor-pointer hover:shadow-md transition-all hover:border-green-500/50 border-2"
+                    onClick={() => { loadChatEmployees(); setChatDialogMode("company"); }}
+                  >
+                    <CardContent className="p-4 text-center space-y-2">
+                      <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto">
+                        <Megaphone className="h-6 w-6 text-green-600" />
+                      </div>
+                      <p className="font-semibold text-sm">Firmen-Chat</p>
+                      <p className="text-xs text-muted-foreground">An Mitarbeiter senden</p>
+                    </CardContent>
+                  </Card>
+                )}
                 <Card
                   className="cursor-pointer hover:shadow-md transition-all hover:border-blue-500/50 border-2"
                   onClick={() => setChatDialogMode("project")}

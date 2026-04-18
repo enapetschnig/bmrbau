@@ -27,6 +27,7 @@ import {
   getNormalWorkingHours,
   pickScheduleForDate,
   getBuakWeekTypeFallback,
+  calculateKilometergeld,
   type WeekSchedule,
   type EmployeeSchedules,
   type BuakWeekType,
@@ -453,7 +454,7 @@ export default function HoursReport() {
     return sum + calculateOvertime(entryDate, entry.stunden);
   }, 0);
   const totalKilometer = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.kilometer || 0), 0);
-  const totalKmGeld = Math.round(totalKilometer * 0.42 * 100) / 100;
+  const totalKmGeld = calculateKilometergeld(totalKilometer);
   const totalDiaeten = uniqueEntriesByDay.filter(e => e.diaeten_typ && e.diaeten_typ !== "keine").length;
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {

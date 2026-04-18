@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
+import { calculateKilometergeld } from "@/lib/workingHours";
 
 type ProjectOption = { id: string; name: string; plz: string | null };
 
@@ -111,7 +112,13 @@ const MyHours = () => {
       .lte("datum", yearEnd)
       .order("datum", { ascending: false });
 
-    const usedDays = vacEntries?.length || 0;
+    // Halb-Tage: wenn der Eintrag <= 4,5 h hat, zählen wir ihn als 0,5 Tag,
+    // sonst als voller Tag. So wird ein als Urlaub gebuchter halber Arbeitstag
+    // nicht als voller Urlaubstag vom Kontingent abgezogen.
+    const usedDays = (vacEntries || []).reduce(
+      (sum, e) => sum + ((e.stunden ?? 0) <= 4.5 ? 0.5 : 1),
+      0,
+    );
     const totalDays = balanceData?.total_days || 25;
 
     setVacationBalance({ total: totalDays, used: usedDays });
@@ -187,7 +194,6 @@ const MyHours = () => {
 
     setSavingEdit(true);
 
-    // Pause ist immer fix 12:00–13:00 (60 Min.)
     const pauseMinutes = editingEntry.pause_minutes || 0;
 
     let calculatedHours = 0;
@@ -207,6 +213,11 @@ const MyHours = () => {
         start_time: editingEntry.start_time,
         end_time: editingEntry.end_time,
         pause_minutes: editingEntry.pause_minutes || 0,
+        // pause_start/end unveraendert mitsichern, damit der Audit-Trail
+        // (wann war Pause genau) erhalten bleibt. Wenn Admin die Pause im
+        // Edit aendert, muss er beide Felder anpassen.
+        pause_start: editingEntry.pause_start ?? null,
+        pause_end: editingEntry.pause_end ?? null,
         notizen: editingEntry.notizen,
         stunden: Math.max(0, calculatedHours),
         project_id: editingEntry.location_type === "werkstatt" ? null : editingEntry.project_id,
@@ -335,7 +346,7 @@ const MyHours = () => {
                     <span className="text-muted-foreground">km: </span>
                     <span className="font-bold">{entries.reduce((s, e) => s + (e.kilometer || 0), 0).toFixed(0)}</span>
                     <span className="text-xs text-muted-foreground ml-1">
-                      (€ {(entries.reduce((s, e) => s + (e.kilometer || 0), 0) * 0.42).toFixed(2)})
+                      (€ {calculateKilometergeld(entries.reduce((s, e) => s + (e.kilometer || 0), 0)).toFixed(2)})
                     </span>
                   </div>
                 )}

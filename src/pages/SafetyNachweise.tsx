@@ -130,7 +130,8 @@ export default function SafetyNachweise() {
         if (cert) {
           let status: Row["status"] = "ok";
           if (cert.gueltig_bis) {
-            const days = differenceInDays(parseISO(cert.gueltig_bis), new Date());
+            const heute = new Date(); heute.setHours(0, 0, 0, 0);
+            const days = differenceInDays(parseISO(cert.gueltig_bis + "T00:00:00"), heute);
             if (days < 0) status = "fehlt";
             else if (days < 60) status = "ablauf";
           }

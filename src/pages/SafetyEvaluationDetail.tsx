@@ -111,8 +111,13 @@ export default function SafetyEvaluationDetail() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const canEdit = false;
+  // Admins und der Ersteller der Evaluierung duerfen sie solange editieren
+  // wie der Status "warte_auf_unterschrift" ist. Nach "abgeschlossen" ist
+  // sie eingefroren, damit bereits gesammelte Unterschriften rechtsverbindlich
+  // bleiben.
   const status = evaluation?.status || "warte_auf_unterschrift";
+  const canEdit = (isAdmin || (evaluation?.created_by && userId === evaluation.created_by))
+    && status === "warte_auf_unterschrift";
 
   const handleSaveChecklistStructure = async () => {
     if (!id) return;

@@ -206,7 +206,8 @@ export default function SafetySchulungen() {
 
   const getStatus = (z: Zertifikat): "aktiv" | "laeuft_ab" | "abgelaufen" => {
     if (!z.gueltig_bis) return "aktiv";
-    const days = differenceInDays(parseISO(z.gueltig_bis), new Date());
+    const heute = new Date(); heute.setHours(0, 0, 0, 0);
+    const days = differenceInDays(parseISO(z.gueltig_bis + "T00:00:00"), heute);
     if (days < 0) return "abgelaufen";
     if (days < 30) return "laeuft_ab";
     return "aktiv";

@@ -59,6 +59,28 @@ Deno.serve(async (req) => {
       throw new Error('Ungültige Telefonnummer. Bitte Format +43... verwenden');
     }
 
+    // Duplicate-Schutz: Wenn in den letzten 5 Minuten bereits an diese Nummer
+    // eine SMS rausging (gleicher oder anderer Admin), zweite SMS verhindern.
+    // Schuetzt gegen versehentliche Doppel-Klicks bei Netz-Latenz.
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: recentLog } = await supabase
+      .from('invitation_logs')
+      .select('id, created_at')
+      .eq('telefonnummer', telefonnummer)
+      .eq('status', 'gesendet')
+      .gte('created_at', fiveMinutesAgo)
+      .maybeSingle();
+
+    if (recentLog) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'An diese Nummer wurde soeben schon eine Einladung verschickt. Bitte warte einige Minuten bevor du sie erneut auslöst.',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      );
+    }
+
     // Get Twilio credentials
     const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');

@@ -240,31 +240,41 @@ export function calculateOvertime(actualHours: number, date: Date, schedule?: We
 }
 
 /**
- * Berechnet Diäten basierend auf Arbeitsstunden
- * Österreichische Regelung:
- * - 3-9 Stunden: Tagesgebühr "klein" (derzeit 2,20 EUR pro angefangene Stunde nach 3h)
- * - Über 9 Stunden: Tagesgebühr "groß" (26,40 EUR pauschal)
- * - Baustellenanfahrt: einmal täglich (4,40 EUR)
+ * Berechnet Diäten basierend auf Arbeitsstunden.
+ * Österreichische Regelung (Baukollektivvertrag):
+ * - unter 3 h: keine Diäten
+ * - 3 bis 9 h (exklusiv): Tagesgebühr "klein" = 2,20 EUR pro ANGEFANGENE Stunde
+ *   NACH der 3. Stunde → 5 h Arbeit ⇒ 2 × 2,20 = 4,40 EUR
+ *   (Obergrenze 9 h: 6 × 2,20 = 13,20 EUR)
+ * - ab 9 h: Tagesgebühr "groß" = 26,40 EUR (pauschal)
+ * - Baustellenanfahrt-Pauschale: einmal täglich 4,40 EUR (additiv)
+ *
+ * Saetze stammen aus der letzten bekannten KV-Version. Admin kann sie im
+ * UI ueber die Einstellungen ueberschreiben (TODO: Admin-Setting-Hook),
+ * intern werden hier die Defaults verwendet.
  */
 export function calculateDiaeten(
   totalHoursOnDay: number,
-  isConstructionSite: boolean
-): { typ: 'keine' | 'klein' | 'gross' | 'anfahrt'; betrag: number } {
-  let typ: 'keine' | 'klein' | 'gross' | 'anfahrt' = 'keine';
+  isConstructionSite: boolean,
+): { typ: "keine" | "klein" | "gross" | "anfahrt"; betrag: number } {
+  let typ: "keine" | "klein" | "gross" | "anfahrt" = "keine";
   let betrag = 0;
 
-  if (totalHoursOnDay > 9) {
-    typ = 'gross';
+  if (totalHoursOnDay >= 9) {
+    typ = "gross";
     betrag = 26.40;
   } else if (totalHoursOnDay >= 3) {
-    typ = 'klein';
-    betrag = 2.20 * Math.min(totalHoursOnDay, 9);
+    typ = "klein";
+    // "Pro ANGEFANGENE Stunde nach 3h" → Math.ceil der Stunden oberhalb 3,
+    // begrenzt auf 6 (= 9 h - 3 h).
+    const stundenUeber3 = Math.min(6, Math.ceil(totalHoursOnDay - 3));
+    betrag = 2.20 * Math.max(0, stundenUeber3);
   }
 
   // Baustellenanfahrt-Pauschale
   if (isConstructionSite && totalHoursOnDay > 0) {
     betrag += 4.40;
-    if (typ === 'keine') typ = 'anfahrt';
+    if (typ === "keine") typ = "anfahrt";
   }
 
   return { typ, betrag: Math.round(betrag * 100) / 100 };
