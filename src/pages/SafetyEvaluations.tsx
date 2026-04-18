@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, ShieldCheck, FileSpreadsheet, Download, X } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,8 @@ export default function SafetyEvaluations() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Filters
-  const [filterProject, setFilterProject] = useState("alle");
+  const [searchParams] = useSearchParams();
+  const [filterProject, setFilterProject] = useState(() => searchParams.get("project") || "alle");
   const [filterTyp, setFilterTyp] = useState("alle");
   const [filterStatus, setFilterStatus] = useState("alle");
 

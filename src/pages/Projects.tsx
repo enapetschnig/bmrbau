@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download } from "lucide-react";
+import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download, MessageCircle, Package, Shield, Truck, Receipt } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,10 @@ type Project = {
     reports: number;
     photos: number;
     chef: number;
+    polier: number;
+    berichte: number;
+    bestellungen: number;
+    unterweisungen: number;
   };
 };
 
@@ -184,16 +188,33 @@ const Projects = () => {
     // Fetch file counts for each project
     const projectsWithCounts = await Promise.all(
       (data || []).map(async (project) => {
-        const [plans, reports, photos, chef] = await Promise.all([
+        const [plans, reports, photos, chef, polier] = await Promise.all([
           getFileCount(project.id, 'project-plans'),
           getFileCount(project.id, 'project-reports'),
           getFileCount(project.id, 'project-photos'),
           getFileCount(project.id, 'project-chef'),
+          getFileCount(project.id, 'project-polier'),
+        ]);
+
+        // DB-Counts fuer Berichte + Bestellungen + Unterweisungen
+        const [reportsCount, bestellungenCount, safetyCount] = await Promise.all([
+          supabase.from("daily_reports").select("id", { count: "exact", head: true }).eq("project_id", project.id),
+          supabase.from("bestellungen").select("id", { count: "exact", head: true }).eq("project_id", project.id),
+          supabase.from("safety_evaluations").select("id", { count: "exact", head: true }).eq("project_id", project.id),
         ]);
 
         return {
           ...project,
-          fileCount: { plans, reports, photos, chef },
+          fileCount: {
+            plans,
+            reports,
+            photos,
+            chef,
+            polier,
+            berichte: reportsCount.count || 0,
+            bestellungen: bestellungenCount.count || 0,
+            unterweisungen: safetyCount.count || 0,
+          },
         };
       })
     );
@@ -832,12 +853,17 @@ const Projects = () => {
                   </p>
                 )}
                 
-                <div className={`grid ${isAdmin ? 'grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2 mb-4">
                   {[
-                    { key: "plans", label: "Plaene", icon: <FileText className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/plans` },
-                    { key: "reports", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}` },
-                    { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos` },
-                    ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/chef` }] : []),
+                    { key: "chat", label: "Chat", icon: <MessageCircle className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/chat`, count: null },
+                    { key: "plans", label: "Pläne", icon: <FileText className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/plans`, count: project.fileCount?.plans },
+                    { key: "lieferscheine", label: "Liefer.", icon: <Receipt className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/orders`, count: null },
+                    { key: "berichte", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}`, count: project.fileCount?.berichte },
+                    { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos`, count: project.fileCount?.photos },
+                    { key: "bestellungen", label: "Bestell.", icon: <Package className="w-5 h-5 text-primary" />, path: `/bestellungen?project=${project.id}`, count: project.fileCount?.bestellungen },
+                    { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety-evaluations?project=${project.id}`, count: project.fileCount?.unterweisungen },
+                    { key: "polier", label: "Polier", icon: <FileText className="w-5 h-5 text-amber-600" />, path: `/projects/${project.id}/polier`, count: project.fileCount?.polier },
+                    ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-red-600" />, path: `/projects/${project.id}/chef`, count: project.fileCount?.chef }] : []),
                   ].map((item) => (
                     <div
                       key={item.key}
@@ -845,10 +871,10 @@ const Projects = () => {
                       onClick={(e) => { e.stopPropagation(); navigate(item.path); }}
                     >
                       {item.icon}
-                      <span className="text-xs font-medium">{item.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {(project.fileCount as any)?.[item.key] || 0}
-                      </span>
+                      <span className="text-[11px] sm:text-xs font-medium text-center">{item.label}</span>
+                      {item.count != null && (
+                        <span className="text-[10px] text-muted-foreground">{item.count}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -992,40 +1018,31 @@ const Projects = () => {
                         </p>
                       )}
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/plans`); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <FileText className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Pläne</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.plans || 0}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/daily-reports?project=${project.id}`); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <FileText className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Berichte</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.reports || 0}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/photos`); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <Image className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Fotos</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.photos || 0}
-                          </span>
-                        </button>
+                      <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2 mb-4">
+                        {[
+                          { key: "chat", label: "Chat", icon: <MessageCircle className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/chat`, count: null },
+                          { key: "plans", label: "Pläne", icon: <FileText className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/plans`, count: project.fileCount?.plans },
+                          { key: "lieferscheine", label: "Liefer.", icon: <Receipt className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/orders`, count: null },
+                          { key: "berichte", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}`, count: project.fileCount?.berichte },
+                          { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos`, count: project.fileCount?.photos },
+                          { key: "bestellungen", label: "Bestell.", icon: <Package className="w-5 h-5 text-primary" />, path: `/bestellungen?project=${project.id}`, count: project.fileCount?.bestellungen },
+                          { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety-evaluations?project=${project.id}`, count: project.fileCount?.unterweisungen },
+                          { key: "polier", label: "Polier", icon: <FileText className="w-5 h-5 text-amber-600" />, path: `/projects/${project.id}/polier`, count: project.fileCount?.polier },
+                          ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-red-600" />, path: `/projects/${project.id}/chef`, count: project.fileCount?.chef }] : []),
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); navigate(item.path); }}
+                            className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
+                          >
+                            {item.icon}
+                            <span className="text-[11px] sm:text-xs font-medium text-center">{item.label}</span>
+                            {item.count != null && (
+                              <span className="text-[10px] text-muted-foreground">{item.count}</span>
+                            )}
+                          </button>
+                        ))}
                       </div>
 
                       <div
