@@ -1073,7 +1073,7 @@ export default function Index() {
         {pendingSafetyCount > 0 && (
           <div
             className="mb-4 flex items-center gap-4 rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/20 p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors"
-            onClick={() => navigate("/my-safety")}
+            onClick={() => navigate("/safety/nachweise")}
           >
             <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-6 w-6 text-orange-600" />
@@ -1606,33 +1606,13 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Evaluierungen */}
-          {menuVisible("evaluierungen") && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/safety")}
-            >
-              <CardHeader className="space-y-2 pb-3 relative">
-                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <ShieldCheck className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg sm:text-xl">Evaluierungen</CardTitle>
-                <CardDescription className="text-sm">
-                  Evaluierungen erstellen & verwalten
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Evaluierungen öffnen</Button>
-              </CardContent>
-            </Card>
-          )}
+          {/* Evaluierungen entfernt - durch Sicherheit-Modul ersetzt */}
 
           {/* Sicherheit */}
           {menuVisible("arbeitsschutz") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/my-safety")}
+              onClick={() => navigate("/safety")}
             >
               <CardHeader className="space-y-2 pb-3 relative">
                 {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
@@ -1641,7 +1621,7 @@ export default function Index() {
                 </div>
                 <CardTitle className="text-lg sm:text-xl">Sicherheit</CardTitle>
                 <CardDescription className="text-sm">
-                  Meine Unterweisungen & Evaluierungen
+                  Unterweisungen, Schulungen, Nachweise
                 </CardDescription>
               </CardHeader>
               <CardContent>

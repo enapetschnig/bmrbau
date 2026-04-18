@@ -80,6 +80,23 @@ export default function SafetyEvaluations() {
   const [newKategorie, setNewKategorie] = useState("");
   const [newFrage, setNewFrage] = useState("");
 
+  // PDFs
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+
+  // Multi-Choice-Fragen (fuer Jahresunterweisung)
+  type MCFrage = { id: string; frage: string; optionen: string[]; korrekt: number };
+  const [mcFragen, setMcFragen] = useState<MCFrage[]>([]);
+  const [neueFrage, setNeueFrage] = useState({ frage: "", optionen: ["", "", "", ""], korrekt: 0 });
+
+  // Geraet-Auswahl fuer Geraeteunterweisung
+  const [equipmentId, setEquipmentId] = useState("");
+  const [equipmentList, setEquipmentList] = useState<{ id: string; name: string }[]>([]);
+
+  // Vorlagen fuer Baustellenunterweisung
+  const [vorlagen, setVorlagen] = useState<any[]>([]);
+  const [alsVorlageSpeichern, setAlsVorlageSpeichern] = useState(false);
+  const [vorlageAnwenden, setVorlageAnwenden] = useState("");
+
   // Signature counts per evaluation
   const [signatureCounts, setSignatureCounts] = useState<Record<string, { signed: number; total: number }>>({});
 
@@ -91,15 +108,19 @@ export default function SafetyEvaluations() {
 
     const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
     if (roleData?.role !== "administrator") {
-      navigate("/my-safety");
+      navigate("/safety/nachweise");
       return;
     }
     setIsAdmin(true);
 
-    const [{ data: evalData }, { data: projData }] = await Promise.all([
+    const [{ data: evalData }, { data: projData }, { data: equipData }, { data: vorlData }] = await Promise.all([
       supabase.from("safety_evaluations").select("*").order("created_at", { ascending: false }),
       supabase.from("projects").select("id, name").order("name"),
+      supabase.from("equipment").select("id, name").order("name"),
+      supabase.from("safety_evaluations").select("*").eq("ist_vorlage", true).order("titel"),
     ]);
+    if (equipData) setEquipmentList(equipData);
+    if (vorlData) setVorlagen(vorlData);
 
     if (evalData) {
       setEvaluations(evalData as Evaluation[]);
@@ -130,11 +151,28 @@ export default function SafetyEvaluations() {
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
   const handleCreate = async () => {
-    if (!form.titel.trim() || !form.project_id) {
-      toast({ variant: "destructive", title: "Fehler", description: "Titel und Projekt sind erforderlich" });
+    // Fuer Vorlage: kein Projekt noetig
+    if (!form.titel.trim()) {
+      toast({ variant: "destructive", title: "Fehler", description: "Titel ist erforderlich" });
+      return;
+    }
+    if (!alsVorlageSpeichern && !form.project_id) {
+      toast({ variant: "destructive", title: "Fehler", description: "Projekt ist erforderlich" });
       return;
     }
     setSaving(true);
+
+    // PDFs hochladen
+    const pdfUrls: string[] = [];
+    for (const f of pdfFiles) {
+      const ext = f.name.split(".").pop() || "pdf";
+      const path = `unterweisungen/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("safety-materials").upload(path, f);
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from("safety-materials").getPublicUrl(path);
+        pdfUrls.push(urlData.publicUrl);
+      }
+    }
 
     const { data, error } = await supabase
       .from("safety_evaluations")
@@ -142,12 +180,16 @@ export default function SafetyEvaluations() {
         titel: form.titel.trim(),
         typ: form.typ,
         kategorie: form.kategorie.trim() || null,
-        project_id: form.project_id,
+        project_id: alsVorlageSpeichern ? null : form.project_id,
         created_by: userId,
         checklist_items: checklistItems,
-        status: "warte_auf_unterschrift",
+        status: alsVorlageSpeichern ? "entwurf" : "warte_auf_unterschrift",
         modul: pathModul || "baustellenunterweisung",
         jahr: pathModul === "jahresunterweisung" ? new Date().getFullYear() : null,
+        pdf_urls: pdfUrls,
+        fragen: mcFragen,
+        equipment_id: pathModul === "geraeteunterweisung" ? (equipmentId || null) : null,
+        ist_vorlage: alsVorlageSpeichern,
       } as any)
       .select("id")
       .single();
@@ -182,7 +224,7 @@ export default function SafetyEvaluations() {
           user_ids: selectedEmployees,
           title: "Neue Sicherheitsunterweisung",
           body: `${TYP_LABELS[form.typ]}: ${form.titel.trim()} — bitte unterschreiben`,
-          url: "/my-safety",
+          url: "/safety/nachweise",
         },
       });
     }
@@ -200,6 +242,12 @@ export default function SafetyEvaluations() {
     setSelectedEmployees([]);
     setNewKategorie("");
     setNewFrage("");
+    setPdfFiles([]);
+    setMcFragen([]);
+    setNeueFrage({ frage: "", optionen: ["", "", "", ""], korrekt: 0 });
+    setEquipmentId("");
+    setAlsVorlageSpeichern(false);
+    setVorlageAnwenden("");
   };
 
   const addManualItem = () => {
@@ -355,7 +403,12 @@ export default function SafetyEvaluations() {
       <Dialog open={showCreate} onOpenChange={(v) => { if (!v) resetForm(); setShowCreate(v); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Neue Evaluierung / Unterweisung</DialogTitle>
+            <DialogTitle>
+              {pathModul === "jahresunterweisung" ? "Neue Jahresunterweisung"
+              : pathModul === "geraeteunterweisung" ? "Neue Geräteunterweisung"
+              : pathModul === "baustellenunterweisung" ? "Neue Baustellenunterweisung"
+              : "Neue Unterweisung"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -386,15 +439,17 @@ export default function SafetyEvaluations() {
                 />
               </div>
             </div>
-            <div>
-              <Label>Projekt *</Label>
-              <Select value={form.project_id} onValueChange={(v) => setForm({ ...form, project_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Projekt wählen" /></SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {!alsVorlageSpeichern && (
+              <div>
+                <Label>Projekt *</Label>
+                <Select value={form.project_id} onValueChange={(v) => setForm({ ...form, project_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Projekt wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Checklist */}
             <div>
@@ -447,6 +502,158 @@ export default function SafetyEvaluations() {
                 </Button>
               </div>
             </div>
+
+            {/* Aus Vorlage anwenden (nur Baustelle) */}
+            {pathModul === "baustellenunterweisung" && vorlagen.length > 0 && (
+              <div>
+                <Label>Aus Vorlage erstellen (optional)</Label>
+                <Select value={vorlageAnwenden} onValueChange={(v) => {
+                  setVorlageAnwenden(v);
+                  const vorlage = vorlagen.find(x => x.id === v);
+                  if (vorlage) {
+                    setForm(f => ({ ...f, titel: vorlage.titel, kategorie: vorlage.kategorie || "", typ: vorlage.typ }));
+                    setChecklistItems(vorlage.checklist_items || []);
+                    setMcFragen(vorlage.fragen || []);
+                  }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Keine Vorlage" /></SelectTrigger>
+                  <SelectContent>
+                    {vorlagen.map(v => <SelectItem key={v.id} value={v.id}>{v.titel}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Geraet-Auswahl (nur Geraeteunterweisung) */}
+            {pathModul === "geraeteunterweisung" && (
+              <div>
+                <Label>Gerät *</Label>
+                <Select value={equipmentId} onValueChange={setEquipmentId}>
+                  <SelectTrigger><SelectValue placeholder="Gerät wählen..." /></SelectTrigger>
+                  <SelectContent>
+                    {equipmentList.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* PDFs hochladen */}
+            <div>
+              <Label>PDF-Dokumente (z.B. Unterweisungsunterlagen)</Label>
+              <div className="mt-1.5 space-y-1.5">
+                {pdfFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {pdfFiles.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 p-1.5 bg-muted/50 rounded text-xs">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                        <span className="flex-1 truncate">{f.name}</span>
+                        <button type="button" className="text-destructive" onClick={() => setPdfFiles(pdfFiles.filter((_, idx) => idx !== i))}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Input
+                  type="file"
+                  accept=".pdf"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length > 0) setPdfFiles(prev => [...prev, ...files]);
+                    e.target.value = "";
+                  }}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Multi-Choice-Fragen */}
+            <div>
+              <Label>Fragenkatalog ({mcFragen.length} Fragen)</Label>
+              <div className="mt-1.5 space-y-2">
+                {mcFragen.length > 0 && (
+                  <div className="border rounded-md p-2 space-y-2 max-h-60 overflow-y-auto">
+                    {mcFragen.map((q, i) => (
+                      <div key={q.id} className="text-sm border-b pb-2 last:border-0">
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">#{i + 1}</span>
+                          <span className="flex-1 font-medium">{q.frage}</span>
+                          <button type="button" className="text-destructive" onClick={() => setMcFragen(prev => prev.filter(x => x.id !== q.id))}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div className="pl-5 text-xs text-muted-foreground">
+                          {q.optionen.map((opt, oi) => (
+                            <div key={oi}>
+                              {oi === q.korrekt ? "✓" : "○"} {opt}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="border rounded-md p-2 space-y-1.5 bg-muted/30">
+                  <Input
+                    placeholder="Frage..."
+                    value={neueFrage.frage}
+                    onChange={(e) => setNeueFrage({ ...neueFrage, frage: e.target.value })}
+                    className="text-sm"
+                  />
+                  {neueFrage.optionen.map((opt, oi) => (
+                    <div key={oi} className="flex gap-2 items-center">
+                      <button
+                        type="button"
+                        className={`w-6 h-6 rounded-full border-2 shrink-0 ${neueFrage.korrekt === oi ? "bg-green-500 border-green-500 text-white" : "border-muted-foreground"}`}
+                        onClick={() => setNeueFrage({ ...neueFrage, korrekt: oi })}
+                      >
+                        {neueFrage.korrekt === oi && "✓"}
+                      </button>
+                      <Input
+                        placeholder={`Antwort ${oi + 1}`}
+                        value={opt}
+                        onChange={(e) => {
+                          const opts = [...neueFrage.optionen];
+                          opts[oi] = e.target.value;
+                          setNeueFrage({ ...neueFrage, optionen: opts });
+                        }}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!neueFrage.frage.trim() || neueFrage.optionen.filter(o => o.trim()).length < 2}
+                    onClick={() => {
+                      setMcFragen(prev => [...prev, {
+                        id: crypto.randomUUID(),
+                        frage: neueFrage.frage.trim(),
+                        optionen: neueFrage.optionen.filter(o => o.trim()),
+                        korrekt: neueFrage.korrekt,
+                      }]);
+                      setNeueFrage({ frage: "", optionen: ["", "", "", ""], korrekt: 0 });
+                    }}
+                  >
+                    <Plus className="w-3 h-3 mr-1" /> Frage hinzufügen
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Als Vorlage speichern (nur Baustelle) */}
+            {pathModul === "baustellenunterweisung" && (
+              <label className="flex items-center gap-2 p-2 bg-muted/30 rounded cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={alsVorlageSpeichern}
+                  onChange={(e) => setAlsVorlageSpeichern(e.target.checked)}
+                />
+                <span className="text-sm">Als Vorlage speichern (keine MA-Zuordnung, wiederverwendbar)</span>
+              </label>
+            )}
 
             {/* Employee Selection */}
             <div>

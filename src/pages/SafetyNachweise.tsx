@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileCheck, CheckCircle2, AlertCircle, XCircle, Download } from "lucide-react";
+import { FileCheck, CheckCircle2, AlertCircle, XCircle, Download, ChevronRight, FileText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -22,6 +24,7 @@ type Row = {
 };
 
 export default function SafetyNachweise() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
@@ -152,6 +155,94 @@ export default function SafetyNachweise() {
   const offenCount = rows.filter(r => r.status === "offen" || r.status === "fehlt").length;
   const ablaufCount = rows.filter(r => r.status === "ablauf").length;
 
+  const exportPDF = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    let y = 20;
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("SCHAFFERHOFER BAU", 20, y);
+    y += 7;
+    doc.setDrawColor(61, 63, 71);
+    doc.line(20, y, 190, y);
+    y += 6;
+    doc.setFontSize(14);
+    doc.text("Sicherheits-Nachweise", 20, y);
+    y += 6;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Mitarbeiter: ${selectedName}`, 20, y);
+    y += 5;
+    doc.text(`Erstellt: ${format(new Date(), "dd.MM.yyyy HH:mm", { locale: de })}`, 20, y);
+    y += 8;
+
+    const writeRow = (r: Row) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      const statusText =
+        r.status === "ok" ? "OK"
+        : r.status === "ablauf" ? "LAEUFT AB"
+        : r.status === "fehlt" ? "FEHLT"
+        : "OFFEN";
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(`[${statusText}]`, 20, y);
+      doc.setFont("helvetica", "normal");
+      const labelLines = doc.splitTextToSize(r.label, 120);
+      doc.text(labelLines, 50, y);
+      y += labelLines.length * 5;
+      const kindLabel = r.kind === "unterweisung"
+        ? (r.modul === "jahresunterweisung" ? "Jahresunterweisung" : r.modul === "geraeteunterweisung" ? "Geraeteunterweisung" : "Baustellenunterweisung")
+        : "Schulung";
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text(kindLabel, 50, y);
+      y += 4;
+      if (r.datum) { doc.text(`Erfasst: ${format(parseISO(r.datum), "dd.MM.yyyy", { locale: de })}`, 50, y); y += 4; }
+      if (r.bis) { doc.text(`Gueltig bis: ${format(parseISO(r.bis), "dd.MM.yyyy", { locale: de })}`, 50, y); y += 4; }
+      doc.setTextColor(0);
+      y += 3;
+    };
+
+    const ok = rows.filter(r => r.status === "ok");
+    const ablauf = rows.filter(r => r.status === "ablauf");
+    const fehlt = rows.filter(r => r.status === "fehlt" || r.status === "offen");
+
+    if (ok.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(34, 139, 34);
+      doc.text("Gueltige Nachweise", 20, y);
+      y += 5;
+      doc.setTextColor(0);
+      for (const r of ok) writeRow(r);
+      y += 4;
+    }
+    if (ablauf.length > 0) {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(200, 140, 0);
+      doc.text("Laufen bald ab", 20, y);
+      y += 5;
+      doc.setTextColor(0);
+      for (const r of ablauf) writeRow(r);
+      y += 4;
+    }
+    if (fehlt.length > 0) {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(200, 0, 0);
+      doc.text("Fehlt / Offen", 20, y);
+      y += 5;
+      doc.setTextColor(0);
+      for (const r of fehlt) writeRow(r);
+    }
+
+    const fileName = `Nachweise_${selectedName.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd")}.pdf`;
+    doc.save(fileName);
+    toast({ title: "PDF heruntergeladen" });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Nachweise" backPath="/safety" />
@@ -177,10 +268,15 @@ export default function SafetyNachweise() {
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle>{selectedName}</CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center flex-wrap">
                 {offenCount > 0 && <Badge className="bg-red-100 text-red-800">{offenCount} offen/fehlt</Badge>}
                 {ablaufCount > 0 && <Badge className="bg-yellow-100 text-yellow-800">{ablaufCount} läuft bald ab</Badge>}
                 {offenCount === 0 && ablaufCount === 0 && rows.length > 0 && <Badge className="bg-green-100 text-green-800">Alles aktuell</Badge>}
+                {rows.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => exportPDF()}>
+                    <FileText className="w-3.5 h-3.5 mr-1" /> PDF
+                  </Button>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -214,6 +310,11 @@ export default function SafetyNachweise() {
                         {r.status === "fehlt" && !r.bis && "Noch kein Nachweis vorhanden"}
                       </p>
                     </div>
+                    {r.status === "offen" && r.kind === "unterweisung" && r.id && selectedUserId === currentUserId && (
+                      <Button size="sm" onClick={() => navigate(`/safety/bestaetigen/${r.id}`)}>
+                        Jetzt bestätigen <ChevronRight className="w-3 h-3 ml-1" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

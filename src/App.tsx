@@ -47,8 +47,10 @@ import SafetyEvaluations from "./pages/SafetyEvaluations";
 import SafetyHub from "./pages/SafetyHub";
 import SafetySchulungen from "./pages/SafetySchulungen";
 import SafetyNachweise from "./pages/SafetyNachweise";
+import SafetyCompletion from "./pages/SafetyCompletion";
+import SafetyErinnerungen from "./pages/SafetyErinnerungen";
 import SafetyEvaluationDetail from "./pages/SafetyEvaluationDetail";
-import MySafety from "./pages/MySafety";
+// MySafety entfernt - ersetzt durch SafetyNachweise
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { usePushNotifications } from "./hooks/usePushNotifications";
@@ -155,7 +157,7 @@ function AppContent() {
           <Route path="/company-chat" element={<CompanyChatPage />} />
           <Route path="/my-hours" element={<MyHours />} />
           <Route path="/my-documents" element={<MyDocuments />} />
-          <Route path="/my-safety" element={<MySafety />} />
+          {/* /my-safety entfernt - nutze /safety/nachweise */}
           {/* Ab Vorarbeiter */}
           <Route path="/reports" element={<ProtectedRoute minRole="vorarbeiter"><Reports /></ProtectedRoute>} />
           <Route path="/disturbances" element={<ProtectedRoute minRole="vorarbeiter"><Disturbances /></ProtectedRoute>} />
@@ -170,10 +172,11 @@ function AppContent() {
           <Route path="/safety/geraeteunterweisungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
           <Route path="/safety/schulungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetySchulungen /></ProtectedRoute>} />
           <Route path="/safety/nachweise" element={<SafetyNachweise />} />
-          <Route path="/safety/erinnerungen" element={<SafetyHub />} />
-          {/* Alte Routen fuer Rueckwaertskompatibilitaet */}
-          <Route path="/safety-evaluations" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
-          <Route path="/safety-evaluations/:id" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluationDetail /></ProtectedRoute>} />
+          <Route path="/safety/bestaetigen/:id" element={<SafetyCompletion />} />
+          <Route path="/safety/erinnerungen" element={<ProtectedRoute minRole="admin"><SafetyErinnerungen /></ProtectedRoute>} />
+          {/* Detail-Route fuer einzelne Unterweisungen (alt + neu unter /safety/detail/:id) */}
+          <Route path="/safety/detail/:id" element={<SafetyEvaluationDetail />} />
+          <Route path="/safety-evaluations/:id" element={<SafetyEvaluationDetail />} />
           {/* Nur Admin */}
           <Route path="/admin" element={<ProtectedRoute minRole="admin"><Admin /></ProtectedRoute>} />
           <Route path="/hours-report" element={<ProtectedRoute minRole="admin"><HoursReport /></ProtectedRoute>} />

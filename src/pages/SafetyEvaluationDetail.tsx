@@ -138,7 +138,7 @@ export default function SafetyEvaluationDetail() {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
     } else {
       toast({ title: "Evaluierung gelöscht" });
-      navigate("/safety-evaluations");
+      navigate("/safety");
     }
   };
 
@@ -198,7 +198,7 @@ export default function SafetyEvaluationDetail() {
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="flex items-center gap-2 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(isAdmin ? "/safety-evaluations" : "/my-safety")}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/safety")}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
