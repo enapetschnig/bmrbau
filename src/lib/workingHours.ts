@@ -46,29 +46,100 @@ export interface HoursSplit {
   zeitausgleich: number;
 }
 
-// Standard-Regelarbeitszeit für Facharbeiter bei BMR Bau
-// Mo/Di: 06:30-17:00 (Pause 30min → 10h), Mi/Do: 07:00-17:00 (Pause 30min → 9,5h)
-// Wochenregelarbeitszeit: 39h
-export const DEFAULT_SCHEDULE: WeekSchedule = {
-  mo: { start: "06:30", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 10 },
-  di: { start: "06:30", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 10 },
-  mi: { start: "07:00", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 9.5 },
-  do: { start: "07:00", end: "17:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 9.5 },
+/**
+ * BUAK-Wochentyp – wechselt zwischen "lang" (Mo–Fr) und "kurz" (Mo–Do)
+ * und wird aus der buak_week_calendar-Tabelle pro KW ermittelt.
+ */
+export type BuakWeekType = "lang" | "kurz";
+
+/**
+ * Zwei Wochenplaene pro Mitarbeiter: einer fuer "lange" Wochen (mit Fr),
+ * einer fuer "kurze" (ohne Fr). Wird aus employees.regelarbeitszeit /
+ * employees.regelarbeitszeit_kurz geladen.
+ */
+export interface EmployeeSchedules {
+  lang: WeekSchedule | null;
+  kurz: WeekSchedule | null;
+}
+
+// BMR-Bau BUAK-Standard: lange Woche
+// Mo–Do 07:00–16:45 (1h Pause → 8,75h), Fr 07:00–15:45 (1h Pause → 7,75h)
+// Wochensumme: 42,75h (Differenz zu 39h KV-Norm laeuft ueber Zeitausgleich/Ueberstunden)
+export const BMR_BUAK_LANG_SCHEDULE: WeekSchedule = {
+  mo: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  di: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  mi: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  do: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  fr: { start: "07:00", end: "15:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 7.75 },
+  sa: { start: null, end: null, pause: 0, hours: 0 },
+  so: { start: null, end: null, pause: 0, hours: 0 },
+};
+
+// BMR-Bau BUAK-Standard: kurze Woche (Fr frei)
+export const BMR_BUAK_KURZ_SCHEDULE: WeekSchedule = {
+  mo: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  di: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  mi: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
+  do: { start: "07:00", end: "16:45", pause: 60, pause_start: "12:00", pause_end: "13:00", hours: 8.75 },
   fr: { start: null, end: null, pause: 0, hours: 0 },
   sa: { start: null, end: null, pause: 0, hours: 0 },
   so: { start: null, end: null, pause: 0, hours: 0 },
 };
 
-// Standard für Lehrlinge (kürzere Arbeitszeiten)
+// Fuer Abwaertskompatibilitaet: DEFAULT_SCHEDULE == lange Woche.
+// Legacy-Callers die keinen Wochentyp kennen bekommen damit die lange Version.
+export const DEFAULT_SCHEDULE: WeekSchedule = BMR_BUAK_LANG_SCHEDULE;
+
+// Standard fuer Lehrlinge (kuerzere Arbeitszeiten) – gilt nur fuer lange Wochen.
+// In kurzen Wochen arbeiten Lehrlinge Mo-Do gleich, Fr frei.
 export const LEHRLING_SCHEDULE: WeekSchedule = {
-  mo: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
-  di: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
-  mi: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
-  do: { start: "07:00", end: "16:00", pause: 30, hours: 8.5 },
+  mo: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  di: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  mi: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  do: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
   fr: { start: "07:00", end: "12:00", pause: 0, hours: 5 },
   sa: { start: null, end: null, pause: 0, hours: 0 },
   so: { start: null, end: null, pause: 0, hours: 0 },
 };
+
+export const LEHRLING_SCHEDULE_KURZ: WeekSchedule = {
+  mo: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  di: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  mi: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  do: { start: "07:00", end: "16:00", pause: 30, pause_start: "12:00", pause_end: "12:30", hours: 8.5 },
+  fr: { start: null, end: null, pause: 0, hours: 0 },
+  sa: { start: null, end: null, pause: 0, hours: 0 },
+  so: { start: null, end: null, pause: 0, hours: 0 },
+};
+
+/**
+ * Regel-Fallback wenn der BUAK-Kalender fuer die betreffende KW noch nicht
+ * gepflegt ist: gerade KW = lang, ungerade KW = kurz.
+ * (Deckt sich mit dem Seed in Migration 20260418140000.)
+ */
+export function getBuakWeekTypeFallback(date: Date): BuakWeekType {
+  // ISO-KW (Mo-basiert)
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return week % 2 === 0 ? "lang" : "kurz";
+}
+
+/**
+ * Gibt den fuer ein Datum passenden Wochenplan zurueck. Wenn kein kurz-Plan
+ * gepflegt ist (Alt-Daten), wird lang als Fallback verwendet.
+ */
+export function pickScheduleForDate(
+  date: Date,
+  schedules: EmployeeSchedules | null,
+  weekType: BuakWeekType,
+): WeekSchedule {
+  if (!schedules) return weekType === "kurz" ? BMR_BUAK_KURZ_SCHEDULE : BMR_BUAK_LANG_SCHEDULE;
+  if (weekType === "kurz") return schedules.kurz || schedules.lang || BMR_BUAK_KURZ_SCHEDULE;
+  return schedules.lang || BMR_BUAK_LANG_SCHEDULE;
+}
 
 const DAY_KEYS: Record<number, keyof WeekSchedule> = {
   0: "so",

@@ -25,9 +25,13 @@ import {
   calculateKilometergeld,
   calculateDiaeten,
   splitHours,
+  pickScheduleForDate,
   DEFAULT_SCHEDULE,
   type WeekSchedule,
+  type BuakWeekType,
+  type EmployeeSchedules,
 } from "@/lib/workingHours";
+import { useBuakWeekType } from "@/hooks/useBuakWeekType";
 import { FillRemainingHoursDialog } from "@/components/FillRemainingHoursDialog";
 import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
@@ -163,10 +167,25 @@ const TimeTracking = () => {
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([createDefaultBlock()]);
   const entryMode = "zeitraum" as const;
 
-  // Employee schedule for individual working hours
-  const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
+  // Employee schedules: "lang" = mit Freitag, "kurz" = ohne Freitag. Beide werden
+  // geladen; der fuer das selectedDate passende wird spaeter per Memo ausgewaehlt.
+  const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedules>({ lang: null, kurz: null });
   const [employeeSchwellenwert, setEmployeeSchwellenwert] = useState<import("@/lib/workingHours").Schwellenwert | null>(null);
   const [isExternalUser, setIsExternalUser] = useState(false);
+
+  // BUAK-Wochentyp fuer das gewaehlte Datum (ggf. durch User ueberschrieben).
+  const buak = useBuakWeekType(selectedDate);
+  const [weekTypeOverride, setWeekTypeOverride] = useState<BuakWeekType | null>(null);
+  // Beim Datums-Wechsel Override zuruecksetzen
+  useEffect(() => { setWeekTypeOverride(null); }, [selectedDate]);
+  const activeWeekType: BuakWeekType = weekTypeOverride ?? buak.weekType;
+
+  // Konkreter Wochenplan fuer das aktuelle Datum
+  const employeeSchedule: WeekSchedule | null = pickScheduleForDate(
+    new Date(selectedDate),
+    employeeSchedules,
+    activeWeekType,
+  );
 
   const fetchEmployeeSchedule = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -174,12 +193,13 @@ const TimeTracking = () => {
     const userId = targetUserId || user.id;
     const { data } = await supabase
       .from("employees")
-      .select("regelarbeitszeit, wochen_soll_stunden, is_external, kategorie, schwellenwert")
+      .select("regelarbeitszeit, regelarbeitszeit_kurz, wochen_soll_stunden, is_external, kategorie, schwellenwert")
       .eq("user_id", userId)
       .single();
-    if (data?.regelarbeitszeit) {
-      setEmployeeSchedule(data.regelarbeitszeit as unknown as WeekSchedule);
-    }
+    setEmployeeSchedules({
+      lang: (data?.regelarbeitszeit as unknown as WeekSchedule) ?? null,
+      kurz: (data?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null,
+    });
     if (data?.schwellenwert) {
       setEmployeeSchwellenwert(data.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert);
     }
@@ -676,7 +696,7 @@ const TimeTracking = () => {
       pause_minutes: entryPauseMinutes,
       location_type: "baustelle",
       notizen: documentPath ? `Krankmeldung: ${documentPath}` : null,
-      week_type: null,
+      week_type: activeWeekType,
     };
     if (absenceDetail) absenceEntry.absence_detail = absenceDetail;
 
@@ -888,7 +908,7 @@ const TimeTracking = () => {
         pause_end: isExternalUser ? null : (block.pauseEnd || null),
         location_type: block.locationType,
         notizen: null,
-        week_type: null,
+        week_type: activeWeekType,
         kilometer: km,
         km_beschreibung: block.kmBeschreibung || null,
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
@@ -943,6 +963,7 @@ const TimeTracking = () => {
             diaeten_typ: isExternalUser ? null : (bi === 0 ? diaetenForDay.typ : null),
             diaeten_betrag: isExternalUser ? null : (bi === 0 ? diaetenForDay.betrag : null),
             diaeten_anfahrt: isExternalUser ? null : (bi === 0 ? dayHasAnfahrt : false),
+            week_type: activeWeekType,
           };
           if (blockLohn > 0) empEntry.lohnstunden = blockLohn;
           if (blockZA > 0) empEntry.zeitausgleich_stunden = blockZA;
@@ -1156,6 +1177,38 @@ const TimeTracking = () => {
                   </p>
                 )}
               </div>
+
+              {/* BUAK-Wochentyp: jederzeit manuell umschaltbar pro Eintrag */}
+              {!isExternalUser && selectedDate && (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={activeWeekType === "lang" ? "default" : "secondary"} className="text-xs">
+                        KW {buak.kw} · {activeWeekType === "lang" ? "Lange Woche (Mo–Fr)" : "Kurze Woche (Mo–Do)"}
+                      </Badge>
+                      {weekTypeOverride && (
+                        <Badge variant="outline" className="text-xs">manuell korrigiert</Badge>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWeekTypeOverride(activeWeekType === "lang" ? "kurz" : "lang")}
+                    >
+                      Auf {activeWeekType === "lang" ? "Kurze Woche" : "Lange Woche"} umschalten
+                    </Button>
+                  </div>
+                  {buak.notiz && (
+                    <p className="text-xs text-muted-foreground">Kalender-Notiz: {buak.notiz}</p>
+                  )}
+                  {activeWeekType === "kurz" && new Date(selectedDate).getDay() === 5 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-500">
+                      ⚠ Freitag in einer Kurzen Woche — normalerweise frei. Erfassung wird als Kurze-Woche-Eintrag gespeichert.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Multi-Mitarbeiter Auswahl (nur fuer Admin/Vorarbeiter) */}
               {isAdmin && !editMode && !targetUserId && !isExternalUser && timeBlocks.length > 0 && (
@@ -1861,7 +1914,7 @@ const TimeTracking = () => {
               pause_end: pauseEnd,
               location_type: locationType,
               notizen: null,
-              week_type: null,
+              week_type: activeWeekType,
             });
 
             if (error) {

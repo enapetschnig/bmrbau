@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, User, FileText, Clock, Mail, Phone, MapPin, FileSpreadsheet, Shirt } from "lucide-react";
 import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
-import { DEFAULT_SCHEDULE, LEHRLING_SCHEDULE, type WeekSchedule } from "@/lib/workingHours";
+import { DEFAULT_SCHEDULE, LEHRLING_SCHEDULE, LEHRLING_SCHEDULE_KURZ, BMR_BUAK_KURZ_SCHEDULE, type WeekSchedule } from "@/lib/workingHours";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Employee {
   id: string;
@@ -44,6 +45,7 @@ interface Employee {
   notizen: string | null;
   kategorie: string | null;
   regelarbeitszeit: any | null;
+  regelarbeitszeit_kurz: any | null;
   wochen_soll_stunden: number | null;
   is_external: boolean | null;
 }
@@ -155,6 +157,7 @@ export default function Employees() {
           kategorie: newEmployee.kategorie,
           is_external: isExtern,
           regelarbeitszeit: isExtern ? null : (newEmployee.kategorie === "lehrling" ? LEHRLING_SCHEDULE : DEFAULT_SCHEDULE),
+          regelarbeitszeit_kurz: isExtern ? null : (newEmployee.kategorie === "lehrling" ? LEHRLING_SCHEDULE_KURZ : BMR_BUAK_KURZ_SCHEDULE),
           wochen_soll_stunden: isExtern ? null : 39,
         })
         .select()
@@ -465,9 +468,11 @@ export default function Employees() {
                             const updates: Partial<Employee> = { kategorie: v, is_external: v === "extern" };
                             if (v === "lehrling") {
                               updates.regelarbeitszeit = LEHRLING_SCHEDULE;
+                              updates.regelarbeitszeit_kurz = LEHRLING_SCHEDULE_KURZ;
                               updates.wochen_soll_stunden = 39;
                             } else if (v === "facharbeiter" || v === "vorarbeiter") {
                               updates.regelarbeitszeit = DEFAULT_SCHEDULE;
+                              updates.regelarbeitszeit_kurz = BMR_BUAK_KURZ_SCHEDULE;
                               updates.wochen_soll_stunden = 39;
                             }
                             setFormData({ ...formData, ...updates });
@@ -500,10 +505,10 @@ export default function Employees() {
 
                   <Separator />
 
-                  {/* Regelarbeitszeit */}
+                  {/* Regelarbeitszeit – BUAK-Wechselmodell: zwei Wochenplaene */}
                   {formData.kategorie !== "extern" && (
                   <div>
-                    <h3 className="text-lg font-semibold mb-3">Regelarbeitszeit</h3>
+                    <h3 className="text-lg font-semibold mb-3">Regelarbeitszeit (BUAK)</h3>
                     <div className="flex items-center gap-3 mb-3">
                       <Label className="text-sm whitespace-nowrap">Wochenstunden-Soll:</Label>
                       <Input
@@ -517,75 +522,84 @@ export default function Employees() {
                         }}
                         className="h-9 w-24"
                       />
-                      <span className="text-sm text-muted-foreground">h/Woche</span>
+                      <span className="text-sm text-muted-foreground">h/Woche (KV-Norm)</span>
                     </div>
-                    <div className="grid grid-cols-7 gap-2">
-                      {DAY_KEYS.map((key, idx) => {
-                        const schedule = (formData.regelarbeitszeit as WeekSchedule) || DEFAULT_SCHEDULE;
-                        const day = schedule[key] || { start: null, end: null, pause: 0, hours: 0 };
+                    <Tabs defaultValue="lang" className="w-full">
+                      <TabsList className="grid w-full max-w-xs grid-cols-2">
+                        <TabsTrigger value="lang">Lange Woche</TabsTrigger>
+                        <TabsTrigger value="kurz">Kurze Woche</TabsTrigger>
+                      </TabsList>
+
+                      {(["lang", "kurz"] as const).map((variant) => {
+                        const field = variant === "lang" ? "regelarbeitszeit" : "regelarbeitszeit_kurz";
+                        const fallback = variant === "lang" ? DEFAULT_SCHEDULE : BMR_BUAK_KURZ_SCHEDULE;
                         return (
-                          <div key={key} className="space-y-1 text-center">
-                            <Label className="text-xs font-bold">{DAY_LABELS[idx]}</Label>
-                            <Input
-                              type="time"
-                              value={day.start || ""}
-                              onChange={(e) => {
-                                const newSchedule = { ...schedule };
-                                newSchedule[key] = { ...day, start: e.target.value || null };
-                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
-                              }}
-                              className="h-8 text-xs px-1"
-                              placeholder="--:--"
-                            />
-                            <Input
-                              type="time"
-                              value={day.end || ""}
-                              onChange={(e) => {
-                                const newSchedule = { ...schedule };
-                                newSchedule[key] = { ...day, end: e.target.value || null };
-                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
-                              }}
-                              className="h-8 text-xs px-1"
-                              placeholder="--:--"
-                            />
-                            <Input
-                              type="number"
-                              min="0"
-                              max="24"
-                              step="0.25"
-                              value={day.hours}
-                              onChange={(e) => {
-                                const newSchedule = { ...schedule };
-                                const hours = parseFloat(e.target.value) || 0;
-                                newSchedule[key] = { ...day, hours };
-                                const total = Object.values(newSchedule).reduce((s, d) => s + (d?.hours ?? 0), 0);
-                                setFormData({ ...formData, regelarbeitszeit: newSchedule, wochen_soll_stunden: total });
-                              }}
-                              className="h-8 text-xs px-1"
-                              placeholder="h"
-                            />
-                            <Input
-                              type="number"
-                              min="0"
-                              max="120"
-                              step="5"
-                              value={day.pause || 0}
-                              onChange={(e) => {
-                                const newSchedule = { ...schedule };
-                                const pause = parseInt(e.target.value) || 0;
-                                newSchedule[key] = { ...day, pause };
-                                setFormData({ ...formData, regelarbeitszeit: newSchedule });
-                              }}
-                              className="h-8 text-xs px-1"
-                              placeholder="min"
-                            />
-                          </div>
+                          <TabsContent key={variant} value={variant} className="mt-3">
+                            <div className="grid grid-cols-7 gap-2">
+                              {DAY_KEYS.map((key, idx) => {
+                                const schedule = ((formData as Partial<Employee>)[field] as WeekSchedule) || fallback;
+                                const day = schedule[key] || { start: null, end: null, pause: 0, hours: 0 };
+                                const writeSchedule = (next: WeekSchedule, updateTotal = false) => {
+                                  const patch: Partial<Employee> = { [field]: next } as Partial<Employee>;
+                                  if (updateTotal && variant === "lang") {
+                                    patch.wochen_soll_stunden = Object.values(next).reduce(
+                                      (s, d) => s + (d?.hours ?? 0),
+                                      0,
+                                    );
+                                  }
+                                  setFormData({ ...formData, ...patch });
+                                };
+                                return (
+                                  <div key={key} className="space-y-1 text-center">
+                                    <Label className="text-xs font-bold">{DAY_LABELS[idx]}</Label>
+                                    <Input
+                                      type="time"
+                                      value={day.start || ""}
+                                      onChange={(e) => writeSchedule({ ...schedule, [key]: { ...day, start: e.target.value || null } })}
+                                      className="h-8 text-xs px-1"
+                                      placeholder="--:--"
+                                    />
+                                    <Input
+                                      type="time"
+                                      value={day.end || ""}
+                                      onChange={(e) => writeSchedule({ ...schedule, [key]: { ...day, end: e.target.value || null } })}
+                                      className="h-8 text-xs px-1"
+                                      placeholder="--:--"
+                                    />
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="24"
+                                      step="0.25"
+                                      value={day.hours}
+                                      onChange={(e) => writeSchedule(
+                                        { ...schedule, [key]: { ...day, hours: parseFloat(e.target.value) || 0 } },
+                                        true,
+                                      )}
+                                      className="h-8 text-xs px-1"
+                                      placeholder="h"
+                                    />
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="120"
+                                      step="5"
+                                      value={day.pause || 0}
+                                      onChange={(e) => writeSchedule({ ...schedule, [key]: { ...day, pause: parseInt(e.target.value) || 0 } })}
+                                      className="h-8 text-xs px-1"
+                                      placeholder="min"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Von / Bis / Stunden / Pause (min) pro Tag · {variant === "lang" ? "Mo–Fr" : "Mo–Do (Fr frei)"}
+                            </p>
+                          </TabsContent>
                         );
                       })}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Von / Bis / Stunden / Pause (min) pro Tag
-                    </p>
+                    </Tabs>
                   </div>
                   )}
 

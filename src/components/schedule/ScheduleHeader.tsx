@@ -9,8 +9,10 @@ import {
 import { de } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ScheduleMode } from "./scheduleTypes";
+import { useBuakWeekType } from "@/hooks/useBuakWeekType";
 
 interface Props {
   weekStart: Date;
@@ -32,6 +34,7 @@ export function ScheduleHeader({
   showYearToggle = true,
 }: Props) {
   const weekEnd = addDays(weekStart, 4);
+  const buak = useBuakWeekType(weekStart);
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -95,6 +98,13 @@ export function ScheduleHeader({
               {format(weekStart, "dd.MM.", { locale: de })} –{" "}
               {format(weekEnd, "dd.MM.yyyy", { locale: de })}
             </span>
+            <Badge
+              variant={buak.weekType === "lang" ? "default" : "secondary"}
+              className="ml-1 text-[10px] uppercase tracking-wide"
+              title={buak.notiz ?? undefined}
+            >
+              {buak.weekType === "lang" ? "Lang" : "Kurz"}
+            </Badge>
           </div>
         )}
 

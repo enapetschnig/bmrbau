@@ -23,7 +23,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getNormalWorkingHours, type WeekSchedule, DEFAULT_SCHEDULE } from "@/lib/workingHours";
+import {
+  getNormalWorkingHours,
+  pickScheduleForDate,
+  getBuakWeekTypeFallback,
+  type WeekSchedule,
+  type EmployeeSchedules,
+  type BuakWeekType,
+  DEFAULT_SCHEDULE,
+} from "@/lib/workingHours";
+import { supabase as supabaseClient } from "@/integrations/supabase/client";
 
 interface TimeEntry {
   id: string;
@@ -115,6 +124,8 @@ export default function HoursReport() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
+  const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedules>({ lang: null, kurz: null });
+  const [buakCalendar, setBuakCalendar] = useState<Map<string, BuakWeekType>>(new Map());
   const [reportExtras, setReportExtras] = useState<ReportExtra[]>([]);
   const [newExtraName, setNewExtraName] = useState("");
   const [newExtraBetrag, setNewExtraBetrag] = useState("");
@@ -154,15 +165,40 @@ export default function HoursReport() {
   const fetchEmployeeSchedule = async (userId: string) => {
     const { data } = await supabase
       .from("employees")
-      .select("regelarbeitszeit, is_external")
+      .select("regelarbeitszeit, regelarbeitszeit_kurz, is_external")
       .eq("user_id", userId)
       .single();
-    if (data?.regelarbeitszeit) {
-      setEmployeeSchedule(data.regelarbeitszeit as unknown as WeekSchedule);
-    } else {
-      setEmployeeSchedule(null);
-    }
+    const lang = (data?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
+    const kurz = (data?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
+    setEmployeeSchedule(lang);
+    setEmployeeSchedules({ lang, kurz });
     setSelectedIsExternal(data?.is_external === true);
+  };
+
+  const fetchBuakCalendar = async (y: number) => {
+    const { data } = await supabaseClient
+      .from("buak_week_calendar")
+      .select("year, kw, week_type")
+      .in("year", [y - 1, y, y + 1]);
+    const map = new Map<string, BuakWeekType>();
+    (data || []).forEach((r) => map.set(`${r.year}-${r.kw}`, r.week_type as BuakWeekType));
+    setBuakCalendar(map);
+  };
+
+  useEffect(() => { fetchBuakCalendar(year); }, [year]);
+
+  const weekTypeFor = (date: Date): BuakWeekType => {
+    // ISO-KW
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return buakCalendar.get(`${d.getUTCFullYear()}-${week}`) ?? getBuakWeekTypeFallback(date);
+  };
+
+  const scheduleFor = (date: Date): WeekSchedule | null => {
+    return pickScheduleForDate(date, employeeSchedules, weekTypeFor(date));
   };
 
   const checkAdminStatus = async () => {
@@ -340,7 +376,7 @@ export default function HoursReport() {
   };
 
   const calculateOvertime = (date: Date, totalHours: number): number => {
-    const normalHours = getNormalWorkingHours(date, employeeSchedule);
+    const normalHours = getNormalWorkingHours(date, scheduleFor(date));
     return Math.max(0, totalHours - normalHours);
   };
 
@@ -643,8 +679,8 @@ export default function HoursReport() {
           if (includeOvertime) {
             worksheetData.push(["", "", "", "", "", "Tagessumme:", dayTotalHours.toFixed(2), dayTotalOvertime > 0 ? dayTotalOvertime.toFixed(2) : "", "", "", "", ""]);
           } else {
-            // Regelarbeitszeit = individueller Zeitplan des Mitarbeiters (Lehrling/Facharbeiter/Vorarbeiter)
-            const regelarbeitszeitTag = getNormalWorkingHours(dayDate, employeeSchedule);
+            // Regelarbeitszeit = individueller Zeitplan (Lehrling/Facharbeiter/Vorarbeiter) je nach BUAK-Wochentyp
+            const regelarbeitszeitTag = getNormalWorkingHours(dayDate, scheduleFor(dayDate));
             worksheetData.push(["", "", "", "", "", "Tagessumme:", regelarbeitszeitTag.toFixed(2), "", "", "", "", ""]);
           }
         }

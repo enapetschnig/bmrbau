@@ -1168,6 +1168,29 @@ export default function Admin() {
         </section>
         )}
 
+        {/* ===== BUAK-KALENDER ===== */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Calendar className="h-6 w-6" />
+            BUAK-Kalender
+          </h2>
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50"
+            onClick={() => navigate("/buak-kalender")}
+          >
+            <CardHeader>
+              <CardTitle className="text-lg">Wochentypen pflegen (lang / kurz)</CardTitle>
+              <CardDescription>
+                Welche Kalenderwochen sind lange Wochen (Mo–Fr) und welche kurze (Mo–Do)?
+                Regel-Vorschlag per Knopfdruck, Feiertage/Fenstertage manuell anpassen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" variant="outline">Öffnen</Button>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* ===== MENÜ-EINSTELLUNGEN ===== */}
         <section>
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">

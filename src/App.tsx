@@ -51,6 +51,7 @@ import SafetyNachweise from "./pages/SafetyNachweise";
 import SafetyCompletion from "./pages/SafetyCompletion";
 import SafetyErinnerungen from "./pages/SafetyErinnerungen";
 import SafetyEvaluationDetail from "./pages/SafetyEvaluationDetail";
+import BuakCalendarAdmin from "./pages/BuakCalendarAdmin";
 // MySafety entfernt - ersetzt durch SafetyNachweise
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -187,6 +188,7 @@ function AppContent() {
           <Route path="/equipment/:id" element={<ProtectedRoute minRole="admin"><EquipmentDetail /></ProtectedRoute>} />
           <Route path="/bestellungen" element={<ProtectedRoute minRole="facharbeiter"><Bestellungen /></ProtectedRoute>} />
           <Route path="/cloud-data" element={<ProtectedRoute minRole="admin"><CloudData /></ProtectedRoute>} />
+          <Route path="/buak-kalender" element={<ProtectedRoute minRole="admin"><BuakCalendarAdmin /></ProtectedRoute>} />
           <Route path="/schedule" element={<ProtectedRoute minRole="vorarbeiter"><ScheduleBoard /></ProtectedRoute>} />
           <Route path="/incoming-invoices" element={<ProtectedRoute minRole="admin"><IncomingInvoices /></ProtectedRoute>} />
           <Route path="/incoming-documents" element={<ProtectedRoute minRole="facharbeiter"><IncomingDocuments /></ProtectedRoute>} />
