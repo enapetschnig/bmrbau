@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -54,6 +55,8 @@ export default function IncomingDocuments() {
   const [showCaptureDialog, setShowCaptureDialog] = useState(() => searchParams.get("capture") === "1");
   const hideListInitially = searchParams.get("capture") === "1";
   const [showList, setShowList] = useState(!hideListInitially);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [zipLoading, setZipLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<IncomingDocument | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -323,10 +326,70 @@ export default function IncomingDocuments() {
                     <p>Keine Dokumente im ausgewählten Zeitraum</p>
                   </div>
                 ) : (
+                  <>
+                    {selectedDocIds.size > 0 && (
+                      <div className="flex items-center gap-2 mb-3 p-2 bg-muted rounded-lg flex-wrap">
+                        <Badge variant="secondary">{selectedDocIds.size} ausgewählt</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={zipLoading}
+                          onClick={async () => {
+                            setZipLoading(true);
+                            try {
+                              const { default: JSZip } = await import("jszip");
+                              const zip = new JSZip();
+                              const docs = filtered.filter(d => selectedDocIds.has(d.id));
+                              for (const doc of docs) {
+                                const urls: string[] = [doc.photo_url];
+                                if ((doc as any).zusatz_seiten_urls) urls.push(...(doc as any).zusatz_seiten_urls);
+                                for (let i = 0; i < urls.length; i++) {
+                                  try {
+                                    const resp = await fetch(urls[i]);
+                                    const blob = await resp.blob();
+                                    const ext = (urls[i].split(".").pop() || "jpg").split("?")[0];
+                                    const label = (doc.typ === "rechnung" ? "Rechnung" : "Lieferschein");
+                                    const fname = `${label}_${(doc.lieferant || "ohne-lieferant").replace(/[^a-z0-9]/gi, "_")}_${doc.id.slice(0, 6)}${urls.length > 1 ? `_seite${i + 1}` : ""}.${ext}`;
+                                    zip.file(fname, blob);
+                                  } catch { /* skip */ }
+                                }
+                              }
+                              const zipBlob = await zip.generateAsync({ type: "blob" });
+                              const url = URL.createObjectURL(zipBlob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `Dokumente_${new Date().toISOString().slice(0, 10)}.zip`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast({ title: `${docs.length} Dokument(e) als ZIP heruntergeladen` });
+                            } catch (err: any) {
+                              toast({ variant: "destructive", title: "Fehler", description: err.message });
+                            } finally {
+                              setZipLoading(false);
+                            }
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                          {zipLoading ? "Erstellt ZIP..." : "Als ZIP herunterladen"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setSelectedDocIds(new Set())}>
+                          Auswahl löschen
+                        </Button>
+                      </div>
+                    )}
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-8">
+                            <Checkbox
+                              checked={filtered.length > 0 && selectedDocIds.size === filtered.length}
+                              onCheckedChange={(v) => {
+                                if (v) setSelectedDocIds(new Set(filtered.map(d => d.id)));
+                                else setSelectedDocIds(new Set());
+                              }}
+                            />
+                          </TableHead>
                           <TableHead>Datum</TableHead>
                           <TableHead>Typ</TableHead>
                           <TableHead>Lieferant</TableHead>
@@ -347,6 +410,19 @@ export default function IncomingDocuments() {
                               className="cursor-pointer hover:bg-muted/50"
                               onClick={() => { setSelectedDoc(doc); setShowDetailDialog(true); }}
                             >
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedDocIds.has(doc.id)}
+                                  onCheckedChange={() => {
+                                    setSelectedDocIds(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(doc.id)) next.delete(doc.id);
+                                      else next.add(doc.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              </TableCell>
                               <TableCell className="font-mono text-xs">
                                 {doc.dokument_datum
                                   ? format(parseISO(doc.dokument_datum), "dd.MM.yyyy")
@@ -375,6 +451,7 @@ export default function IncomingDocuments() {
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 )}
               </CardContent>
             </Card>

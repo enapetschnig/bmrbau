@@ -1154,6 +1154,30 @@ export type Database = {
           },
         ]
       }
+      invoice_delivery_matches: {
+        Row: {
+          id: string
+          rechnung_id: string
+          lieferschein_id: string
+          created_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          rechnung_id: string
+          lieferschein_id: string
+          created_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          rechnung_id?: string
+          lieferschein_id?: string
+          created_by?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       incoming_documents: {
         Row: {
           id: string

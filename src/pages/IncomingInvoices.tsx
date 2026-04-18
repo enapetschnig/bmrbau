@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
 import { BatchInvoiceProcessor } from "@/components/BatchInvoiceProcessor";
 import { Layers } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Download, Upload, Filter, FileText, Check, CheckCircle2, AlertTriangle, XCircle, Loader2, X, Plus, Sparkles } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as XLSX from "xlsx-js-style";
@@ -178,8 +179,9 @@ export default function IncomingInvoices() {
   const [saving, setSaving] = useState(false);
 
   // Abgleich tab state
-  const [abgleichLSId, setAbgleichLSId] = useState("");
+  const [abgleichLSIds, setAbgleichLSIds] = useState<Set<string>>(new Set());
   const [abgleichREId, setAbgleichREId] = useState("");
+  const [matchesSaving, setMatchesSaving] = useState(false);
   const [aiMatchResult, setAiMatchResult] = useState<AIMatchResult | null>(null);
   const [aiMatchLoading, setAiMatchLoading] = useState(false);
 
@@ -532,24 +534,81 @@ export default function IncomingInvoices() {
   };
 
 
-  const selectedLS = lieferscheine.find((d) => d.id === abgleichLSId);
+  const selectedLSList = lieferscheine.filter((d) => abgleichLSIds.has(d.id));
+  const selectedLS = selectedLSList[0] || null; // fuer Rueckwaertskompatibilitaet im Code unten
   const selectedRE = invoices.find((d) => d.id === abgleichREId);
+
+  // Lade bestehende Matches aus DB wenn Rechnung ausgewaehlt
+  useEffect(() => {
+    if (!abgleichREId) {
+      setAbgleichLSIds(new Set());
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("invoice_delivery_matches")
+        .select("lieferschein_id")
+        .eq("rechnung_id", abgleichREId);
+      if (data) {
+        setAbgleichLSIds(new Set(data.map((m: any) => m.lieferschein_id)));
+      }
+    })();
+  }, [abgleichREId]);
+
+  const toggleLSAssignment = async (lsId: string) => {
+    if (!abgleichREId) return;
+    setMatchesSaving(true);
+    const isCurrentlyAssigned = abgleichLSIds.has(lsId);
+    if (isCurrentlyAssigned) {
+      // Entfernen
+      await supabase.from("invoice_delivery_matches")
+        .delete()
+        .eq("rechnung_id", abgleichREId)
+        .eq("lieferschein_id", lsId);
+      setAbgleichLSIds(prev => {
+        const next = new Set(prev);
+        next.delete(lsId);
+        return next;
+      });
+    } else {
+      // Hinzufuegen
+      await supabase.from("invoice_delivery_matches").insert({
+        rechnung_id: abgleichREId,
+        lieferschein_id: lsId,
+      });
+      setAbgleichLSIds(prev => new Set(prev).add(lsId));
+    }
+    setMatchesSaving(false);
+    setAiMatchResult(null); // bei Aenderung KI neu laufen lassen
+  };
 
   // Reset KI-Ergebnis bei Auswahlaenderung
   useEffect(() => {
     setAiMatchResult(null);
-  }, [abgleichLSId, abgleichREId]);
+  }, [abgleichREId]);
 
   const runAIMatch = async () => {
-    if (!selectedLS || !selectedRE) return;
+    if (selectedLSList.length === 0 || !selectedRE) return;
     setAiMatchLoading(true);
     setAiMatchResult(null);
     try {
+      // Alle Positionen der zugeordneten Lieferscheine zusammenfuegen
+      const combinedPositionen: any[] = [];
+      for (const ls of selectedLSList) {
+        const pos = Array.isArray(ls.positionen) ? ls.positionen : [];
+        for (const p of pos) {
+          combinedPositionen.push({
+            ...p,
+            __ls_source: ls.dokument_nummer || ls.id.slice(0, 8),
+          });
+        }
+      }
+      const combinedLieferant = selectedLSList.map(ls => ls.lieferant).filter(Boolean).join(", ") || null;
       const { data, error } = await supabase.functions.invoke("compare-documents", {
         body: {
           lieferschein: {
-            lieferant: selectedLS.lieferant,
-            positionen: selectedLS.positionen,
+            lieferant: combinedLieferant,
+            positionen: combinedPositionen,
           },
           rechnung: {
             lieferant: selectedRE.lieferant,
@@ -983,43 +1042,68 @@ export default function IncomingInvoices() {
                   </Select>
                 </div>
 
-                {/* Dokument-Auswahl */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Lieferschein auswählen</Label>
-                    <Select value={abgleichLSId} onValueChange={setAbgleichLSId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Lieferschein wählen..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lieferscheine.map((ls) => (
-                          <SelectItem key={ls.id} value={ls.id}>
-                            {ls.lieferant
-                              ? `${ls.lieferant} — ${ls.dokument_nummer || ls.id.slice(0, 8)} ${ls.betrag != null ? `(€ ${Number(ls.betrag).toFixed(2)})` : ""}`
-                              : `Hochgeladen von ${ls.employee_name || "Unbekannt"} am ${new Date(ls.created_at).toLocaleDateString("de-AT")}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Rechnung auswählen</Label>
-                    <Select value={abgleichREId} onValueChange={setAbgleichREId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Rechnung wählen..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {invoices.map((re) => (
-                          <SelectItem key={re.id} value={re.id}>
-                            {re.lieferant
-                              ? `${re.lieferant} — ${re.dokument_nummer || re.id.slice(0, 8)} ${re.betrag != null ? `(€ ${Number(re.betrag).toFixed(2)})` : ""}`
-                              : `Hochgeladen von ${re.employee_name || "Unbekannt"} am ${new Date(re.created_at).toLocaleDateString("de-AT")}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Rechnung auswählen */}
+                <div className="space-y-2">
+                  <Label>1. Rechnung auswählen</Label>
+                  <Select value={abgleichREId} onValueChange={setAbgleichREId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Rechnung wählen..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {invoices.map((re) => (
+                        <SelectItem key={re.id} value={re.id}>
+                          {re.lieferant
+                            ? `${re.lieferant} — ${re.dokument_nummer || re.id.slice(0, 8)} ${re.betrag != null ? `(€ ${Number(re.betrag).toFixed(2)})` : ""}`
+                            : `Hochgeladen von ${re.employee_name || "Unbekannt"} am ${new Date(re.created_at).toLocaleDateString("de-AT")}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {/* Lieferscheine-Mehrfach-Zuordnung */}
+                {abgleichREId && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <Label>2. Zugeordnete Lieferscheine ({abgleichLSIds.size})</Label>
+                      {matchesSaving && <span className="text-xs text-muted-foreground">Speichert...</span>}
+                    </div>
+                    <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
+                      {lieferscheine.length === 0 ? (
+                        <p className="text-sm text-muted-foreground p-3 text-center">Keine Lieferscheine im ausgewählten Zeitraum</p>
+                      ) : (
+                        lieferscheine.map((ls) => {
+                          const isAssigned = abgleichLSIds.has(ls.id);
+                          return (
+                            <label
+                              key={ls.id}
+                              className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 ${isAssigned ? "bg-primary/5" : ""}`}
+                            >
+                              <Checkbox
+                                checked={isAssigned}
+                                onCheckedChange={() => toggleLSAssignment(ls.id)}
+                                disabled={matchesSaving}
+                              />
+                              <div className="flex-1 min-w-0 text-sm">
+                                <div className="font-medium truncate">
+                                  {ls.lieferant || "Kein Lieferant"}
+                                  {ls.dokument_nummer && <span className="text-muted-foreground font-normal"> · {ls.dokument_nummer}</span>}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {ls.dokument_datum ? format(parseISO(ls.dokument_datum), "dd.MM.yyyy") : format(new Date(ls.created_at), "dd.MM.yyyy")}
+                                  {Array.isArray(ls.positionen) && ` · ${ls.positionen.length} Position${ls.positionen.length === 1 ? "" : "en"}`}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Mehrere Lieferscheine einer Rechnung zuordnen. Beim KI-Abgleich werden alle Positionen der ausgewählten Lieferscheine zusammen verglichen.
+                    </p>
+                  </div>
+                )}
 
 
                 {/* Dokument-Vorschau */}
@@ -1071,7 +1155,7 @@ export default function IncomingInvoices() {
                 )}
 
                 {/* KI-Abgleich */}
-                {selectedLS && selectedRE && (
+                {selectedLSList.length > 0 && selectedRE && (
                   <div className="space-y-4">
                     {!aiMatchResult && (
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted/40 rounded-lg border">
@@ -1089,7 +1173,10 @@ export default function IncomingInvoices() {
                     )}
 
                     {aiMatchResult && (() => {
-                      const lsPos: any[] = (selectedLS.positionen as any[]) || [];
+                      const lsPos: any[] = selectedLSList.flatMap((ls) => {
+                        const arr: any[] = Array.isArray(ls.positionen) ? ls.positionen : [];
+                        return arr.map(p => ({ ...p, __ls_source: ls.dokument_nummer || ls.id.slice(0, 8) }));
+                      });
                       const rePos: any[] = (selectedRE.positionen as any[]) || [];
                       const score = aiMatchResult.match_score ?? 0;
                       const scoreColor =
