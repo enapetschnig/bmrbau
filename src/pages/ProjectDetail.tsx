@@ -210,15 +210,41 @@ const ProjectDetail = () => {
     e.target.value = "";
   };
 
-  const handleDelete = async (file: StorageFile) => {
+  // Verschiebt eine Datei ins Archiv (soft delete - fuer alle)
+  const handleArchiveSingle = async (file: StorageFile) => {
+    if (!projectId || !type) return;
+    const filePath = `${projectId}/${file.name}`;
+    // Sicherstellen dass DB-Record existiert (bei direkten Storage-Uploads evtl. nicht)
+    const existing = docRecords.find((d) => d.file_url === filePath || d.name === file.name);
+    if (existing) {
+      await supabase.from("documents").update({ archived: true }).eq("id", existing.id);
+    } else {
+      // Neuen Record mit archived=true erzeugen
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("documents").insert({
+        project_id: projectId,
+        user_id: user.id,
+        typ: type,
+        name: file.name,
+        file_url: filePath,
+        archived: true,
+      });
+    }
+    toast({ title: "Ins Archiv verschoben" });
+    fetchDocRecords();
+  };
+
+  // Endgültig löschen (nur Admin, aus dem Archiv)
+  const handlePermanentDelete = async (file: StorageFile) => {
     if (!projectId || !type || !isAdmin) return;
+    if (!confirm(`"${file.name}" endgültig löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
     const bucket = bucketMap[type];
     const filePath = `${projectId}/${file.name}`;
     const { error } = await supabase.storage.from(bucket).remove([filePath]);
     if (!error) {
-      // Auch DB-Record loeschen
       await supabase.from("documents").delete().eq("file_url", filePath);
-      toast({ title: "Gelöscht" });
+      toast({ title: "Endgültig gelöscht" });
       fetchFiles();
       fetchDocRecords();
     }
@@ -568,34 +594,43 @@ const ProjectDetail = () => {
 
                   {/* Aktions-Leiste bei Auswahl */}
                   {selectedFiles.size > 0 && (
-                    <div className="flex items-center gap-2 mb-3 p-2 bg-muted rounded-lg">
+                    <div className="flex items-center gap-2 mb-3 p-2 bg-muted rounded-lg flex-wrap">
                       <Badge variant="secondary">{selectedFiles.size} ausgewählt</Badge>
-                      {!isArchivTab && (
-                        <Button size="sm" variant="outline" onClick={handleArchiveSelected}>
-                          <Archive className="h-3.5 w-3.5 mr-1" /> Archivieren
-                        </Button>
-                      )}
-                      {isArchivTab && (
-                        <Button size="sm" variant="outline" onClick={handleUnarchiveSelected}>
-                          Wiederherstellen
-                        </Button>
-                      )}
                       <Button size="sm" variant="outline" onClick={handleBulkDownload}>
                         <Download className="h-3.5 w-3.5 mr-1" /> Herunterladen
                       </Button>
                       <Button size="sm" variant="outline" onClick={handleShareSelected}>
                         <Share2 className="h-3.5 w-3.5 mr-1" /> Weiterleiten
                       </Button>
-                      {isAdmin && (
+                      {!isArchivTab && (
                         <Button size="sm" variant="destructive" onClick={async () => {
                           for (const fn of Array.from(selectedFiles)) {
                             const file = files.find(f => f.name === fn);
-                            if (file) await handleDelete(file);
+                            if (file) await handleArchiveSingle(file);
                           }
                           setSelectedFiles(new Set());
                         }}>
-                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Loeschen
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen (ins Archiv)
                         </Button>
+                      )}
+                      {isArchivTab && (
+                        <>
+                          <Button size="sm" variant="outline" onClick={handleUnarchiveSelected}>
+                            <Archive className="h-3.5 w-3.5 mr-1" /> Wiederherstellen
+                          </Button>
+                          {isAdmin && (
+                            <Button size="sm" variant="destructive" onClick={async () => {
+                              if (!confirm(`${selectedFiles.size} Datei(en) endgültig löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
+                              for (const fn of Array.from(selectedFiles)) {
+                                const file = files.find(f => f.name === fn);
+                                if (file) await handlePermanentDelete(file);
+                              }
+                              setSelectedFiles(new Set());
+                            }}>
+                              <Trash2 className="h-3.5 w-3.5 mr-1" /> Endgültig löschen
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -671,21 +706,37 @@ const ProjectDetail = () => {
                                 {doc.text_content}
                               </p>
                             </div>
-                            {isAdmin && (
+                            {/* Archiv/Endgueltig-Loeschen */}
+                            {!archivMode ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-destructive shrink-0"
                                 onClick={async () => {
-                                  if (!confirm(`"${doc.name}" löschen?`)) return;
-                                  await supabase.from("documents").delete().eq("id", doc.id);
+                                  await supabase.from("documents").update({ archived: true }).eq("id", doc.id);
                                   fetchDocRecords();
-                                  toast({ title: "Gelöscht" });
+                                  toast({ title: "Ins Archiv verschoben" });
                                 }}
+                                title="Löschen (ins Archiv)"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
-                            )}
+                            ) : isAdmin ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive shrink-0"
+                                onClick={async () => {
+                                  if (!confirm(`"${doc.name}" endgültig löschen?`)) return;
+                                  await supabase.from("documents").delete().eq("id", doc.id);
+                                  fetchDocRecords();
+                                  toast({ title: "Endgültig gelöscht" });
+                                }}
+                                title="Endgültig löschen"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            ) : null}
                           </div>
                         ));
                       })()}
@@ -738,8 +789,25 @@ const ProjectDetail = () => {
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleFileOpen(file)}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {isAdmin && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(file)}>
+                            {!isArchivTab && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive"
+                                onClick={() => handleArchiveSingle(file)}
+                                title="Löschen (ins Archiv)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {isArchivTab && isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive"
+                                onClick={() => handlePermanentDelete(file)}
+                                title="Endgültig löschen"
+                              >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             )}
