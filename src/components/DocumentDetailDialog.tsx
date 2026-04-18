@@ -45,7 +45,7 @@ const TYP_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  offen: { label: "Offen", color: "bg-red-100 text-red-800" },
+  offen: { label: "Offen", color: "bg-amber-100 text-amber-800" },
   bezahlt: { label: "Bezahlt", color: "bg-green-100 text-green-800" },
   storniert: { label: "Storniert", color: "bg-gray-100 text-gray-800" },
 };

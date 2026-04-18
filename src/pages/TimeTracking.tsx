@@ -876,7 +876,7 @@ const TimeTracking = () => {
         km_beschreibung: block.kmBeschreibung || null,
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
         diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
-        diaeten_betrag: null,
+        diaeten_betrag: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).betrag : null),
       };
       // Neue Spalten nur senden wenn sie vorhanden sein koennten (nach Migration)
       if (blockLohn > 0) entryData.lohnstunden = blockLohn;
@@ -923,6 +923,7 @@ const TimeTracking = () => {
             km_beschreibung: block.kmBeschreibung || null,
             zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
             diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
+            diaeten_betrag: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).betrag : null),
           };
           if (blockLohn > 0) empEntry.lohnstunden = blockLohn;
           if (blockZA > 0) empEntry.zeitausgleich_stunden = blockZA;
