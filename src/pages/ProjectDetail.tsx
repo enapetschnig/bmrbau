@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { confirm } from "@/lib/confirm";
+import { ENABLE_CHAT } from "@/lib/features";
 import { FileViewer } from "@/components/FileViewer";
 import { Nachkalkulation } from "@/components/Nachkalkulation";
 
@@ -963,7 +964,7 @@ const ProjectDetail = () => {
           onClose={() => setEditingImage(null)}
           imageUrl={editingImage}
           onSave={handleEditedImageSave}
-          onShareToChat={handleEditedImageToChat}
+          onShareToChat={ENABLE_CHAT ? handleEditedImageToChat : undefined}
           title="Bild bearbeiten"
         />
       )}

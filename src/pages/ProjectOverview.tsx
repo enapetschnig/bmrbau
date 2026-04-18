@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ENABLE_CHAT } from "@/lib/features";
 
 type DocumentCategory = {
   type: "plans" | "reports" | "photos" | "chef";
@@ -562,22 +563,24 @@ const ProjectOverview = () => {
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Projekt-Chat */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow border-primary/30 bg-primary/5"
-            onClick={() => navigate(`/projects/${projectId}/chat`)}
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="text-primary"><MessageCircle className="h-8 w-8" /></div>
-              </div>
-              <CardTitle className="text-xl">Projekt-Chat</CardTitle>
-              <CardDescription>Nachrichten & Fotos mit dem Team austauschen</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" className="w-full">Chat öffnen</Button>
-            </CardContent>
-          </Card>
+          {/* Projekt-Chat – hinter Feature-Flag */}
+          {ENABLE_CHAT && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow border-primary/30 bg-primary/5"
+              onClick={() => navigate(`/projects/${projectId}/chat`)}
+            >
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="text-primary"><MessageCircle className="h-8 w-8" /></div>
+                </div>
+                <CardTitle className="text-xl">Projekt-Chat</CardTitle>
+                <CardDescription>Nachrichten & Fotos mit dem Team austauschen</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full">Chat öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Fotos - first */}
           {visibleCategories.filter(c => c.type === "photos").map((category) => (

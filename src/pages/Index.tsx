@@ -44,9 +44,12 @@ type RecentTimeEntry = {
   } | null;
 };
 
-// Firmenchat ist derzeit auf Wunsch der BMR-Leitung deaktiviert.
-// Projekt-Chats bleiben weiterhin nutzbar. Einschalten via "true".
-const ENABLE_COMPANY_CHAT = false;
+import { ENABLE_CHAT } from "@/lib/features";
+
+// Kompatibilitaets-Alias: wenn Chat komplett aus ist, ist auch
+// der Firmenchat aus. Flag bleibt im Code erhalten, um Einzeln-Aktivierung
+// spaeter einfach zu ermoeglichen.
+const ENABLE_COMPANY_CHAT = ENABLE_CHAT;
 
 const formatChatTime = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -881,8 +884,8 @@ export default function Index() {
           </div>
         )}
 
-        {/* Chat-Übersicht (WhatsApp-Style) */}
-        {chatPreviews.length > 0 ? (
+        {/* Chat-Übersicht (WhatsApp-Style) – komplett hinter Feature-Flag */}
+        {ENABLE_CHAT && chatPreviews.length > 0 ? (
           <Card className="mb-6">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -944,7 +947,7 @@ export default function Index() {
               ))}
             </CardContent>
           </Card>
-        ) : isAdmin ? (
+        ) : ENABLE_CHAT && isAdmin ? (
           <div
             className="mb-6 flex items-center gap-4 rounded-xl border-2 border-green-400 bg-green-50 dark:bg-green-950/20 p-4 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors shadow-sm"
             onClick={() => {
@@ -965,7 +968,8 @@ export default function Index() {
           </div>
         ) : null}
 
-        {/* Chat starten Dialog */}
+        {/* Chat starten Dialog – komplett hinter Feature-Flag */}
+        {ENABLE_CHAT && (
         <Dialog open={showChatDialog} onOpenChange={(open) => {
           setShowChatDialog(open);
           if (!open) { setChatDialogMode("select"); setNewChAudience("all"); setNewChRoles([]); setNewChDirectUserId(""); setNewChName(""); }
@@ -1118,6 +1122,7 @@ export default function Index() {
             )}
           </DialogContent>
         </Dialog>
+        )}
 
         {/* Wochenplanung Widget */}
         {!isExternal && user && (
