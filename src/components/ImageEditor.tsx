@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { ReactSketchCanvas, ReactSketchCanvasRef } from "react-sketch-canvas";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Undo2, Redo2, Eraser, Trash2, Send, Pencil, X, AlertCircle } from "lucide-react";
+import { Undo2, Redo2, Eraser, Trash2, Send, Pencil, X, AlertCircle, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void;
   imageUrl: string;
   onSave: (editedBlob: Blob) => Promise<void>;
+  /** Optional: wenn gesetzt, erscheint zusaetzlich ein "Im Chat posten"-Button */
+  onShareToChat?: (editedBlob: Blob) => Promise<void>;
   title?: string;
 }
 
@@ -29,7 +31,7 @@ const STROKE_WIDTHS = [
   { value: 12, label: "L" },
 ];
 
-export function ImageEditor({ open, onClose, imageUrl, onSave, title = "Bild bearbeiten" }: Props) {
+export function ImageEditor({ open, onClose, imageUrl, onSave, onShareToChat, title = "Bild bearbeiten" }: Props) {
   const { toast } = useToast();
   const canvasRef = useRef<ReactSketchCanvasRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -156,63 +158,70 @@ export function ImageEditor({ open, onClose, imageUrl, onSave, title = "Bild bea
     }
   };
 
-  const handleSave = async () => {
+  const produceBlob = async (): Promise<Blob> => {
     if (!canvasRef.current || !imageDataUrl || originalSize.width === 0) {
-      toast({ variant: "destructive", title: "Fehler", description: "Bild ist noch nicht bereit" });
-      return;
+      throw new Error("Bild ist noch nicht bereit");
     }
+    // 1. Canvas-Anmerkungen als Data-URL
+    const drawingDataUrl = await canvasRef.current.exportImage("png");
+    // 2. Original + Zeichnung mergen
+    const MAX_OUTPUT = 3000;
+    let outW = originalSize.width;
+    let outH = originalSize.height;
+    if (outW > MAX_OUTPUT || outH > MAX_OUTPUT) {
+      const ratio = outW / outH;
+      if (outW > outH) { outW = MAX_OUTPUT; outH = Math.round(outW / ratio); }
+      else { outH = MAX_OUTPUT; outW = Math.round(outH * ratio); }
+    }
+    const mergeCanvas = document.createElement("canvas");
+    mergeCanvas.width = outW;
+    mergeCanvas.height = outH;
+    const ctx = mergeCanvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas-Kontext nicht verfuegbar");
+    const originalImg = new Image();
+    await new Promise<void>((resolve, reject) => {
+      originalImg.onload = () => resolve();
+      originalImg.onerror = () => reject(new Error("Original-Bild konnte nicht geladen werden"));
+      originalImg.src = imageDataUrl;
+    });
+    ctx.drawImage(originalImg, 0, 0, outW, outH);
+    const drawingImg = new Image();
+    await new Promise<void>((resolve, reject) => {
+      drawingImg.onload = () => resolve();
+      drawingImg.onerror = () => reject(new Error("Zeichnung konnte nicht geladen werden"));
+      drawingImg.src = drawingDataUrl;
+    });
+    ctx.drawImage(drawingImg, 0, 0, outW, outH);
+    return new Promise<Blob>((resolve, reject) => {
+      mergeCanvas.toBlob(
+        (b) => b ? resolve(b) : reject(new Error("Blob konnte nicht erstellt werden")),
+        "image/jpeg",
+        0.92
+      );
+    });
+  };
 
+  const handleShareToChat = async () => {
+    if (!onShareToChat) return;
     setSaving(true);
     try {
-      // 1. Canvas-Anmerkungen als Data-URL (Canvas-Groesse = display-Groesse)
-      const drawingDataUrl = await canvasRef.current.exportImage("png");
-
-      // 2. Original + Zeichnung zu einem Bild mergen
-      // Auflösung: Original-Größe, aber max 3000px auf längster Seite
-      const MAX_OUTPUT = 3000;
-      let outW = originalSize.width;
-      let outH = originalSize.height;
-      if (outW > MAX_OUTPUT || outH > MAX_OUTPUT) {
-        const ratio = outW / outH;
-        if (outW > outH) { outW = MAX_OUTPUT; outH = Math.round(outW / ratio); }
-        else { outH = MAX_OUTPUT; outW = Math.round(outH * ratio); }
-      }
-
-      const mergeCanvas = document.createElement("canvas");
-      mergeCanvas.width = outW;
-      mergeCanvas.height = outH;
-      const ctx = mergeCanvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas-Kontext nicht verfügbar");
-
-      // Original zeichnen (aus Data-URL = safe)
-      const originalImg = new Image();
-      await new Promise<void>((resolve, reject) => {
-        originalImg.onload = () => resolve();
-        originalImg.onerror = () => reject(new Error("Original-Bild konnte nicht geladen werden"));
-        originalImg.src = imageDataUrl;
+      const blob = await produceBlob();
+      await onShareToChat(blob);
+    } catch (err: any) {
+      console.error("ImageEditor share to chat error:", err);
+      toast({
+        variant: "destructive",
+        title: "Fehler beim Senden in den Chat",
+        description: err?.message || "Bild konnte nicht gesendet werden",
       });
-      ctx.drawImage(originalImg, 0, 0, outW, outH);
+      setSaving(false);
+    }
+  };
 
-      // Zeichnung laden
-      const drawingImg = new Image();
-      await new Promise<void>((resolve, reject) => {
-        drawingImg.onload = () => resolve();
-        drawingImg.onerror = () => reject(new Error("Zeichnung konnte nicht geladen werden"));
-        drawingImg.src = drawingDataUrl;
-      });
-
-      // Zeichnung skaliert darüber zeichnen (von Canvas-Größe auf Output-Größe)
-      ctx.drawImage(drawingImg, 0, 0, outW, outH);
-
-      // Als JPEG Blob mit 92% Qualität
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        mergeCanvas.toBlob(
-          (b) => b ? resolve(b) : reject(new Error("Blob konnte nicht erstellt werden")),
-          "image/jpeg",
-          0.92
-        );
-      });
-
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const blob = await produceBlob();
       await onSave(blob);
       // onSave schliesst normalerweise den Dialog via onClose im Parent
     } catch (err: any) {
@@ -324,10 +333,25 @@ export function ImageEditor({ open, onClose, imageUrl, onSave, title = "Bild bea
 
           <div className="flex-1" />
 
+          {/* Im Chat posten (nur wenn Handler da) */}
+          {onShareToChat && (
+            <Button
+              onClick={handleShareToChat}
+              disabled={saving || !imageReady || imageError}
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              title="Bearbeitetes Bild direkt in den Projekt-Chat posten"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">In Chat</span>
+            </Button>
+          )}
+
           {/* Speichern */}
           <Button onClick={handleSave} disabled={saving || !imageReady || imageError} size="sm" className="gap-1">
             <Send className="h-4 w-4" />
-            {saving ? "Speichert..." : "Teilen"}
+            {saving ? "Speichert..." : "Speichern"}
           </Button>
         </div>
 

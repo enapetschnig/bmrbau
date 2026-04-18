@@ -224,6 +224,40 @@ const ProjectDetail = () => {
     }
   };
 
+  // Bearbeitetes Bild direkt in den Projekt-Chat posten
+  const handleEditedImageToChat = async (blob: Blob) => {
+    if (!projectId) throw new Error("project id missing");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("not authenticated");
+
+    const fileName = `edited_${Date.now()}.jpg`;
+    const filePath = `${projectId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("project-chat")
+      .upload(filePath, blob, { cacheControl: "3600", contentType: "image/jpeg" });
+    if (uploadError) {
+      toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: uploadError.message });
+      throw uploadError;
+    }
+
+    const { data: urlData } = supabase.storage.from("project-chat").getPublicUrl(filePath);
+    const { error: msgError } = await supabase.from("project_messages").insert({
+      project_id: projectId,
+      user_id: user.id,
+      image_url: urlData.publicUrl,
+      message: "✏️ Bearbeitet",
+    });
+    if (msgError) {
+      toast({ variant: "destructive", title: "Nachricht konnte nicht gesendet werden", description: msgError.message });
+      throw msgError;
+    }
+
+    toast({ title: "Bearbeitetes Bild im Chat geteilt" });
+    setEditingImage(null);
+    setLightboxImage(null);
+  };
+
   // Bearbeitetes Bild als neue Datei im Bucket speichern
   const handleEditedImageSave = async (blob: Blob) => {
     if (!projectId || !type) {
@@ -846,6 +880,7 @@ const ProjectDetail = () => {
           onClose={() => setEditingImage(null)}
           imageUrl={editingImage}
           onSave={handleEditedImageSave}
+          onShareToChat={handleEditedImageToChat}
           title="Bild bearbeiten"
         />
       )}
