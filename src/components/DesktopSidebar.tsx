@@ -73,8 +73,8 @@ export function DesktopSidebar({ isAdmin, menuVisible }: Props) {
       <div className="px-4 py-3 border-t">
         <div className="flex items-center gap-2">
           <img
-            src="/schafferhofer-logo.png"
-            alt="Schafferhofer Bau"
+            src="/bmr-logo.png"
+            alt="BMR Bau"
             className="h-10 w-auto object-contain"
           />
         </div>

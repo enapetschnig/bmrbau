@@ -29,10 +29,10 @@ export function PageHeader({ title, showBackButton = true, backPath }: PageHeade
               <span className="hidden sm:inline">Zurück</span>
             </Button>
           )}
-          <img 
-            src="/schafferhofer-logo.png"
-            alt="Schafferhofer Bau"
-            className="h-14 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] cursor-pointer hover:opacity-80 transition-opacity object-contain" 
+          <img
+            src="/bmr-monogram.png"
+            alt="BMR Bau"
+            className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain rounded-md"
             onClick={() => navigate("/")}
           />
           {title && (

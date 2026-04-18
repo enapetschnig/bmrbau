@@ -15,7 +15,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Schafferhofer Bau', options)
+    self.registration.showNotification(data.title || 'BMR Bau', options)
   );
 });
 

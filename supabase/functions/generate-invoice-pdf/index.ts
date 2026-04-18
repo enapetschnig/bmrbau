@@ -90,10 +90,10 @@ serve(async (req) => {
 
 <div class="header">
   <div>
-    <div class="company">Schafferhofer Bau</div>
+    <div class="company">BMR Bau GmbH</div>
     <div class="company-details">
-      Naturstein & Verlegung<br>
-      office@schafferhoferbau.at
+      Ausführung &middot; Beratung &middot; Sanierung<br>
+      office@bmrbau.at
     </div>
   </div>
   <div>
@@ -143,7 +143,7 @@ serve(async (req) => {
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ''}
 
 <div class="footer">
-  Schafferhofer Bau | office@schafferhoferbau.at
+  BMR Bau GmbH | office@bmrbau.at
 </div>
 
 </body></html>`;

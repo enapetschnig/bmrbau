@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle, Download, Upload } from "lucide-react";
-import * as XLSX from "xlsx-js-style";
+import { ArrowLeft, FileText, FileCheck, Camera, ImagePlus, Lock, Plus, MapPin, Users, Copy, Pencil, Trash2, Phone, Mail, Shield, MessageCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,16 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type DocumentCategory = {
-  type: "plans" | "reports" | "photos" | "chef" | "polier";
+  type: "plans" | "reports" | "photos" | "chef";
   title: string;
   description: string;
   icon: React.ReactNode;
   count: number;
   adminOnly?: boolean;
-  polierOnly?: boolean;
 };
 
 type Contact = {
@@ -37,14 +34,11 @@ const ProjectOverview = () => {
   const [projectInfo, setProjectInfo] = useState<{
     adresse: string | null; plz: string | null; bauherr: string | null;
     bauherr_kontakt: string | null; bauleiter: string | null;
-    bauherr2: string | null; bauherr2_kontakt: string | null;
-    baustellenart: string | null; anfahrt_ueber_100km: boolean | null;
     budget: number | null; start_datum: string | null; end_datum: string | null;
     beschreibung: string | null; kunde_telefon: string | null; kunde_email: string | null;
     erreichbarkeit: string | null; besonderheiten: string | null; hinweise: string | null;
   } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isVorarbeiter, setIsVorarbeiter] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [categories, setCategories] = useState<DocumentCategory[]>([
     {
@@ -61,18 +55,16 @@ const ProjectOverview = () => {
       icon: <FileText className="h-8 w-8" />,
       count: 0,
     },
-    // Regieberichte entfernt - gibt bereits "Berichte" Karte (Tages-/Regie-/Zwischenberichte)
     {
-      type: "polier",
-      title: "Polierordner",
-      description: "Interner Datenaustausch Polier & Chef",
-      icon: <FileText className="h-8 w-8" />,
+      type: "reports",
+      title: "Regieberichte",
+      description: "Bautagebücher und Stundenberichte",
+      icon: <FileCheck className="h-8 w-8" />,
       count: 0,
-      polierOnly: true,
     },
     {
       type: "chef",
-      title: "Chefordner",
+      title: "🔒 Chefordner",
       description: "Vertrauliche Chef-Dokumente",
       icon: <Lock className="h-8 w-8" />,
       count: 0,
@@ -84,17 +76,9 @@ const ProjectOverview = () => {
 
   // Contacts state
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [showAllContacts, setShowAllContacts] = useState(false);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", rolle: "", telefon: "", email: "", firma: "", phase: "bauphase", notizen: "" });
-
-  // Template picker state
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [templates, setTemplates] = useState<{ id: string; name: string; firma: string | null; rolle: string | null; telefon: string | null; email: string | null }[]>([]);
-  const [templateSearch, setTemplateSearch] = useState("");
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
-  const [addingTemplates, setAddingTemplates] = useState(false);
 
   // Access management state
   const [showAccessDialog, setShowAccessDialog] = useState(false);
@@ -107,9 +91,6 @@ const ProjectOverview = () => {
   const [editForm, setEditForm] = useState({
     name: "", beschreibung: "", adresse: "", plz: "",
     bauherr: "", bauherr_kontakt: "", bauleiter: "",
-    bauherr2: "", bauherr2_kontakt: "",
-    baustellenart: "" as string,
-    anfahrt_ueber_100km: false,
     budget: "", start_datum: "", end_datum: "",
     kunde_telefon: "", kunde_email: "",
     erreichbarkeit: "", besonderheiten: "", hinweise: "",
@@ -125,10 +106,6 @@ const ProjectOverview = () => {
       plz: projectInfo.plz || "",
       bauherr: projectInfo.bauherr || "",
       bauherr_kontakt: projectInfo.bauherr_kontakt || "",
-      bauherr2: projectInfo.bauherr2 || "",
-      bauherr2_kontakt: projectInfo.bauherr2_kontakt || "",
-      baustellenart: projectInfo.baustellenart || "",
-      anfahrt_ueber_100km: projectInfo.anfahrt_ueber_100km || false,
       bauleiter: projectInfo.bauleiter || "",
       budget: projectInfo.budget != null ? String(projectInfo.budget) : "",
       start_datum: projectInfo.start_datum || "",
@@ -154,10 +131,6 @@ const ProjectOverview = () => {
         plz: editForm.plz.trim() || null,
         bauherr: editForm.bauherr.trim() || null,
         bauherr_kontakt: editForm.bauherr_kontakt.trim() || null,
-        bauherr2: editForm.bauherr2.trim() || null,
-        bauherr2_kontakt: editForm.bauherr2_kontakt.trim() || null,
-        baustellenart: editForm.baustellenart || null,
-        anfahrt_ueber_100km: editForm.anfahrt_ueber_100km,
         bauleiter: editForm.bauleiter.trim() || null,
         budget: editForm.budget ? Number(editForm.budget) : null,
         start_datum: editForm.start_datum || null,
@@ -255,14 +228,6 @@ const ProjectOverview = () => {
       .maybeSingle();
 
     setIsAdmin(!!data);
-
-    // Check if Vorarbeiter
-    const { data: empData } = await supabase
-      .from("employees")
-      .select("kategorie")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    setIsVorarbeiter(empData?.kategorie === "vorarbeiter");
   };
 
   const fetchProjectName = async () => {
@@ -270,7 +235,7 @@ const ProjectOverview = () => {
 
     const { data } = await supabase
       .from("projects")
-      .select("name, adresse, plz, bauherr, bauherr_kontakt, bauherr2, bauherr2_kontakt, baustellenart, anfahrt_ueber_100km, bauleiter, budget, start_datum, end_datum, beschreibung, kunde_telefon, kunde_email, erreichbarkeit, besonderheiten, hinweise")
+      .select("name, adresse, plz, bauherr, bauherr_kontakt, bauleiter, budget, start_datum, end_datum, beschreibung, kunde_telefon, kunde_email, erreichbarkeit, besonderheiten, hinweise")
       .eq("id", projectId)
       .single();
 
@@ -279,10 +244,7 @@ const ProjectOverview = () => {
       setProjectName(d.name);
       setProjectInfo({
         adresse: d.adresse, plz: d.plz, bauherr: d.bauherr,
-        bauherr_kontakt: d.bauherr_kontakt,
-        bauherr2: d.bauherr2, bauherr2_kontakt: d.bauherr2_kontakt,
-        baustellenart: d.baustellenart, anfahrt_ueber_100km: d.anfahrt_ueber_100km,
-        bauleiter: d.bauleiter,
+        bauherr_kontakt: d.bauherr_kontakt, bauleiter: d.bauleiter,
         budget: d.budget, start_datum: d.start_datum, end_datum: d.end_datum,
         beschreibung: d.beschreibung, kunde_telefon: d.kunde_telefon,
         kunde_email: d.kunde_email, erreichbarkeit: d.erreichbarkeit,
@@ -303,25 +265,8 @@ const ProjectOverview = () => {
       .from("project_contacts")
       .select("*")
       .eq("project_id", projectId)
-      .order("sort_order")
       .order("name");
     if (data) setContacts(data as Contact[]);
-  };
-
-  const moveContact = async (contactId: string, direction: "up" | "down") => {
-    const idx = contacts.findIndex(c => c.id === contactId);
-    if (idx < 0) return;
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= contacts.length) return;
-
-    const updates = [
-      { id: contacts[idx].id, sort_order: swapIdx },
-      { id: contacts[swapIdx].id, sort_order: idx },
-    ];
-    for (const u of updates) {
-      await supabase.from("project_contacts").update({ sort_order: u.sort_order }).eq("id", u.id);
-    }
-    fetchContacts();
   };
 
   const handleSaveContact = async () => {
@@ -377,124 +322,6 @@ const ProjectOverview = () => {
     toast({ title: "Kopiert", description: "Kontaktdaten in Zwischenablage" });
   };
 
-  const exportContactVCF = (c: Contact) => {
-    const nameParts = c.name.split(" ");
-    const lastName = nameParts.pop() || "";
-    const firstName = nameParts.join(" ");
-    const vcf = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      `N:${lastName};${firstName};;;`,
-      `FN:${c.name}`,
-      c.firma ? `ORG:${c.firma}` : "",
-      c.rolle ? `TITLE:${c.rolle}` : "",
-      c.telefon ? `TEL;TYPE=WORK:${c.telefon}` : "",
-      c.email ? `EMAIL:${c.email}` : "",
-      `NOTE:Projekt: ${projectName}`,
-      "END:VCARD",
-    ].filter(Boolean).join("\r\n");
-
-    const blob = new Blob([vcf], { type: "text/vcard" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${c.name.replace(/\s+/g, "_")}.vcf`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportContactsExcel = () => {
-    const data = contacts.map(c => ({
-      Name: c.name, Firma: c.firma || "", Rolle: c.rolle || "",
-      Telefon: c.telefon || "", Email: c.email || "",
-      Phase: c.phase === "planungsphase" ? "Planungsphase" : c.phase === "beide" ? "Alle Phasen" : "Bauphase",
-      Notizen: c.notizen || "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws["!cols"] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 18 }, { wch: 25 }, { wch: 15 }, { wch: 30 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Kontakte");
-    XLSX.writeFile(wb, `Kontakte_${projectName.replace(/\s+/g, "_")}.xlsx`);
-  };
-
-  const importContactsExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !projectId) return;
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data);
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
-
-    // Bestehende Kontakte loeschen (laut Dokument: "beim Import werden alle ueberschrieben")
-    await supabase.from("project_contacts").delete().eq("project_id", projectId);
-
-    let imported = 0;
-    for (const row of rows) {
-      const name = (row["Name"] || row["name"] || "").toString().trim();
-      if (!name) continue;
-      const phaseRaw = (row["Phase"] || row["phase"] || "bauphase").toString().toLowerCase();
-      const phase = phaseRaw.includes("plan") ? "planungsphase" : phaseRaw.includes("alle") || phaseRaw.includes("beide") ? "beide" : "bauphase";
-
-      await supabase.from("project_contacts").insert({
-        project_id: projectId,
-        name,
-        firma: (row["Firma"] || row["firma"] || "").toString() || null,
-        rolle: (row["Rolle"] || row["rolle"] || "").toString() || null,
-        telefon: (row["Telefon"] || row["telefon"] || "").toString() || null,
-        email: (row["Email"] || row["email"] || row["E-Mail"] || "").toString() || null,
-        phase,
-        notizen: (row["Notizen"] || row["notizen"] || "").toString() || null,
-      });
-      imported++;
-    }
-    toast({ title: `${imported} Kontakte importiert` });
-    fetchContacts();
-    e.target.value = "";
-  };
-
-  const openTemplatePicker = async () => {
-    setShowTemplatePicker(true);
-    setSelectedTemplateIds(new Set());
-    setTemplateSearch("");
-    const { data } = await supabase
-      .from("contact_templates")
-      .select("id, name, firma, rolle, telefon, email")
-      .order("name");
-    setTemplates(data || []);
-  };
-
-  const toggleTemplate = (id: string) => {
-    const next = new Set(selectedTemplateIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setSelectedTemplateIds(next);
-  };
-
-  const addSelectedTemplates = async () => {
-    if (!projectId || selectedTemplateIds.size === 0) return;
-    setAddingTemplates(true);
-    const selected = templates.filter(t => selectedTemplateIds.has(t.id));
-    const maxSort = contacts.reduce((m, c) => Math.max(m, (c as any).sort_order ?? 0), 0);
-    const rows = selected.map((t, i) => ({
-      project_id: projectId,
-      name: t.name,
-      firma: t.firma,
-      rolle: t.rolle,
-      telefon: t.telefon,
-      email: t.email,
-      phase: "beide",
-      sort_order: maxSort + 1 + i,
-    }));
-    const { error } = await supabase.from("project_contacts").insert(rows);
-    setAddingTemplates(false);
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
-    }
-    toast({ title: `${rows.length} Kontakt${rows.length === 1 ? "" : "e"} aus Vorlage hinzugefügt` });
-    setShowTemplatePicker(false);
-    fetchContacts();
-  };
-
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
@@ -503,15 +330,11 @@ const ProjectOverview = () => {
       reports: "project-reports",
       photos: "project-photos",
       chef: "project-chef",
-      polier: "project-polier",
     };
 
     const updatedCategories = await Promise.all(
       categories.map(async (category) => {
         if (category.type === "chef" && !isAdmin) {
-          return { ...category, count: 0 };
-        }
-        if (category.type === "polier" && !isAdmin && !isVorarbeiter) {
           return { ...category, count: 0 };
         }
 
@@ -535,62 +358,9 @@ const ProjectOverview = () => {
     navigate(`/projects/${projectId}/photos`);
   };
 
-  const [downloading, setDownloading] = useState(false);
-  const handleProjectZipDownload = async () => {
-    if (!projectId || !isAdmin) return;
-    setDownloading(true);
-    const { default: JSZip } = await import("jszip");
-    const zip = new JSZip();
-    const folder = zip.folder(projectName || "Projekt")!;
-
-    const buckets = [
-      { name: "Plaene_Auftraege", bucket: "project-plans" },
-      { name: "Regieberichte", bucket: "project-reports" },
-      { name: "Fotos", bucket: "project-photos" },
-      { name: "Chefordner", bucket: "project-chef" },
-      { name: "Polierordner", bucket: "project-polier" },
-    ];
-
-    for (const b of buckets) {
-      const { data: files } = await supabase.storage.from(b.bucket).list(projectId);
-      if (!files || files.length === 0) continue;
-      const subFolder = folder.folder(b.name)!;
-      for (const file of files) {
-        const { data } = await supabase.storage.from(b.bucket).download(`${projectId}/${file.name}`);
-        if (data) subFolder.file(file.name, data);
-      }
-    }
-
-    // Kontakte als Excel
-    if (contacts.length > 0) {
-      const XLSX = await import("xlsx-js-style");
-      const wsData = contacts.map(c => ({
-        Name: c.name, Firma: c.firma || "", Rolle: c.rolle || "",
-        Telefon: c.telefon || "", Email: c.email || "",
-      }));
-      const ws = XLSX.utils.json_to_sheet(wsData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Kontakte");
-      const excelBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-      folder.file("Kontakte.xlsx", excelBuffer);
-    }
-
-    const blob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${projectName || "Projekt"}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setDownloading(false);
-    toast({ title: "Download abgeschlossen" });
-  };
-
-  const visibleCategories = categories.filter((category) => {
-    if (category.adminOnly && !isAdmin) return false;
-    if (category.polierOnly && !isAdmin && !isVorarbeiter) return false;
-    return true;
-  });
+  const visibleCategories = categories.filter(
+    (category) => !category.adminOnly || isAdmin
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -602,9 +372,9 @@ const ProjectOverview = () => {
               <span className="hidden sm:inline">Zurück</span>
             </Button>
             <img
-              src="/schafferhofer-logo.png"
-              alt="Schafferhofer Bau"
-              className="h-14 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] cursor-pointer hover:opacity-80 transition-opacity object-contain"
+              src="/bmr-monogram.png"
+              alt="BMR Bau"
+              className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain rounded-md"
               onClick={() => navigate("/projects")}
             />
           </div>
@@ -629,16 +399,6 @@ const ProjectOverview = () => {
                 >
                   <Shield className="h-4 w-4" />
                   <span className="hidden sm:inline">Zugriff</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={handleProjectZipDownload}
-                  disabled={downloading}
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">{downloading ? "Lädt..." : "ZIP"}</span>
                 </Button>
               </div>
             )}
@@ -714,40 +474,22 @@ const ProjectOverview = () => {
         {/* Projektkontakte — prominent oben */}
         <Card className="mb-4">
           <CardHeader className="pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Users className="h-5 w-5" />
                 Projektkontakte
                 {contacts.length > 0 && <span className="text-sm font-normal text-muted-foreground">({contacts.length})</span>}
               </CardTitle>
-              <div className="flex gap-1 flex-wrap">
-                {contacts.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={exportContactsExcel} title="Excel-Export">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                )}
-                {isAdmin && (
-                  <>
-                    <label className="cursor-pointer">
-                      <input type="file" accept=".xlsx,.xls" onChange={importContactsExcel} className="hidden" />
-                      <Button size="sm" variant="ghost" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Excel-Import (überschreibt alle)">
-                        <Upload className="h-4 w-4" />
-                      </Button>
-                    </label>
-                    <Button size="sm" variant="outline" onClick={openTemplatePicker} title="Kontakt aus Vorlage">
-                      <Users className="h-4 w-4 mr-1" /> Vorlage
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowContactDialog(true)}>
-                      <Plus className="h-4 w-4 mr-1" /> Kontakt
-                    </Button>
-                  </>
-                )}
-              </div>
+              {isAdmin && (
+                <Button size="sm" variant="outline" onClick={() => setShowContactDialog(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Kontakt
+                </Button>
+              )}
             </div>
           </CardHeader>
           {contacts.length > 0 ? (
             <CardContent className="pt-0 space-y-2">
-              {contacts.slice(0, showAllContacts ? contacts.length : 2).map(c => (
+              {contacts.map(c => (
                 <div key={c.id} className="flex items-start gap-3 p-2 rounded-lg border text-sm">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">{c.name}{c.firma && <span className="text-muted-foreground font-normal"> · {c.firma}</span>}</div>
@@ -769,17 +511,8 @@ const ProjectOverview = () => {
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyContact(c)} title="Kontakt kopieren">
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportContactVCF(c)} title="Als VCF exportieren (WhatsApp/Kontakte)">
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
                     {isAdmin && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveContact(c.id, "up")} title="Nach oben">
-                          <ArrowLeft className="h-3 w-3 rotate-90" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveContact(c.id, "down")} title="Nach unten">
-                          <ArrowLeft className="h-3 w-3 -rotate-90" />
-                        </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditContact(c)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -791,16 +524,6 @@ const ProjectOverview = () => {
                   </div>
                 </div>
               ))}
-              {contacts.length > 2 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={() => setShowAllContacts(!showAllContacts)}
-                >
-                  {showAllContacts ? "Weniger anzeigen" : `+ ${contacts.length - 2} weitere Kontakte anzeigen`}
-                </Button>
-              )}
             </CardContent>
           ) : (
             <CardContent className="pt-0">
@@ -838,8 +561,8 @@ const ProjectOverview = () => {
           </Card>
         )}
 
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-          {/* 1. Projekt-Chat */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Projekt-Chat */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow border-primary/30 bg-primary/5"
             onClick={() => navigate(`/projects/${projectId}/chat`)}
@@ -852,41 +575,32 @@ const ProjectOverview = () => {
               <CardDescription>Nachrichten & Fotos mit dem Team austauschen</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" className="w-full">Chat oeffnen</Button>
+              <Button variant="outline" className="w-full">Chat öffnen</Button>
             </CardContent>
           </Card>
 
-          {/* 2. Plaene/Auftraege */}
-          {visibleCategories.filter(c => c.type === "plans").map((category) => (
-            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
+          {/* Fotos - first */}
+          {visibleCategories.filter(c => c.type === "photos").map((category) => (
+            <Card
+              key={category.type}
+              className="cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => navigate(`/projects/${projectId}/${category.type}`)}
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="text-primary">{category.icon}</div>
                   <div className="text-2xl font-bold">{category.count}</div>
                 </div>
-                <CardTitle className="text-xl">Plaene / Auftraege</CardTitle>
+                <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
+              <CardContent>
+                <Button variant="outline" className="w-full">Öffnen</Button>
+              </CardContent>
             </Card>
           ))}
 
-          {/* 3. Lieferscheine & Rechnungen */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate(`/incoming-documents?project=${projectId}${!isAdmin ? "&capture=1" : ""}`)}
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="text-primary"><FileText className="h-8 w-8" /></div>
-              </div>
-              <CardTitle className="text-xl">Lieferscheine & Rechnungen</CardTitle>
-              <CardDescription>Lieferscheine und Rechnungen verwalten</CardDescription>
-            </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-          </Card>
-
-          {/* 4. Berichte (Tages-, Regie-, Zwischenberichte) */}
+          {/* Tagesberichte */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => navigate(`/daily-reports?project=${projectId}`)}
@@ -896,17 +610,21 @@ const ProjectOverview = () => {
                 <div className="text-primary"><FileText className="h-8 w-8" /></div>
                 <div className="text-2xl font-bold">{dailyReportCount}</div>
               </div>
-              <CardTitle className="text-xl">Berichte</CardTitle>
-              <CardDescription>Tages-, Regie- und Zwischenberichte</CardDescription>
+              <CardTitle className="text-xl">Tagesberichte</CardTitle>
+              <CardDescription>Tages- und Zwischenberichte für dieses Projekt</CardDescription>
             </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
+            <CardContent>
+              <Button variant="outline" className="w-full">Öffnen</Button>
+            </CardContent>
           </Card>
 
-          {/* Regieberichte-Karte entfernt - ersetzt durch "Berichte" oben */}
-
-          {/* 5. Fotos */}
-          {visibleCategories.filter(c => c.type === "photos").map((category) => (
-            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
+          {/* Rest: Pläne, Regieberichte, Chefordner */}
+          {visibleCategories.filter(c => c.type !== "photos").map((category) => (
+            <Card
+              key={category.type}
+              className="cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => navigate(`/projects/${projectId}/${category.type}`)}
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="text-primary">{category.icon}</div>
@@ -915,57 +633,9 @@ const ProjectOverview = () => {
                 <CardTitle className="text-xl">{category.title}</CardTitle>
                 <CardDescription>{category.description}</CardDescription>
               </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-            </Card>
-          ))}
-
-          {/* 6. Bestellungen */}
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/bestellungen?project=${projectId}`)}>
-            <CardHeader>
-              <div className="text-primary"><FileText className="h-8 w-8" /></div>
-              <CardTitle className="text-xl">Bestellungen</CardTitle>
-              <CardDescription>Material bestellen und verwalten</CardDescription>
-            </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-          </Card>
-
-          {/* 7. Unterweisungen */}
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/safety/baustellenunterweisungen?project=${projectId}`)}>
-            <CardHeader>
-              <div className="text-primary"><Shield className="h-8 w-8" /></div>
-              <CardTitle className="text-xl">Unterweisungen</CardTitle>
-              <CardDescription>Sicherheits- und Geräteunterweisungen</CardDescription>
-            </CardHeader>
-            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-          </Card>
-
-          {/* 8. Polierordner (Vorarbeiter + Admin) */}
-          {visibleCategories.filter(c => c.type === "polier").map((category) => (
-            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="text-primary">{category.icon}</div>
-                  <div className="text-2xl font-bold">{category.count}</div>
-                </div>
-                <CardTitle className="text-xl">{category.title}</CardTitle>
-                <CardDescription>{category.description}</CardDescription>
-              </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
-            </Card>
-          ))}
-
-          {/* 7. Chefordner (Admin only) */}
-          {visibleCategories.filter(c => c.type === "chef").map((category) => (
-            <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="text-primary">{category.icon}</div>
-                  <div className="text-2xl font-bold">{category.count}</div>
-                </div>
-                <CardTitle className="text-xl">{category.title}</CardTitle>
-                <CardDescription>{category.description}</CardDescription>
-              </CardHeader>
-              <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
+              <CardContent>
+                <Button variant="outline" className="w-full">Öffnen</Button>
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -1032,74 +702,6 @@ const ProjectOverview = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Template Picker Dialog */}
-      <Dialog open={showTemplatePicker} onOpenChange={setShowTemplatePicker}>
-        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Kontakt aus Vorlage</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2 flex-1 overflow-hidden flex flex-col">
-            <Input
-              placeholder="Suchen (Name, Firma, Rolle)..."
-              value={templateSearch}
-              onChange={(e) => setTemplateSearch(e.target.value)}
-              className="h-10"
-            />
-            <div className="flex-1 overflow-y-auto border rounded-lg">
-              {templates.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-4 text-center">
-                  Keine Vorlagen vorhanden. Admin kann unter Administration → Kontakt-Vorlagen welche anlegen.
-                </p>
-              ) : (
-                (() => {
-                  const term = templateSearch.toLowerCase().trim();
-                  const filtered = term
-                    ? templates.filter(t =>
-                        [t.name, t.firma, t.rolle, t.telefon].some(v => (v || "").toLowerCase().includes(term))
-                      )
-                    : templates;
-                  if (filtered.length === 0) {
-                    return <p className="text-sm text-muted-foreground p-4 text-center">Keine Treffer</p>;
-                  }
-                  return filtered.map(t => (
-                    <label key={t.id} className="flex items-start gap-3 p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/40">
-                      <Checkbox
-                        checked={selectedTemplateIds.has(t.id)}
-                        onCheckedChange={() => toggleTemplate(t.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 min-w-0 text-sm">
-                        <div className="font-medium">
-                          {t.name}
-                          {t.firma && <span className="text-muted-foreground font-normal"> · {t.firma}</span>}
-                        </div>
-                        {t.rolle && <div className="text-xs text-muted-foreground">{t.rolle}</div>}
-                        <div className="flex flex-wrap gap-3 mt-0.5">
-                          {t.telefon && <span className="text-xs text-muted-foreground">{t.telefon}</span>}
-                          {t.email && <span className="text-xs text-muted-foreground">{t.email}</span>}
-                        </div>
-                      </div>
-                    </label>
-                  ));
-                })()
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                onClick={addSelectedTemplates}
-                disabled={addingTemplates || selectedTemplateIds.size === 0}
-              >
-                {addingTemplates ? "Hinzufügen..." : `${selectedTemplateIds.size} hinzufügen`}
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setShowTemplatePicker(false)}>
-                Abbrechen
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Access Management Dialog */}
       <Dialog open={showAccessDialog} onOpenChange={setShowAccessDialog}>
         <DialogContent className="sm:max-w-md">
@@ -1156,13 +758,7 @@ const ProjectOverview = () => {
             </div>
             <div className="space-y-1">
               <Label>Beschreibung</Label>
-              <VoiceAIInput
-                multiline
-                rows={2}
-                context="default"
-                value={editForm.beschreibung}
-                onChange={(v) => setEditForm(f => ({ ...f, beschreibung: v }))}
-              />
+              <Textarea value={editForm.beschreibung} onChange={(e) => setEditForm(f => ({ ...f, beschreibung: e.target.value }))} rows={2} />
             </div>
 
             <div className="border-t pt-3">
@@ -1183,36 +779,6 @@ const ProjectOverview = () => {
                 <div className="space-y-1">
                   <Label>Bauherr Kontakt</Label>
                   <Input value={editForm.bauherr_kontakt} onChange={(e) => setEditForm(f => ({ ...f, bauherr_kontakt: e.target.value }))} className="h-10" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Bauherr 2</Label>
-                  <Input value={editForm.bauherr2} onChange={(e) => setEditForm(f => ({ ...f, bauherr2: e.target.value }))} className="h-10" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Bauherr 2 Kontakt</Label>
-                  <Input value={editForm.bauherr2_kontakt} onChange={(e) => setEditForm(f => ({ ...f, bauherr2_kontakt: e.target.value }))} className="h-10" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Baustellenart</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={editForm.baustellenart}
-                    onChange={(e) => setEditForm(f => ({ ...f, baustellenart: e.target.value }))}
-                  >
-                    <option value="">-- Auswählen --</option>
-                    <option value="regie">Regie</option>
-                    <option value="pauschale">Pauschale</option>
-                  </select>
-                </div>
-                <div className="space-y-1 flex items-center gap-3 pt-5">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300"
-                    checked={editForm.anfahrt_ueber_100km}
-                    onChange={(e) => setEditForm(f => ({ ...f, anfahrt_ueber_100km: e.target.checked }))}
-                    id="anfahrt100km"
-                  />
-                  <Label htmlFor="anfahrt100km">&gt;100km Anfahrt</Label>
                 </div>
                 <div className="space-y-1">
                   <Label>Telefon</Label>
@@ -1252,55 +818,17 @@ const ProjectOverview = () => {
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label>Erreichbarkeit</Label>
-                  <VoiceAIInput
-                    context="notiz"
-                    value={editForm.erreichbarkeit}
-                    onChange={(v) => setEditForm(f => ({ ...f, erreichbarkeit: v }))}
-                  />
+                  <Input value={editForm.erreichbarkeit} onChange={(e) => setEditForm(f => ({ ...f, erreichbarkeit: e.target.value }))} className="h-10" />
                 </div>
                 <div className="space-y-1">
                   <Label>Besonderheiten</Label>
-                  <VoiceAIInput
-                    multiline
-                    rows={2}
-                    context="anmerkung"
-                    value={editForm.besonderheiten}
-                    onChange={(v) => setEditForm(f => ({ ...f, besonderheiten: v }))}
-                  />
+                  <Textarea value={editForm.besonderheiten} onChange={(e) => setEditForm(f => ({ ...f, besonderheiten: e.target.value }))} rows={2} />
                 </div>
                 <div className="space-y-1">
                   <Label>Hinweise zur Baustelle</Label>
-                  <VoiceAIInput
-                    multiline
-                    rows={2}
-                    context="anmerkung"
-                    value={editForm.hinweise}
-                    onChange={(v) => setEditForm(f => ({ ...f, hinweise: v }))}
-                  />
+                  <Textarea value={editForm.hinweise} onChange={(e) => setEditForm(f => ({ ...f, hinweise: e.target.value }))} rows={2} />
                 </div>
               </div>
-            </div>
-
-            <div className="border-t pt-3">
-              <p className="text-sm font-medium mb-2">Projektkontakte</p>
-              <p className="text-xs text-muted-foreground mb-2">
-                Kontakte werden direkt auf der Projektseite verwaltet (hinzufügen, bearbeiten, löschen, sortieren, aus Vorlage übernehmen, Excel-Import/Export).
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setShowEditDialog(false); setTimeout(() => setShowContactDialog(true), 150); }}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Kontakt hinzufügen
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-2"
-                onClick={() => { setShowEditDialog(false); setTimeout(() => openTemplatePicker(), 150); }}
-              >
-                <Users className="h-4 w-4 mr-1" /> Aus Vorlage
-              </Button>
             </div>
 
             <div className="flex gap-2 pt-2">

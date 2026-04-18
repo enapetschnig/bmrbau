@@ -234,7 +234,7 @@ export async function generateDisturbancePDF(
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   const footerY = doc.internal.pageSize.getHeight() - 15;
-  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | Schafferhofer Bau`, margin, footerY);
+  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | BMR Bau GmbH`, margin, footerY);
 
   const pdfBase64 = doc.output("datauristring").split(",")[1];
   const dateForFilename = formatDateShort(disturbance.datum).replace(/\./g, "-");
@@ -253,12 +253,12 @@ export function generateEmailHtml(
     <!DOCTYPE html><html><head><meta charset="utf-8">
     <style>
       body { font-family: Arial, sans-serif; color: #333; line-height: 1.5; }
-      .header { color: #3D9B3D; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+      .header { color: #7CA373; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
       .container { max-width: 600px; margin: 0 auto; padding: 20px; }
       .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
     </style></head>
     <body><div class="container">
-      <div class="header">HOLZKNECHT NATURSTEINE</div>
+      <div class="header">BMR BAU GMBH</div>
       <h2>Regiebericht</h2>
       <p>Sehr geehrte Damen und Herren,</p>
       <p>im Anhang finden Sie den Regiebericht für den Einsatz bei <strong>${disturbance.kunde_name}</strong>.</p>
@@ -269,7 +269,7 @@ export function generateEmailHtml(
         Gesamtstunden: ${disturbance.stunden.toFixed(2)} h
       </div>
       <p>Der vollständige Bericht befindet sich im angehängten PDF-Dokument.</p>
-      <p>Mit freundlichen Grüßen,<br>Schafferhofer Bau</p>
+      <p>Mit freundlichen Grüßen,<br>BMR Bau GmbH</p>
     </div></body></html>
   `;
 }

@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = JSON.stringify({
-      title: title || "Schafferhofer Bau",
+      title: title || "BMR Bau",
       body: body || "Neue Nachricht",
       url: url || "/",
       tag: `msg-${Date.now()}`,

@@ -118,9 +118,9 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
-            <img src="/schafferhofer-logo.png" alt="Schafferhofer Bau" className="h-20 w-20 object-contain" />
+            <img src="/bmr-monogram.png" alt="BMR Bau" className="h-20 w-20 object-contain rounded-lg" />
             <div>
-              <h1 className="text-4xl font-bold text-foreground">Schafferhofer Bau</h1>
+              <h1 className="text-4xl font-bold text-foreground">BMR Bau</h1>
               <p className="text-muted-foreground">Digitale Projektdokumentation</p>
             </div>
           </div>

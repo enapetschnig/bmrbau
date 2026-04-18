@@ -15,7 +15,7 @@ import type {
   DailyTarget,
   ScheduleMode,
 } from "@/components/schedule/scheduleTypes";
-import { getAssignmentForDay, getAssignmentsForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
+import { getAssignmentForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
@@ -26,9 +26,6 @@ import { AssignmentPopover } from "@/components/schedule/AssignmentPopover";
 import { DayDetailSheet } from "@/components/schedule/DayDetailSheet";
 import { CompanyHolidayManager } from "@/components/schedule/CompanyHolidayManager";
 import { YearPlanningView } from "@/components/schedule/YearPlanningView";
-import { ResourcesManager } from "@/components/schedule/ResourcesManager";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Package } from "lucide-react";
 
 export default function ScheduleBoard() {
   const navigate = useNavigate();
@@ -59,18 +56,10 @@ export default function ScheduleBoard() {
     isExtern,
     canEditProject,
     canManageHolidays,
-    canSeeYearPlanning,
     loading: permLoading,
   } = useSchedulePermissions();
 
   const isExternView = isExtern && !isAdmin && !isVorarbeiter;
-
-  // Falls User keine Berechtigung fuer Jahresansicht hat, zwinge zurueck zu Wochenansicht
-  useEffect(() => {
-    if (!permLoading && mode === "year" && !canSeeYearPlanning) {
-      setMode("week");
-    }
-  }, [permLoading, canSeeYearPlanning, mode]);
 
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
   const weekEnd = addDays(weekStart, 4);
@@ -88,9 +77,6 @@ export default function ScheduleBoard() {
   const [sheetProjectId, setSheetProjectId] = useState<string | null>(null);
   const [sheetDatum, setSheetDatum] = useState<string | null>(null);
 
-  // Resources manager dialog
-  const [resourcesDialogOpen, setResourcesDialogOpen] = useState(false);
-
   useEffect(() => {
     if (!permLoading && !isAdmin && !isVorarbeiter && !isExtern) {
       navigate("/");
@@ -106,55 +92,49 @@ export default function ScheduleBoard() {
   // --- Assignment handlers ---
   const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string) => {
     const datum = format(date, "yyyy-MM-dd");
+    const existing = getAssignmentForDay(assignments, uid, date);
 
-    // Upsert: wenn gleicher MA + Tag + Projekt existiert -> update, sonst insert
-    const { data, error } = await supabase
-      .from("worker_assignments")
-      .upsert(
-        { user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null },
-        { onConflict: "user_id,datum,project_id" }
-      )
-      .select()
-      .single();
-
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
-    }
-    if (data) {
-      setAssignments((prev) => {
-        const existing = prev.find((a) => a.id === (data as Assignment).id);
-        if (existing) return prev.map((a) => a.id === existing.id ? (data as Assignment) : a);
-        return [...prev, data as Assignment];
-      });
-    }
-  };
-
-  const handleRemove = async (uid: string, date: Date, assignmentId?: string) => {
-    if (assignmentId) {
-      // Remove specific assignment by ID
+    if (existing) {
       const { error } = await supabase
         .from("worker_assignments")
-        .delete()
-        .eq("id", assignmentId);
+        .update({ project_id: projectId, notizen: notizen ?? null })
+        .eq("id", existing.id);
       if (error) {
         toast({ variant: "destructive", title: "Fehler", description: error.message });
         return;
       }
-      setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
-    } else {
-      // Remove all assignments for this user on this date (legacy fallback)
-      const existing = assignments.filter(
-        (a) => a.user_id === uid && a.datum === format(date, "yyyy-MM-dd")
+      setAssignments((prev) =>
+        prev.map((a) =>
+          a.id === existing.id ? { ...a, project_id: projectId, notizen: notizen ?? null } : a
+        )
       );
-      if (existing.length === 0) return;
-
-      for (const a of existing) {
-        await supabase.from("worker_assignments").delete().eq("id", a.id);
+    } else {
+      const { data, error } = await supabase
+        .from("worker_assignments")
+        .insert({ user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null })
+        .select()
+        .single();
+      if (error) {
+        toast({ variant: "destructive", title: "Fehler", description: error.message });
+        return;
       }
-      const ids = new Set(existing.map((a) => a.id));
-      setAssignments((prev) => prev.filter((a) => !ids.has(a.id)));
+      if (data) setAssignments((prev) => [...prev, data as Assignment]);
     }
+  };
+
+  const handleRemove = async (uid: string, date: Date) => {
+    const existing = getAssignmentForDay(assignments, uid, date);
+    if (!existing) return;
+
+    const { error } = await supabase
+      .from("worker_assignments")
+      .delete()
+      .eq("id", existing.id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    setAssignments((prev) => prev.filter((a) => a.id !== existing.id));
   };
 
   // --- Daily target handlers ---
@@ -332,10 +312,6 @@ export default function ScheduleBoard() {
     popoverUserId && popoverDate
       ? getAssignmentForDay(assignments, popoverUserId, popoverDate)
       : null;
-  const popoverExistingAssignments =
-    popoverUserId && popoverDate
-      ? getAssignmentsForDay(assignments, popoverUserId, popoverDate)
-      : [];
 
   const sheetProject = projects.find((p) => p.id === sheetProjectId) || null;
   const sheetTarget = sheetProjectId && sheetDatum
@@ -360,9 +336,9 @@ export default function ScheduleBoard() {
               <span className="hidden sm:inline">Zurück</span>
             </Button>
             <img
-              src="/schafferhofer-logo.png"
-              alt="Schafferhofer Bau"
-              className="h-14 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] cursor-pointer hover:opacity-80 transition-opacity object-contain"
+              src="/bmr-monogram.png"
+              alt="BMR Bau"
+              className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain rounded-md"
               onClick={() => navigate("/")}
             />
           </div>
@@ -375,7 +351,6 @@ export default function ScheduleBoard() {
           onWeekChange={setWeekStart}
           mode={isExternView ? "week" : mode}
           onModeChange={isExternView ? undefined : setMode}
-          showYearToggle={canSeeYearPlanning}
           title={isExternView ? "Meine Einteilung" : undefined}
         >
           {canManageHolidays && (
@@ -384,11 +359,6 @@ export default function ScheduleBoard() {
               onUpdate={() => fetchData(weekStart, weekEnd, mode)}
               userId={userId}
             />
-          )}
-          {(isAdmin || isVorarbeiter) && (
-            <Button variant="outline" size="sm" onClick={() => setResourcesDialogOpen(true)}>
-              <Package className="h-4 w-4 mr-1" /> Ressourcen
-            </Button>
           )}
         </ScheduleHeader>
 
@@ -450,7 +420,6 @@ export default function ScheduleBoard() {
             assignments={assignments}
             holidays={companyHolidays}
             leaveRequests={leaveRequests}
-            onSelectWeek={(wStart) => { setWeekStart(wStart); setMode("week"); }}
           />
         )}
       </main>
@@ -463,9 +432,7 @@ export default function ScheduleBoard() {
         date={popoverDate}
         days={popoverDays.length > 1 ? popoverDays : undefined}
         assignment={popoverAssignment || null}
-        existingAssignments={popoverExistingAssignments}
         projects={projects}
-        holidays={companyHolidays}
         onAssign={async (uid, date, projectId, notizen) => {
           const daysToAssign = popoverDays.length > 1 ? popoverDays : [date];
           for (const d of daysToAssign) {
@@ -490,16 +457,6 @@ export default function ScheduleBoard() {
         onUpdateResource={handleUpdateResource}
         onDeleteResource={handleDeleteResource}
       />
-
-      {/* Ressourcen-Verwaltung */}
-      <Dialog open={resourcesDialogOpen} onOpenChange={setResourcesDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Ressourcen-Verwaltung</DialogTitle>
-          </DialogHeader>
-          <ResourcesManager />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

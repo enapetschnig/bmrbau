@@ -447,7 +447,7 @@ export default function HoursReport() {
 
     const worksheetData: any[][] = [
       // Firmendaten Header
-      ["Schafferhofer Bau", "", "", "", "", "", "", "", "", "", "", ""],
+      ["BMR Bau GmbH", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],

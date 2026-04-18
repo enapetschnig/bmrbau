@@ -17,13 +17,14 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Schafferhofer Bau',
-        short_name: 'Schafferhofer',
-        description: 'Projektdokumentation und Zeiterfassung für Schafferhofer Bau',
-        theme_color: '#d80b05',
-        background_color: '#ffffff',
+        name: 'BMR Bau',
+        short_name: 'BMR Bau',
+        description: 'Projektdokumentation und Zeiterfassung für BMR Bau',
+        theme_color: '#7CA373',
+        background_color: '#7CA373',
         display: 'standalone',
         start_url: '/',
+        orientation: 'portrait',
         icons: [
           {
             src: '/icon-192.png',

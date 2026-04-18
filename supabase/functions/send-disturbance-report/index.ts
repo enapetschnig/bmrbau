@@ -346,7 +346,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     setDraw({ r: 180, g: 180, b: 180 }); doc.setLineWidth(0.3);
     doc.line(margin, pageH - 12, margin + cW, pageH - 12);
     doc.setFont("helvetica", "normal"); doc.setFontSize(7); setTxt(GRAY);
-    doc.text(`Schafferhofer Bau  |  Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, margin, pageH - 7);
+    doc.text(`BMR Bau GmbH  |  Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, margin, pageH - 7);
     doc.text(`Seite ${p} / ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
   }
 
@@ -359,12 +359,12 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
     <style>
       body { font-family: Arial, sans-serif; color: #333; line-height: 1.5; }
-      .header { color: #4a4a4a; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+      .header { color: #7CA373; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
       .container { max-width: 600px; margin: 0 auto; padding: 20px; }
       .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
     </style></head>
     <body><div class="container">
-      <div class="header">HOLZKNECHT NATURSTEINE</div>
+      <div class="header">BMR BAU GMBH</div>
       <h2>Regiebericht</h2>
       <p>Sehr geehrte Damen und Herren,</p>
       <p>im Anhang finden Sie den Regiebericht für den Einsatz bei <strong>${disturbance.kunde_name}</strong> vom <strong>${formatDate(disturbance.datum)}</strong>.</p>
@@ -375,7 +375,7 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         Gesamtstunden: ${disturbance.stunden.toFixed(2)} h
       </div>
       <p>Der vollständige Bericht mit Kundenunterschrift befindet sich im angehängten PDF-Dokument.</p>
-      <p>Mit freundlichen Grüßen,<br>Schafferhofer Bau</p>
+      <p>Mit freundlichen Grüßen,<br>BMR Bau GmbH</p>
     </div></body></html>`;
 }
 
@@ -434,7 +434,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq("key", "disturbance_report_email")
       .maybeSingle();
 
-    const officeEmail = setting?.value || "office@schafferhoferbau.at";
+    const officeEmail = setting?.value || "office@bmrbau.at";
     const recipients = [officeEmail];
     if (disturbance.kunde_email) recipients.push(disturbance.kunde_email);
 
@@ -453,8 +453,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       html: string;
       attachments?: { filename: string; content: string }[];
     } = {
-      from: "Schafferhofer Bau <noreply@chrisnapetschnig.at>",
-      reply_to: "office@schafferhoferbau.at",
+      from: "BMR Bau <noreply@chrisnapetschnig.at>",
+      reply_to: officeEmail,
       to: recipients,
       subject,
       html: emailHtml,

@@ -9,7 +9,7 @@ export default defineConfig({
   retries: 1,
   reporter: "list",
   use: {
-    baseURL: process.env.TEST_URL || "https://www.schafferhoferbau.app",
+    baseURL: process.env.TEST_URL || "https://www.bmrbau.app",
     screenshot: "only-on-failure",
     video: "off",
   },

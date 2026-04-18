@@ -216,7 +216,7 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   const footerY = pageHeight - 10;
-  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | Schafferhofer Bau`, margin, footerY);
+  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | BMR Bau GmbH`, margin, footerY);
 
   const dateStr = new Date(data.created_at).toISOString().slice(0, 10);
   const titelClean = data.titel.replace(/[^a-zA-Z0-9äöüÄÖÜß ]/g, "_").slice(0, 40);

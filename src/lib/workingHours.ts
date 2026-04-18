@@ -46,7 +46,7 @@ export interface HoursSplit {
   zeitausgleich: number;
 }
 
-// Standard-Regelarbeitszeit für Facharbeiter bei Schafferhofer Bau
+// Standard-Regelarbeitszeit für Facharbeiter bei BMR Bau
 // Mo/Di: 06:30-17:00 (Pause 30min → 10h), Mi/Do: 07:00-17:00 (Pause 30min → 9,5h)
 // Wochenregelarbeitszeit: 39h
 export const DEFAULT_SCHEDULE: WeekSchedule = {

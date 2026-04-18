@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WeeklyAssignmentWidget } from "@/components/dashboard/WeeklyAssignmentWidget";
-// DesktopSidebar now handled by AppLayout
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type Project = {
@@ -78,8 +77,7 @@ export default function Index() {
   const [recentEntries, setRecentEntries] = useState<RecentTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
-  const [missingHoursDates, setMissingHoursDates] = useState<string[]>([]);
-  const [pendingBestellungen, setPendingBestellungen] = useState(0);
+  const [missingHoursDate, setMissingHoursDate] = useState<string | null>(null);
   const [kategorie, setKategorie] = useState<string | null>(null);
   const [favoriteProjects, setFavoriteProjects] = useState<{ id: string; name: string; adresse: string | null }[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -99,29 +97,6 @@ export default function Index() {
   const { permission: pushPermission, requestPermission: requestPush } = usePushNotifications();
   const [menuSettings, setMenuSettings] = useState<Record<string, boolean>>({});
   const [lohnzettelNotifCount, setLohnzettelNotifCount] = useState(0);
-  const [dashboardMessage, setDashboardMessage] = useState("");
-  const [editingMessage, setEditingMessage] = useState(false);
-  const [editMessageText, setEditMessageText] = useState("");
-  type WeatherDayDetail = {
-    date: string;
-    label: string;
-    min: number;
-    max: number;
-    description: string;
-    icon: string;
-    weatherCode: number;
-    hourly: { time: string; temp: number; weatherCode: number; precipitation: number; wind: number }[];
-  };
-  const [weatherData, setWeatherData] = useState<{
-    temp: number;
-    description: string;
-    icon: string;
-    location: string;
-    projectName: string;
-    forecast: WeatherDayDetail[];
-  } | null>(null);
-  const [weatherDialogDay, setWeatherDialogDay] = useState<WeatherDayDetail | null>(null);
-  const [todayGoal, setTodayGoal] = useState<{ projectName: string; tagesziel: string; projectId: string } | null>(null);
 
   // Role-based visibility helper
   const ROLE_LEVEL: Record<string, number> = {
@@ -139,48 +114,29 @@ export default function Index() {
   const menuVisible = (key: string) => menuSettings[key] ?? true;
 
   const checkMissingHours = async (userId: string) => {
-    // Pruefe die letzten 14 Tage (ohne heute) auf Plantafel-Zuweisungen ohne Stundenerfassung
     const today = new Date();
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 14);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const startStr = startDate.toISOString().split("T")[0];
-    const endStr = yesterday.toISOString().split("T")[0];
-
-    const { data: assignments } = await supabase
-      .from("worker_assignments")
-      .select("datum")
-      .eq("user_id", userId)
-      .gte("datum", startStr)
-      .lte("datum", endStr);
-
-    const assignedDates = [...new Set((assignments || []).map((a: any) => a.datum))];
-    if (assignedDates.length === 0) {
-      setMissingHoursDates([]);
-      return;
+    let checkDate = new Date(today);
+    // If Monday, check Friday; otherwise check yesterday
+    if (today.getDay() === 1) {
+      checkDate.setDate(checkDate.getDate() - 3); // Friday
+    } else if (today.getDay() === 0) {
+      return; // Sunday — don't check
+    } else if (today.getDay() === 6) {
+      checkDate.setDate(checkDate.getDate() - 1); // Saturday checks Friday
+    } else {
+      checkDate.setDate(checkDate.getDate() - 1);
     }
+    const dateStr = checkDate.toISOString().split("T")[0];
 
-    const { data: entries } = await supabase
-      .from("time_entries")
-      .select("datum")
-      .eq("user_id", userId)
-      .in("datum", assignedDates);
-
-    const entryDates = new Set((entries || []).map((e: any) => e.datum));
-    const missing = assignedDates.filter((d) => !entryDates.has(d)).sort();
-    setMissingHoursDates(missing);
-  };
-
-  const checkPendingBestellungen = async (userId: string) => {
     const { count } = await supabase
-      .from("bestellungen")
-      .select("id", { count: "exact", head: true })
-      .eq("zugewiesen_an", userId)
-      .eq("typ", "chef")
-      .in("status", ["offen", "nicht_vollstaendig"]);
-    setPendingBestellungen(count || 0);
+      .from("time_entries")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("datum", dateStr);
+
+    if (count === 0) {
+      setMissingHoursDate(dateStr);
+    }
   };
 
   const fetchProjects = async () => {
@@ -343,21 +299,14 @@ export default function Index() {
       });
     }
 
-    // Filter: nur Chats der letzten Woche anzeigen
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const recentPreviews = previews.filter(
-      (p) => new Date(p.timestamp).getTime() >= oneWeekAgo.getTime() || p.unreadCount > 0
-    );
-
     // Sort: unread first, then by timestamp
-    recentPreviews.sort((a, b) => {
+    previews.sort((a, b) => {
       if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
       if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
 
-    setChatPreviews(recentPreviews);
+    setChatPreviews(previews);
   };
 
   const ROLE_LABELS: Record<string, string> = {
@@ -574,7 +523,6 @@ export default function Index() {
       fetchProjects(),
       fetchRecentEntries(userId, role),
       checkMissingHours(userId),
-      checkPendingBestellungen(userId),
       fetchFavoriteProjects(userId),
       fetchPendingUsers(),
       fetchAllProjectsForChat(),
@@ -582,121 +530,6 @@ export default function Index() {
       fetchPendingSafety(),
       fetchLohnzettelNotifs(),
     ]);
-
-    // Dashboard-Nachricht laden
-    const { data: msgData } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "dashboard_message")
-      .maybeSingle();
-    if (msgData?.value) setDashboardMessage(msgData.value);
-
-    // Wetterdaten laden (basierend auf heutiger Plantafel-Zuweisung)
-    const { data: todayAssign } = await supabase
-      .from("worker_assignments")
-      .select("project_id, projects:project_id(name, plz, adresse)")
-      .eq("user_id", userId)
-      .eq("datum", new Date().toISOString().split("T")[0])
-      .limit(1)
-      .maybeSingle();
-
-    if (todayAssign?.projects) {
-      const proj = todayAssign.projects as any;
-      const locationParts = [proj.plz, proj.adresse].filter(Boolean);
-      const location = locationParts.join(" · ") || "";
-
-      // Tagesziel fuer heute laden
-      const todayStr = new Date().toISOString().split("T")[0];
-      const { data: targetData } = await supabase
-        .from("project_daily_targets")
-        .select("tagesziel")
-        .eq("project_id", todayAssign.project_id)
-        .eq("datum", todayStr)
-        .maybeSingle();
-      if (targetData?.tagesziel) {
-        setTodayGoal({
-          projectId: todayAssign.project_id,
-          projectName: proj.name || "Baustelle",
-          tagesziel: targetData.tagesziel,
-        });
-      } else {
-        setTodayGoal(null);
-      }
-      try {
-        // PLZ/Adresse zu Koordinaten aufloesen (Open-Meteo Geocoding)
-        let lat = 47.07, lon = 15.44; // Fallback: Graz
-        const searchTerm = proj.plz ? `${proj.plz} Austria` : (proj.adresse ? `${proj.adresse} Austria` : null);
-        if (searchTerm) {
-          const geoResp = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchTerm)}&count=1&language=de&format=json`);
-          const geoData = await geoResp.json();
-          if (geoData?.results?.[0]) {
-            lat = geoData.results[0].latitude;
-            lon = geoData.results[0].longitude;
-          }
-        }
-
-        const resp = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-          `&current=temperature_2m,weather_code` +
-          `&daily=temperature_2m_min,temperature_2m_max,weather_code` +
-          `&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m` +
-          `&forecast_days=3&timezone=Europe/Vienna`
-        );
-        const weather = await resp.json();
-        const describe = (code: number) =>
-          code <= 3 ? "Sonnig" : code <= 48 ? "Bewölkt" : code <= 67 ? "Regen" : code <= 77 ? "Schnee" : "Gewitter";
-        const iconFor = (code: number) =>
-          code <= 3 ? "☀️" : code <= 48 ? "☁️" : code <= 67 ? "🌧️" : code <= 77 ? "❄️" : "⛈️";
-
-        if (weather?.current) {
-          const currentCode = weather.current.weather_code;
-          // 3-Tage-Vorhersage aufbauen
-          const forecast: WeatherDayDetail[] = [];
-          const dayLabels = ["Heute", "Morgen", "Übermorgen"];
-          const daily = weather.daily;
-          const hourly = weather.hourly;
-
-          for (let i = 0; i < 3 && daily?.time?.[i]; i++) {
-            const dayDate = daily.time[i]; // YYYY-MM-DD
-            // Stunden-Daten fuer diesen Tag filtern
-            const dayHourly: WeatherDayDetail["hourly"] = [];
-            if (hourly?.time) {
-              for (let h = 0; h < hourly.time.length; h++) {
-                if (String(hourly.time[h]).startsWith(dayDate)) {
-                  dayHourly.push({
-                    time: hourly.time[h],
-                    temp: Math.round(hourly.temperature_2m[h]),
-                    weatherCode: hourly.weather_code[h],
-                    precipitation: hourly.precipitation?.[h] ?? 0,
-                    wind: Math.round(hourly.wind_speed_10m?.[h] ?? 0),
-                  });
-                }
-              }
-            }
-            const dcode = daily.weather_code[i];
-            forecast.push({
-              date: dayDate,
-              label: dayLabels[i],
-              min: Math.round(daily.temperature_2m_min[i]),
-              max: Math.round(daily.temperature_2m_max[i]),
-              description: describe(dcode),
-              icon: iconFor(dcode),
-              weatherCode: dcode,
-              hourly: dayHourly,
-            });
-          }
-
-          setWeatherData({
-            temp: Math.round(weather.current.temperature_2m),
-            description: describe(currentCode),
-            icon: iconFor(currentCode),
-            location,
-            projectName: proj.name || "Baustelle",
-            forecast,
-          });
-        }
-      } catch { /* Wetter optional */ }
-    }
 
     setLoading(false);
   };
@@ -839,7 +672,7 @@ export default function Index() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-md">
-          <img src="/schafferhofer-logo.png" alt="Schafferhofer Bau" className="h-20 mx-auto" />
+          <img src="/bmr-logo.png" alt="BMR Bau" className="h-20 mx-auto object-contain" />
           <h1 className="text-xl font-bold">Konto noch nicht freigeschaltet</h1>
           <p className="text-muted-foreground">
             Dein Konto muss vom Administrator freigeschaltet werden, bevor du die App nutzen kannst.
@@ -860,7 +693,7 @@ export default function Index() {
         <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex justify-between items-center gap-3">
             <div className="flex items-center gap-2 sm:gap-3">
-              <img src="/schafferhofer-logo.png" alt="Schafferhofer Bau" className="h-14 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] object-contain" />
+              <img src="/bmr-logo.png" alt="BMR Bau" className="h-10 sm:h-14 w-auto object-contain" />
               <div className="hidden sm:block h-8 w-px bg-border" />
               <div className="flex flex-col">
                 <span className="text-xs sm:text-sm text-muted-foreground">Hallo</span>
@@ -917,137 +750,17 @@ export default function Index() {
       </header>
 
       {/* Main Content */}
-      <main className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-w-7xl mx-auto">
-
-        {/* Fehlende Stunden — ganz oben, prominent */}
-        {!isExternal && missingHoursDates.length > 0 && (
-          <div
-            className="mb-4 flex items-center gap-4 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-4 cursor-pointer hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors shadow-sm"
-            onClick={() => navigate(`/time-tracking?date=${missingHoursDates[missingHoursDates.length - 1]}`)}
-          >
-            <div className="h-12 w-12 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
-              <Clock className="h-6 w-6 text-red-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-red-900 dark:text-red-100">
-                {missingHoursDates.length === 1
-                  ? "Stunden fehlen — jetzt nachtragen!"
-                  : `${missingHoursDates.length} Tage ohne Stundenerfassung`}
-              </p>
-              <p className="text-sm text-red-800 dark:text-red-200 truncate">
-                {missingHoursDates.length === 1
-                  ? new Date(missingHoursDates[0]).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })
-                  : missingHoursDates.slice(-3).map(d => new Date(d).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" })).join(", ") + (missingHoursDates.length > 3 ? ` und ${missingHoursDates.length - 3} weitere` : "")}
-              </p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-red-600 shrink-0" />
-          </div>
-        )}
-
-        {/* Bestellung zur Kontrolle */}
-        {pendingBestellungen > 0 && (
-          <div
-            className="mb-4 flex items-center gap-4 rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors"
-            onClick={() => navigate("/bestellungen")}
-          >
-            <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
-              <Package className="h-6 w-6 text-orange-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-orange-900 dark:text-orange-100">
-                {pendingBestellungen} Bestellung{pendingBestellungen === 1 ? "" : "en"} zur Kontrolle
-              </p>
-              <p className="text-sm text-orange-800 dark:text-orange-200">
-                Prüfe, ob die Lieferung vollständig ist, und setze den Status.
-              </p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-orange-600 shrink-0" />
-          </div>
-        )}
-
-        {/* Dashboard-Nachricht (Admin editierbar) */}
-        {dashboardMessage && (
-          <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between gap-3">
-            {editingMessage ? (
-              <div className="flex-1 flex gap-2">
-                <input
-                  className="flex-1 text-sm bg-transparent border-b border-primary/30 focus:outline-none focus:border-primary px-1"
-                  value={editMessageText}
-                  onChange={(e) => setEditMessageText(e.target.value)}
-                  autoFocus
-                />
-                <Button size="sm" variant="ghost" onClick={async () => {
-                  await supabase.from("app_settings").upsert({ key: "dashboard_message", value: editMessageText }, { onConflict: "key" });
-                  setDashboardMessage(editMessageText);
-                  setEditingMessage(false);
-                }}>Speichern</Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditingMessage(false)}>Abbrechen</Button>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-primary/80 flex-1">{dashboardMessage}</p>
-                {isAdmin && (
-                  <Button size="sm" variant="ghost" className="shrink-0 h-7 text-xs" onClick={() => { setEditMessageText(dashboardMessage); setEditingMessage(true); }}>
-                    Bearbeiten
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Wetter — 3-Tage-Vorhersage fuer heute zugeteilte Baustelle */}
-        {weatherData && (
-          <div className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 overflow-hidden">
-            <div className="px-3 py-2 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
-              <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
-                {weatherData.projectName}
-                {weatherData.location && <span className="text-muted-foreground"> · {weatherData.location}</span>}
-              </p>
-              <p className="text-xs text-muted-foreground">aktuell {weatherData.temp}°C</p>
-            </div>
-            <div className="grid grid-cols-3 divide-x divide-blue-200 dark:divide-blue-800">
-              {weatherData.forecast.map((day) => (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => setWeatherDialogDay(day)}
-                  className="p-3 text-center hover:bg-blue-100 dark:hover:bg-blue-950/40 transition-colors"
-                >
-                  <p className="text-xs font-medium text-blue-900 dark:text-blue-100">{day.label}</p>
-                  <span className="text-3xl block my-1">{day.icon}</span>
-                  <p className="text-sm font-semibold">{day.min}° / {day.max}°</p>
-                  <p className="text-xs text-muted-foreground truncate">{day.description}</p>
-                </button>
-              ))}
-            </div>
-            {weatherData.forecast.length > 0 && (
-              <p className="text-[10px] text-center text-muted-foreground py-1 border-t border-blue-200 dark:border-blue-800">
-                Zum Anzeigen der Stunden-Vorhersage tippen
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Tagesziel — wenn Admin/Polier fuer heute eines hinterlegt hat */}
-        {todayGoal && (
-          <div
-            className="mb-4 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-950/30 transition-colors"
-            onClick={() => navigate(`/projects/${todayGoal.projectId}`)}
-          >
-            <div className="flex items-start gap-3">
-              <Star className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200 uppercase tracking-wide">
-                  Tagesziel · {todayGoal.projectName}
-                </p>
-                <p className="text-sm text-emerald-900 dark:text-emerald-100 mt-1 whitespace-pre-wrap">
-                  {todayGoal.tagesziel}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
+            {isAdmin ? "Admin Dashboard" : "Mein Dashboard"}
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            {isAdmin 
+              ? "Verwaltung aller Projekte und Mitarbeiter" 
+              : "Zeiterfassung und Projektdokumentation"}
+          </p>
+        </div>
 
         {/* Pending Activations Banner (Admin only) */}
         {isAdmin && pendingCount > 0 && (
@@ -1068,12 +781,28 @@ export default function Index() {
           </div>
         )}
 
+        {/* Missing Hours Reminder — nicht für Externe */}
+        {!isExternal && missingHoursDate && (
+          <div
+            className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 cursor-pointer"
+            onClick={() => navigate(`/time-tracking?date=${missingHoursDate}`)}
+          >
+            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-sm text-yellow-800 dark:text-yellow-200">Stunden nicht erfasst</p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                Du hast am {new Date(missingHoursDate).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })} keine Stunden erfasst — jetzt nachtragen?
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-yellow-600 shrink-0" />
+          </div>
+        )}
 
         {/* Ausstehende Sicherheitsunterweisungen */}
         {pendingSafetyCount > 0 && (
           <div
             className="mb-4 flex items-center gap-4 rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/20 p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors"
-            onClick={() => navigate("/safety/nachweise")}
+            onClick={() => navigate("/my-safety")}
           >
             <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-6 w-6 text-orange-600" />
@@ -1115,6 +844,10 @@ export default function Index() {
         {/* Favoriten-Projekte — nicht für Externe */}
         {!isExternal && favoriteProjects.length > 0 && (
           <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Star className="h-5 w-5 fill-red-500 text-red-500" />
+              Meine Favoriten
+            </h2>
             <div className="grid gap-2 sm:grid-cols-3">
               {favoriteProjects.map(p => (
                 <Card
@@ -1606,26 +1339,46 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Evaluierungen entfernt - durch Sicherheit-Modul ersetzt */}
+          {/* Evaluierungen */}
+          {menuVisible("evaluierungen") && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+              onClick={() => navigate("/safety-evaluations")}
+            >
+              <CardHeader className="space-y-2 pb-3 relative">
+                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Evaluierungen</CardTitle>
+                <CardDescription className="text-sm">
+                  Evaluierungen erstellen & verwalten
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="sm" variant="outline">Evaluierungen öffnen</Button>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Sicherheit */}
+          {/* Arbeitsschutz */}
           {menuVisible("arbeitsschutz") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/safety")}
+              onClick={() => navigate("/my-safety")}
             >
               <CardHeader className="space-y-2 pb-3 relative">
                 {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                   <ShieldCheck className="h-6 w-6 text-green-500" />
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Sicherheit</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Arbeitsschutz</CardTitle>
                 <CardDescription className="text-sm">
-                  Unterweisungen, Schulungen, Nachweise
+                  Meine Unterweisungen & Evaluierungen
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Sicherheit öffnen</Button>
+                <Button className="w-full" size="sm" variant="outline">Arbeitsschutz öffnen</Button>
               </CardContent>
             </Card>
           )}
@@ -1804,50 +1557,6 @@ export default function Index() {
         )}
       </main>
 
-      {/* Wetter-Detail-Dialog mit Stunden-Vorhersage */}
-      <Dialog open={!!weatherDialogDay} onOpenChange={(o) => !o && setWeatherDialogDay(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {weatherDialogDay && (
-                <div className="flex items-center gap-2">
-                  <span className="text-3xl">{weatherDialogDay.icon}</span>
-                  <div>
-                    <div>{weatherDialogDay.label} · {new Date(weatherDialogDay.date).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })}</div>
-                    <div className="text-sm font-normal text-muted-foreground">
-                      {weatherDialogDay.min}° / {weatherDialogDay.max}° · {weatherDialogDay.description}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {weatherDialogDay && (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground mb-2">Stunden-Vorhersage</p>
-              <div className="divide-y">
-                {weatherDialogDay.hourly.map((h) => {
-                  const hour = new Date(h.time).getHours();
-                  const icon = h.weatherCode <= 3 ? "☀️" : h.weatherCode <= 48 ? "☁️" : h.weatherCode <= 67 ? "🌧️" : h.weatherCode <= 77 ? "❄️" : "⛈️";
-                  return (
-                    <div key={h.time} className="flex items-center justify-between py-1.5 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono w-10 text-muted-foreground">{String(hour).padStart(2, "0")}:00</span>
-                        <span className="text-lg">{icon}</span>
-                        <span className="font-medium">{h.temp}°C</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        {h.precipitation > 0 && <span>💧 {h.precipitation.toFixed(1)}mm</span>}
-                        {h.wind > 0 && <span>💨 {h.wind}km/h</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

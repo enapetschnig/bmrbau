@@ -178,7 +178,7 @@ export function generateLegalWorkTimePDF(params: LegalWorkTimePDFParams) {
   doc.setFontSize(7);
   doc.setTextColor(130, 130, 130);
   doc.text(
-    `Erstellt am ${format(new Date(), "dd.MM.yyyy HH:mm")} — Schafferhofer Bau GmbH`,
+    `Erstellt am ${format(new Date(), "dd.MM.yyyy HH:mm")} — BMR Bau GmbH`,
     margin,
     287
   );

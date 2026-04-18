@@ -2,105 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
-All colors MUST be HSL.
-*/
+/* Design-System fuer BMR Bau.
+   Alle Farben werden als HSL-Werte definiert.
+   Primaere Markenfarbe ist das BMR-Gruen (~#7CA373). */
 
 @layer base {
   :root {
-    /* Schafferhofer Bau – Red & White Palette */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 12%;
+    /* Basis-Oberflaeche: weich weiss mit warmem Grundton */
+    --background: 90 20% 98%;
+    --foreground: 120 10% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 12%;
+    --card-foreground: 120 10% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 12%;
+    --popover-foreground: 120 10% 14%;
 
-    /* Schafferhofer Rot als Hauptfarbe (#d80b05 = hsl(2, 96%, 43%)) */
-    --primary: 2 96% 43%;
+    /* BMR-Gruen als Primaerfarbe (#7CA373 ≈ hsl(108 22% 55%)) */
+    --primary: 108 22% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Helles Grau als Sekundärfarbe */
-    --secondary: 0 0% 95%;
-    --secondary-foreground: 0 0% 20%;
+    /* Warmes Hellgrau als Sekundaerfarbe */
+    --secondary: 108 12% 94%;
+    --secondary-foreground: 120 12% 22%;
 
-    --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 40%;
+    --muted: 108 8% 93%;
+    --muted-foreground: 120 6% 42%;
 
-    /* Dunkleres Rot als Akzent */
-    --accent: 2 90% 35%;
+    /* Dunkleres Gruen fuer Akzent/Hover-States */
+    --accent: 108 28% 38%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    /* Warnung bleibt rot */
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 88%;
-    --input: 0 0% 92%;
-    --ring: 2 96% 43%;
+    --border: 108 10% 86%;
+    --input: 108 10% 90%;
+    --ring: 108 26% 45%;
 
     --radius: 0.5rem;
 
-    /* Schafferhofer Design Tokens */
-    --schafferhofer-red: 2 96% 43%;
-    --schafferhofer-red-dark: 2 90% 35%;
-    --schafferhofer-red-light: 2 80% 55%;
-    --schafferhofer-gray: 0 0% 40%;
+    /* BMR-Design-Tokens (fuer direkte Nutzung in Komponenten) */
+    --bmr-green: 108 22% 50%;
+    --bmr-green-dark: 108 28% 38%;
+    --bmr-green-light: 108 24% 68%;
+    --bmr-gray: 120 6% 42%;
 
     /* Shadows */
-    --shadow-soft: 0 2px 8px hsl(0 0% 15% / 0.08);
-    --shadow-medium: 0 4px 16px hsl(0 0% 15% / 0.12);
+    --shadow-soft: 0 2px 8px hsl(120 10% 15% / 0.08);
+    --shadow-medium: 0 4px 16px hsl(120 10% 15% / 0.12);
 
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 2 96% 43%;
+    --sidebar-background: 90 20% 98%;
+    --sidebar-foreground: 120 12% 22%;
+    --sidebar-primary: 108 22% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 95%;
-    --sidebar-accent-foreground: 0 0% 20%;
-    --sidebar-border: 0 0% 88%;
-    --sidebar-ring: 2 96% 43%;
+    --sidebar-accent: 108 12% 94%;
+    --sidebar-accent-foreground: 120 12% 22%;
+    --sidebar-border: 108 10% 86%;
+    --sidebar-ring: 108 26% 45%;
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
+    --background: 120 8% 8%;
+    --foreground: 108 12% 94%;
 
-    --card: 0 0% 12%;
-    --card-foreground: 0 0% 95%;
+    --card: 120 8% 12%;
+    --card-foreground: 108 12% 94%;
 
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 120 8% 12%;
+    --popover-foreground: 108 12% 94%;
 
-    --primary: 2 90% 50%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 108 28% 55%;
+    --primary-foreground: 120 10% 10%;
 
-    --secondary: 0 0% 18%;
-    --secondary-foreground: 0 0% 90%;
+    --secondary: 120 8% 18%;
+    --secondary-foreground: 108 12% 90%;
 
-    --muted: 0 0% 16%;
-    --muted-foreground: 0 0% 58%;
+    --muted: 120 8% 16%;
+    --muted-foreground: 108 8% 60%;
 
-    --accent: 2 80% 45%;
+    --accent: 108 22% 48%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 2 90% 50%;
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 2 90% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 16%;
-    --sidebar-accent-foreground: 0 0% 90%;
-    --sidebar-border: 0 0% 18%;
-    --sidebar-ring: 2 90% 50%;
+    --border: 120 8% 20%;
+    --input: 120 8% 20%;
+    --ring: 108 28% 55%;
+
+    --sidebar-background: 120 8% 8%;
+    --sidebar-foreground: 108 12% 90%;
+    --sidebar-primary: 108 28% 55%;
+    --sidebar-primary-foreground: 120 10% 10%;
+    --sidebar-accent: 120 8% 16%;
+    --sidebar-accent-foreground: 108 12% 90%;
+    --sidebar-border: 120 8% 18%;
+    --sidebar-ring: 108 28% 55%;
   }
 }
 

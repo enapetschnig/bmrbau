@@ -68,12 +68,12 @@ Deno.serve(async (req) => {
       throw new Error('Twilio credentials not configured');
     }
 
-    // Generate registration link
-    const appUrl = 'https://www.schafferhoferbau.app';
+    // Generate registration link (APP_URL overrideable via Edge-Function secret)
+    const appUrl = Deno.env.get('APP_URL') || 'https://www.bmrbau.app';
     const registrationLink = `${appUrl}/auth`;
 
     // Compose SMS message
-    const smsText = `Schafferhofer Bau: Bitte registriere dich in unserer Mitarbeiter-App:\n${registrationLink}`;
+    const smsText = `BMR Bau: Bitte registriere dich in unserer Mitarbeiter-App:\n${registrationLink}`;
 
     console.log('Sending SMS via Twilio...');
 

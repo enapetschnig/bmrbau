@@ -293,7 +293,7 @@ export async function generateDailyReportPDF(
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   const footerY = doc.internal.pageSize.getHeight() - 15;
-  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | Schafferhofer Bau`, margin, footerY);
+  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | BMR Bau GmbH`, margin, footerY);
 
   const projectSlug = report.project?.name.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_") || "Projekt";
   const dateSlug = new Date(report.datum).toLocaleDateString("de-AT").replace(/\./g, "-");
