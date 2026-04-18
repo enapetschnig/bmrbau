@@ -78,7 +78,8 @@ export default function Index() {
   const [recentEntries, setRecentEntries] = useState<RecentTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
-  const [missingHoursDate, setMissingHoursDate] = useState<string | null>(null);
+  const [missingHoursDates, setMissingHoursDates] = useState<string[]>([]);
+  const [pendingBestellungen, setPendingBestellungen] = useState(0);
   const [kategorie, setKategorie] = useState<string | null>(null);
   const [favoriteProjects, setFavoriteProjects] = useState<{ id: string; name: string; adresse: string | null }[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -101,7 +102,8 @@ export default function Index() {
   const [dashboardMessage, setDashboardMessage] = useState("");
   const [editingMessage, setEditingMessage] = useState(false);
   const [editMessageText, setEditMessageText] = useState("");
-  const [weatherData, setWeatherData] = useState<{ temp: number; description: string; icon: string; location: string } | null>(null);
+  const [weatherData, setWeatherData] = useState<{ temp: number; description: string; icon: string; location: string; projectName: string } | null>(null);
+  const [todayGoal, setTodayGoal] = useState<{ projectName: string; tagesziel: string; projectId: string } | null>(null);
 
   // Role-based visibility helper
   const ROLE_LEVEL: Record<string, number> = {
@@ -119,40 +121,48 @@ export default function Index() {
   const menuVisible = (key: string) => menuSettings[key] ?? true;
 
   const checkMissingHours = async (userId: string) => {
+    // Pruefe die letzten 14 Tage (ohne heute) auf Plantafel-Zuweisungen ohne Stundenerfassung
     const today = new Date();
-    let checkDate = new Date(today);
-    // If Monday, check Friday; otherwise check yesterday
-    if (today.getDay() === 1) {
-      checkDate.setDate(checkDate.getDate() - 3); // Friday
-    } else if (today.getDay() === 0) {
-      return; // Sunday — don't check
-    } else if (today.getDay() === 6) {
-      checkDate.setDate(checkDate.getDate() - 1); // Saturday checks Friday
-    } else {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-    const dateStr = checkDate.toISOString().split("T")[0];
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 14);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-    // Nur nachfragen wenn der Mitarbeiter an diesem Tag in der Plantafel eingeteilt war
-    const { count: assignmentCount } = await supabase
+    const startStr = startDate.toISOString().split("T")[0];
+    const endStr = yesterday.toISOString().split("T")[0];
+
+    const { data: assignments } = await supabase
       .from("worker_assignments")
-      .select("*", { count: "exact", head: true })
+      .select("datum")
       .eq("user_id", userId)
-      .eq("datum", dateStr);
+      .gte("datum", startStr)
+      .lte("datum", endStr);
 
-    if (!assignmentCount || assignmentCount === 0) {
-      return; // Nicht in Plantafel eingeteilt -> keine Nachfrage
+    const assignedDates = [...new Set((assignments || []).map((a: any) => a.datum))];
+    if (assignedDates.length === 0) {
+      setMissingHoursDates([]);
+      return;
     }
 
-    const { count } = await supabase
+    const { data: entries } = await supabase
       .from("time_entries")
-      .select("*", { count: "exact", head: true })
+      .select("datum")
       .eq("user_id", userId)
-      .eq("datum", dateStr);
+      .in("datum", assignedDates);
 
-    if (count === 0) {
-      setMissingHoursDate(dateStr);
-    }
+    const entryDates = new Set((entries || []).map((e: any) => e.datum));
+    const missing = assignedDates.filter((d) => !entryDates.has(d)).sort();
+    setMissingHoursDates(missing);
+  };
+
+  const checkPendingBestellungen = async (userId: string) => {
+    const { count } = await supabase
+      .from("bestellungen")
+      .select("id", { count: "exact", head: true })
+      .eq("zugewiesen_an", userId)
+      .eq("typ", "chef")
+      .in("status", ["offen", "nicht_vollstaendig"]);
+    setPendingBestellungen(count || 0);
   };
 
   const fetchProjects = async () => {
@@ -546,6 +556,7 @@ export default function Index() {
       fetchProjects(),
       fetchRecentEntries(userId, role),
       checkMissingHours(userId),
+      checkPendingBestellungen(userId),
       fetchFavoriteProjects(userId),
       fetchPendingUsers(),
       fetchAllProjectsForChat(),
@@ -573,7 +584,26 @@ export default function Index() {
 
     if (todayAssign?.projects) {
       const proj = todayAssign.projects as any;
-      const location = proj.plz || proj.adresse || proj.name;
+      const locationParts = [proj.plz, proj.adresse].filter(Boolean);
+      const location = locationParts.join(" · ") || "";
+
+      // Tagesziel fuer heute laden
+      const todayStr = new Date().toISOString().split("T")[0];
+      const { data: targetData } = await supabase
+        .from("project_daily_targets")
+        .select("tagesziel")
+        .eq("project_id", todayAssign.project_id)
+        .eq("datum", todayStr)
+        .maybeSingle();
+      if (targetData?.tagesziel) {
+        setTodayGoal({
+          projectId: todayAssign.project_id,
+          projectName: proj.name || "Baustelle",
+          tagesziel: targetData.tagesziel,
+        });
+      } else {
+        setTodayGoal(null);
+      }
       try {
         // PLZ/Adresse zu Koordinaten aufloesen (Open-Meteo Geocoding)
         let lat = 47.07, lon = 15.44; // Fallback: Graz
@@ -599,7 +629,8 @@ export default function Index() {
             temp: Math.round(weather.current.temperature_2m),
             description: desc,
             icon,
-            location: location || "Baustelle",
+            location,
+            projectName: proj.name || "Baustelle",
           });
         }
       } catch { /* Wetter optional */ }
@@ -826,6 +857,52 @@ export default function Index() {
       {/* Main Content */}
       <main className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-w-7xl mx-auto">
 
+        {/* Fehlende Stunden — ganz oben, prominent */}
+        {!isExternal && missingHoursDates.length > 0 && (
+          <div
+            className="mb-4 flex items-center gap-4 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-4 cursor-pointer hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors shadow-sm"
+            onClick={() => navigate(`/time-tracking?date=${missingHoursDates[missingHoursDates.length - 1]}`)}
+          >
+            <div className="h-12 w-12 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
+              <Clock className="h-6 w-6 text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-red-900 dark:text-red-100">
+                {missingHoursDates.length === 1
+                  ? "Stunden fehlen — jetzt nachtragen!"
+                  : `${missingHoursDates.length} Tage ohne Stundenerfassung`}
+              </p>
+              <p className="text-sm text-red-800 dark:text-red-200 truncate">
+                {missingHoursDates.length === 1
+                  ? new Date(missingHoursDates[0]).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })
+                  : missingHoursDates.slice(-3).map(d => new Date(d).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" })).join(", ") + (missingHoursDates.length > 3 ? ` und ${missingHoursDates.length - 3} weitere` : "")}
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-red-600 shrink-0" />
+          </div>
+        )}
+
+        {/* Bestellung zur Kontrolle */}
+        {pendingBestellungen > 0 && (
+          <div
+            className="mb-4 flex items-center gap-4 rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors"
+            onClick={() => navigate("/bestellungen")}
+          >
+            <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
+              <Package className="h-6 w-6 text-orange-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-orange-900 dark:text-orange-100">
+                {pendingBestellungen} Bestellung{pendingBestellungen === 1 ? "" : "en"} zur Kontrolle
+              </p>
+              <p className="text-sm text-orange-800 dark:text-orange-200">
+                Prüfe, ob die Lieferung vollständig ist, und setze den Status.
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-orange-600 shrink-0" />
+          </div>
+        )}
+
         {/* Dashboard-Nachricht (Admin editierbar) */}
         {dashboardMessage && (
           <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between gap-3">
@@ -857,13 +934,38 @@ export default function Index() {
           </div>
         )}
 
-        {/* Wetterdaten */}
+        {/* Wetterdaten — von der heute zugeteilten Baustelle */}
         {weatherData && (
           <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-            <span className="text-2xl">{weatherData.icon}</span>
-            <div>
-              <p className="text-sm font-medium">{weatherData.temp}°C · {weatherData.description}</p>
-              <p className="text-xs text-muted-foreground">{weatherData.location}</p>
+            <span className="text-3xl">{weatherData.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">
+                {weatherData.temp}°C · {weatherData.description}
+                <span className="text-muted-foreground"> — {weatherData.projectName}</span>
+              </p>
+              {weatherData.location && (
+                <p className="text-xs text-muted-foreground truncate">{weatherData.location}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tagesziel — wenn Admin/Polier fuer heute eines hinterlegt hat */}
+        {todayGoal && (
+          <div
+            className="mb-4 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-950/30 transition-colors"
+            onClick={() => navigate(`/projects/${todayGoal.projectId}`)}
+          >
+            <div className="flex items-start gap-3">
+              <Star className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200 uppercase tracking-wide">
+                  Tagesziel · {todayGoal.projectName}
+                </p>
+                <p className="text-sm text-emerald-900 dark:text-emerald-100 mt-1 whitespace-pre-wrap">
+                  {todayGoal.tagesziel}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -887,22 +989,6 @@ export default function Index() {
           </div>
         )}
 
-        {/* Missing Hours Reminder — nicht für Externe */}
-        {!isExternal && missingHoursDate && (
-          <div
-            className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 cursor-pointer"
-            onClick={() => navigate(`/time-tracking?date=${missingHoursDate}`)}
-          >
-            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
-            <div className="flex-1">
-              <p className="font-semibold text-sm text-yellow-800 dark:text-yellow-200">Stunden nicht erfasst</p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                Du hast am {new Date(missingHoursDate).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })} keine Stunden erfasst — jetzt nachtragen?
-              </p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-yellow-600 shrink-0" />
-          </div>
-        )}
 
         {/* Ausstehende Sicherheitsunterweisungen */}
         {pendingSafetyCount > 0 && (

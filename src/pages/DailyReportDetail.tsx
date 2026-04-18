@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SafetyChecklist, DEFAULT_SAFETY_ITEMS, type SafetyItem } from "@/components/SafetyChecklist";
 import { DailyReportForm } from "@/components/DailyReportForm";
 import { SignaturePad } from "@/components/SignaturePad";
+import { SerialPhotoCapture } from "@/components/SerialPhotoCapture";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { generateDailyReportPDF } from "@/lib/generateDailyReportPDF";
@@ -63,6 +64,7 @@ export default function DailyReportDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [serialCapture, setSerialCapture] = useState(false);
+  const [showSerialDialog, setShowSerialDialog] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showSignDialog, setShowSignDialog] = useState(false);
@@ -226,6 +228,41 @@ export default function DailyReportDetail() {
     if (serialCapture && photoInputRef.current) {
       setTimeout(() => photoInputRef.current?.click(), 300);
     }
+  };
+
+  const handleSerialUpload = async (files: File[]) => {
+    if (!id || files.length === 0) return;
+    setUploading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUploading(false); return; }
+
+    let uploaded = 0;
+    for (const file of files) {
+      const rotatedBlob = file.type.startsWith("image/") ? await autoRotateImage(file) : file;
+      const ext = file.name.split(".").pop() || "jpg";
+      const filePath = `${id}/${crypto.randomUUID()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("daily-report-photos")
+        .upload(filePath, rotatedBlob);
+
+      if (uploadError) {
+        toast({ variant: "destructive", title: "Upload-Fehler", description: uploadError.message });
+        continue;
+      }
+
+      await supabase.from("daily_report_photos").insert({
+        daily_report_id: id,
+        user_id: user.id,
+        file_path: filePath,
+        file_name: file.name,
+      });
+      uploaded++;
+    }
+
+    setUploading(false);
+    toast({ title: `${uploaded} Foto${uploaded === 1 ? "" : "s"} hochgeladen` });
+    fetchReport();
   };
 
   const deletePhoto = async (photo: Photo) => {
@@ -415,7 +452,7 @@ export default function DailyReportDetail() {
                 )}
               </CardTitle>
               {!isSigned && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <label className="cursor-pointer">
                     <Button variant="outline" size="sm" asChild>
                       <span>
@@ -427,24 +464,20 @@ export default function DailyReportDetail() {
                       ref={photoInputRef}
                       type="file"
                       accept="image/*"
-                      capture="environment"
+                      multiple
                       className="hidden"
                       onChange={handlePhotoUpload}
                       disabled={uploading}
                     />
                   </label>
                   <Button
-                    variant={serialCapture ? "default" : "outline"}
+                    variant="default"
                     size="sm"
-                    onClick={() => {
-                      setSerialCapture(!serialCapture);
-                      if (!serialCapture) {
-                        toast({ title: "Serienaufnahme aktiviert", description: "Nach jedem Foto oeffnet sich die Kamera erneut" });
-                      }
-                    }}
+                    onClick={() => setShowSerialDialog(true)}
+                    disabled={uploading}
                   >
                     <Camera className="w-4 h-4 mr-1" />
-                    Serie {serialCapture ? "an" : "aus"}
+                    Serienaufnahme
                   </Button>
                 </div>
               )}
@@ -585,6 +618,14 @@ export default function DailyReportDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Serienaufnahme Dialog */}
+      <SerialPhotoCapture
+        open={showSerialDialog}
+        onOpenChange={setShowSerialDialog}
+        onFinish={handleSerialUpload}
+        title="Fotos für Tagesbericht"
+      />
     </div>
   );
 }

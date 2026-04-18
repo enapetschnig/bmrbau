@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Check, AlertTriangle, ArrowRight, ArrowLeft, Loader2, FileText, Send } from "lucide-react";
+import { Upload, Check, AlertTriangle, ArrowRight, ArrowLeft, Loader2, FileText, Send, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PDFDocument } from "pdf-lib";
@@ -38,6 +40,7 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
   const pdfDocRef = useRef<any>(null);
 
   const [step, setStep] = useState(1);
+  const [releaseDate, setReleaseDate] = useState<string>("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
   const [totalPages, setTotalPages] = useState(0);
@@ -65,7 +68,30 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
     setLightboxPage(null);
     setPageFullImages(new Map());
     pdfDocRef.current = null;
+    // releaseDate wird in useEffect geladen, nicht reset
   };
+
+  // Beim Oeffnen: zuletzt verwendetes Freigabedatum laden
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "last_payslip_release_date")
+        .maybeSingle();
+      const saved = (data?.value || "").trim();
+      if (saved) {
+        setReleaseDate(saved);
+      } else {
+        // Default: 10. des naechsten Monats
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        d.setDate(10);
+        setReleaseDate(d.toISOString().split("T")[0]);
+      }
+    })();
+  }, [open]);
 
   const openLightbox = async (pageIdx: number, pages: number[]) => {
     if (!pageFullImages.has(pageIdx) && pdfDocRef.current) {
@@ -241,19 +267,35 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
           continue;
         }
 
-        // In-App notification
-        await supabase.from("notifications").insert({
+        // Metadaten mit Freigabedatum speichern
+        await supabase.from("payslip_metadata").insert({
           user_id: assignment.matched_user_id,
-          type: "lohnzettel_upload",
-          title: "Neuer Lohnzettel verfügbar",
-          message: "Ein neuer Lohnzettel wurde für Sie hochgeladen.",
-          metadata: { file_name: fileName },
+          file_path: filePath,
+          release_date: releaseDate,
         });
 
-        notifiedUserIds.push(assignment.matched_user_id);
+        // In-App notification nur wenn Freigabedatum heute oder in Vergangenheit
+        const today = new Date().toISOString().split("T")[0];
+        if (releaseDate <= today) {
+          await supabase.from("notifications").insert({
+            user_id: assignment.matched_user_id,
+            type: "lohnzettel_upload",
+            title: "Neuer Lohnzettel verfügbar",
+            message: "Ein neuer Lohnzettel wurde für Sie hochgeladen.",
+            metadata: { file_name: fileName },
+          });
+          notifiedUserIds.push(assignment.matched_user_id);
+        }
         done++;
         setProgress(Math.round((done / total) * 100));
       }
+
+      // Zuletzt verwendetes Freigabedatum persistieren
+      await supabase.from("app_settings").upsert({
+        key: "last_payslip_release_date",
+        value: releaseDate,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
 
       // Send push notifications (batch)
       if (notifiedUserIds.length > 0) {
@@ -328,8 +370,25 @@ export function PayslipBulkUploadDialog({ open, onOpenChange }: Props) {
                 onChange={handleFileSelect}
               />
 
+              {/* Freigabedatum */}
+              <div className="space-y-1.5 pt-2 border-t">
+                <Label className="flex items-center gap-1.5 text-sm">
+                  <Calendar className="w-4 h-4" />
+                  Freigabedatum — Mitarbeiter sieht Lohnzettel erst ab diesem Tag
+                </Label>
+                <Input
+                  type="date"
+                  value={releaseDate}
+                  onChange={(e) => setReleaseDate(e.target.value)}
+                  className="h-10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Voreingestellt auf zuletzt verwendeten Wert. Bis zum Freigabedatum bleibt der Lohnzettel für den Mitarbeiter unsichtbar.
+                </p>
+              </div>
+
               <div className="flex justify-end">
-                <Button onClick={handleAnalyze} disabled={!pdfFile || analyzing}>
+                <Button onClick={handleAnalyze} disabled={!pdfFile || !releaseDate || analyzing}>
                   {analyzing ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

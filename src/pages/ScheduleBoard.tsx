@@ -26,6 +26,9 @@ import { AssignmentPopover } from "@/components/schedule/AssignmentPopover";
 import { DayDetailSheet } from "@/components/schedule/DayDetailSheet";
 import { CompanyHolidayManager } from "@/components/schedule/CompanyHolidayManager";
 import { YearPlanningView } from "@/components/schedule/YearPlanningView";
+import { ResourcesManager } from "@/components/schedule/ResourcesManager";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Package } from "lucide-react";
 
 export default function ScheduleBoard() {
   const navigate = useNavigate();
@@ -56,10 +59,18 @@ export default function ScheduleBoard() {
     isExtern,
     canEditProject,
     canManageHolidays,
+    canSeeYearPlanning,
     loading: permLoading,
   } = useSchedulePermissions();
 
   const isExternView = isExtern && !isAdmin && !isVorarbeiter;
+
+  // Falls User keine Berechtigung fuer Jahresansicht hat, zwinge zurueck zu Wochenansicht
+  useEffect(() => {
+    if (!permLoading && mode === "year" && !canSeeYearPlanning) {
+      setMode("week");
+    }
+  }, [permLoading, canSeeYearPlanning, mode]);
 
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
   const weekEnd = addDays(weekStart, 4);
@@ -76,6 +87,9 @@ export default function ScheduleBoard() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetProjectId, setSheetProjectId] = useState<string | null>(null);
   const [sheetDatum, setSheetDatum] = useState<string | null>(null);
+
+  // Resources manager dialog
+  const [resourcesDialogOpen, setResourcesDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!permLoading && !isAdmin && !isVorarbeiter && !isExtern) {
@@ -361,6 +375,7 @@ export default function ScheduleBoard() {
           onWeekChange={setWeekStart}
           mode={isExternView ? "week" : mode}
           onModeChange={isExternView ? undefined : setMode}
+          showYearToggle={canSeeYearPlanning}
           title={isExternView ? "Meine Einteilung" : undefined}
         >
           {canManageHolidays && (
@@ -369,6 +384,11 @@ export default function ScheduleBoard() {
               onUpdate={() => fetchData(weekStart, weekEnd, mode)}
               userId={userId}
             />
+          )}
+          {(isAdmin || isVorarbeiter) && (
+            <Button variant="outline" size="sm" onClick={() => setResourcesDialogOpen(true)}>
+              <Package className="h-4 w-4 mr-1" /> Ressourcen
+            </Button>
           )}
         </ScheduleHeader>
 
@@ -469,6 +489,16 @@ export default function ScheduleBoard() {
         onUpdateResource={handleUpdateResource}
         onDeleteResource={handleDeleteResource}
       />
+
+      {/* Ressourcen-Verwaltung */}
+      <Dialog open={resourcesDialogOpen} onOpenChange={setResourcesDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ressourcen-Verwaltung</DialogTitle>
+          </DialogHeader>
+          <ResourcesManager />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

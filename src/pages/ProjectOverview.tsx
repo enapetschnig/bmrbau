@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type DocumentCategory = {
   type: "plans" | "reports" | "photos" | "chef" | "polier";
@@ -87,6 +88,13 @@ const ProjectOverview = () => {
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", rolle: "", telefon: "", email: "", firma: "", phase: "bauphase", notizen: "" });
+
+  // Template picker state
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; firma: string | null; rolle: string | null; telefon: string | null; email: string | null }[]>([]);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
+  const [addingTemplates, setAddingTemplates] = useState(false);
 
   // Access management state
   const [showAccessDialog, setShowAccessDialog] = useState(false);
@@ -444,6 +452,49 @@ const ProjectOverview = () => {
     e.target.value = "";
   };
 
+  const openTemplatePicker = async () => {
+    setShowTemplatePicker(true);
+    setSelectedTemplateIds(new Set());
+    setTemplateSearch("");
+    const { data } = await supabase
+      .from("contact_templates")
+      .select("id, name, firma, rolle, telefon, email")
+      .order("name");
+    setTemplates(data || []);
+  };
+
+  const toggleTemplate = (id: string) => {
+    const next = new Set(selectedTemplateIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedTemplateIds(next);
+  };
+
+  const addSelectedTemplates = async () => {
+    if (!projectId || selectedTemplateIds.size === 0) return;
+    setAddingTemplates(true);
+    const selected = templates.filter(t => selectedTemplateIds.has(t.id));
+    const maxSort = contacts.reduce((m, c) => Math.max(m, (c as any).sort_order ?? 0), 0);
+    const rows = selected.map((t, i) => ({
+      project_id: projectId,
+      name: t.name,
+      firma: t.firma,
+      rolle: t.rolle,
+      telefon: t.telefon,
+      email: t.email,
+      phase: "beide",
+      sort_order: maxSort + 1 + i,
+    }));
+    const { error } = await supabase.from("project_contacts").insert(rows);
+    setAddingTemplates(false);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    toast({ title: `${rows.length} Kontakt${rows.length === 1 ? "" : "e"} aus Vorlage hinzugefügt` });
+    setShowTemplatePicker(false);
+    fetchContacts();
+  };
+
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
@@ -679,10 +730,13 @@ const ProjectOverview = () => {
                   <>
                     <label className="cursor-pointer">
                       <input type="file" accept=".xlsx,.xls" onChange={importContactsExcel} className="hidden" />
-                      <Button size="sm" variant="ghost" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Excel-Import">
+                      <Button size="sm" variant="ghost" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Excel-Import (überschreibt alle)">
                         <Upload className="h-4 w-4" />
                       </Button>
                     </label>
+                    <Button size="sm" variant="outline" onClick={openTemplatePicker} title="Kontakt aus Vorlage">
+                      <Users className="h-4 w-4 mr-1" /> Vorlage
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setShowContactDialog(true)}>
                       <Plus className="h-4 w-4 mr-1" /> Kontakt
                     </Button>
@@ -875,7 +929,17 @@ const ProjectOverview = () => {
             <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
           </Card>
 
-          {/* 7. Polierordner (Vorarbeiter + Admin) */}
+          {/* 7. Unterweisungen */}
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/safety-evaluations?project=${projectId}`)}>
+            <CardHeader>
+              <div className="text-primary"><Shield className="h-8 w-8" /></div>
+              <CardTitle className="text-xl">Unterweisungen</CardTitle>
+              <CardDescription>Sicherheits- und Geräteunterweisungen</CardDescription>
+            </CardHeader>
+            <CardContent><Button variant="outline" className="w-full">Öffnen</Button></CardContent>
+          </Card>
+
+          {/* 8. Polierordner (Vorarbeiter + Admin) */}
           {visibleCategories.filter(c => c.type === "polier").map((category) => (
             <Card key={category.type} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/projects/${projectId}/${category.type}`)}>
               <CardHeader>
@@ -968,6 +1032,74 @@ const ProjectOverview = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Template Picker Dialog */}
+      <Dialog open={showTemplatePicker} onOpenChange={setShowTemplatePicker}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Kontakt aus Vorlage</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2 flex-1 overflow-hidden flex flex-col">
+            <Input
+              placeholder="Suchen (Name, Firma, Rolle)..."
+              value={templateSearch}
+              onChange={(e) => setTemplateSearch(e.target.value)}
+              className="h-10"
+            />
+            <div className="flex-1 overflow-y-auto border rounded-lg">
+              {templates.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-4 text-center">
+                  Keine Vorlagen vorhanden. Admin kann unter Administration → Kontakt-Vorlagen welche anlegen.
+                </p>
+              ) : (
+                (() => {
+                  const term = templateSearch.toLowerCase().trim();
+                  const filtered = term
+                    ? templates.filter(t =>
+                        [t.name, t.firma, t.rolle, t.telefon].some(v => (v || "").toLowerCase().includes(term))
+                      )
+                    : templates;
+                  if (filtered.length === 0) {
+                    return <p className="text-sm text-muted-foreground p-4 text-center">Keine Treffer</p>;
+                  }
+                  return filtered.map(t => (
+                    <label key={t.id} className="flex items-start gap-3 p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/40">
+                      <Checkbox
+                        checked={selectedTemplateIds.has(t.id)}
+                        onCheckedChange={() => toggleTemplate(t.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0 text-sm">
+                        <div className="font-medium">
+                          {t.name}
+                          {t.firma && <span className="text-muted-foreground font-normal"> · {t.firma}</span>}
+                        </div>
+                        {t.rolle && <div className="text-xs text-muted-foreground">{t.rolle}</div>}
+                        <div className="flex flex-wrap gap-3 mt-0.5">
+                          {t.telefon && <span className="text-xs text-muted-foreground">{t.telefon}</span>}
+                          {t.email && <span className="text-xs text-muted-foreground">{t.email}</span>}
+                        </div>
+                      </div>
+                    </label>
+                  ));
+                })()
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={addSelectedTemplates}
+                disabled={addingTemplates || selectedTemplateIds.size === 0}
+              >
+                {addingTemplates ? "Hinzufügen..." : `${selectedTemplateIds.size} hinzufügen`}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowTemplatePicker(false)}>
+                Abbrechen
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Access Management Dialog */}
       <Dialog open={showAccessDialog} onOpenChange={setShowAccessDialog}>
         <DialogContent className="sm:max-w-md">
@@ -1024,7 +1156,13 @@ const ProjectOverview = () => {
             </div>
             <div className="space-y-1">
               <Label>Beschreibung</Label>
-              <Textarea value={editForm.beschreibung} onChange={(e) => setEditForm(f => ({ ...f, beschreibung: e.target.value }))} rows={2} />
+              <VoiceAIInput
+                multiline
+                rows={2}
+                context="default"
+                value={editForm.beschreibung}
+                onChange={(v) => setEditForm(f => ({ ...f, beschreibung: v }))}
+              />
             </div>
 
             <div className="border-t pt-3">
@@ -1114,17 +1252,55 @@ const ProjectOverview = () => {
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label>Erreichbarkeit</Label>
-                  <Input value={editForm.erreichbarkeit} onChange={(e) => setEditForm(f => ({ ...f, erreichbarkeit: e.target.value }))} className="h-10" />
+                  <VoiceAIInput
+                    context="notiz"
+                    value={editForm.erreichbarkeit}
+                    onChange={(v) => setEditForm(f => ({ ...f, erreichbarkeit: v }))}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Besonderheiten</Label>
-                  <Textarea value={editForm.besonderheiten} onChange={(e) => setEditForm(f => ({ ...f, besonderheiten: e.target.value }))} rows={2} />
+                  <VoiceAIInput
+                    multiline
+                    rows={2}
+                    context="anmerkung"
+                    value={editForm.besonderheiten}
+                    onChange={(v) => setEditForm(f => ({ ...f, besonderheiten: v }))}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Hinweise zur Baustelle</Label>
-                  <Textarea value={editForm.hinweise} onChange={(e) => setEditForm(f => ({ ...f, hinweise: e.target.value }))} rows={2} />
+                  <VoiceAIInput
+                    multiline
+                    rows={2}
+                    context="anmerkung"
+                    value={editForm.hinweise}
+                    onChange={(v) => setEditForm(f => ({ ...f, hinweise: v }))}
+                  />
                 </div>
               </div>
+            </div>
+
+            <div className="border-t pt-3">
+              <p className="text-sm font-medium mb-2">Projektkontakte</p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Kontakte werden direkt auf der Projektseite verwaltet (hinzufügen, bearbeiten, löschen, sortieren, aus Vorlage übernehmen, Excel-Import/Export).
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setShowEditDialog(false); setTimeout(() => setShowContactDialog(true), 150); }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Kontakt hinzufügen
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-2"
+                onClick={() => { setShowEditDialog(false); setTimeout(() => openTemplatePicker(), 150); }}
+              >
+                <Users className="h-4 w-4 mr-1" /> Aus Vorlage
+              </Button>
             </div>
 
             <div className="flex gap-2 pt-2">

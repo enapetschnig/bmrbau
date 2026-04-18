@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { WeatherSelector } from "@/components/WeatherSelector";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -326,11 +327,13 @@ export default function BadWeather() {
 
             <div>
               <Label>Notizen</Label>
-              <Textarea
-                value={formData.notizen}
-                onChange={(e) => setFormData({ ...formData, notizen: e.target.value })}
-                placeholder="Zusätzliche Informationen..."
+              <VoiceAIInput
+                multiline
                 rows={3}
+                context="notiz"
+                value={formData.notizen}
+                onChange={(v) => setFormData({ ...formData, notizen: v })}
+                placeholder="Zusätzliche Informationen..."
               />
             </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, Wrench, Search, AlertTriangle, Camera, Receipt, X, Download, Upload } from "lucide-react";
+import { Plus, Wrench, Search, AlertTriangle, Camera, Receipt, X, Download, Upload, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type Project = { id: string; name: string };
 
@@ -68,6 +69,13 @@ export default function EquipmentPage() {
     zustand: "gut", standort_typ: "lager", standort_project_id: "",
     notizen: "", naechste_wartung: "", wartungsintervall_monate: "",
   });
+
+  // AI Import state
+  const [aiImportOpen, setAiImportOpen] = useState(false);
+  const [aiImportLoading, setAiImportLoading] = useState(false);
+  const [aiImportResult, setAiImportResult] = useState<{ equipment: any[]; uebersprungen: any[]; total_input: number } | null>(null);
+  const [aiImportSelectedIdxs, setAiImportSelectedIdxs] = useState<Set<number>>(new Set());
+  const [aiImportSaving, setAiImportSaving] = useState(false);
 
   // Photo state
   const [fotoFile, setFotoFile] = useState<File | null>(null);
@@ -296,8 +304,82 @@ export default function EquipmentPage() {
     }
 
     toast({ title: `${imported} Geraete importiert` });
-    fetchItems();
+    fetchData();
     e.target.value = "";
+  };
+
+  const handleAIImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    setAiImportOpen(true);
+    setAiImportLoading(true);
+    setAiImportResult(null);
+    setAiImportSelectedIdxs(new Set());
+
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      // Rohe Zeilen mit Header-Erkennung
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: null, raw: false });
+      if (rows.length === 0) {
+        toast({ variant: "destructive", title: "Leere Datei" });
+        setAiImportLoading(false);
+        setAiImportOpen(false);
+        return;
+      }
+
+      const { data: result, error } = await supabase.functions.invoke("ai-import-equipment", {
+        body: { rows },
+      });
+
+      if (error) throw error;
+      if (!result?.equipment) throw new Error("KI-Antwort ungueltig");
+
+      setAiImportResult(result);
+      setAiImportSelectedIdxs(new Set(result.equipment.map((_: any, i: number) => i)));
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "KI-Import fehlgeschlagen", description: err.message });
+      setAiImportOpen(false);
+    } finally {
+      setAiImportLoading(false);
+    }
+  };
+
+  const toggleAiRow = (idx: number) => {
+    const next = new Set(aiImportSelectedIdxs);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    setAiImportSelectedIdxs(next);
+  };
+
+  const confirmAIImport = async () => {
+    if (!aiImportResult || aiImportSelectedIdxs.size === 0) return;
+    setAiImportSaving(true);
+    const toInsert = aiImportResult.equipment
+      .filter((_, i) => aiImportSelectedIdxs.has(i))
+      .map(e => ({
+        name: e.name,
+        kategorie: e.kategorie,
+        seriennummer: e.seriennummer,
+        kaufdatum: e.kaufdatum,
+        zustand: e.zustand,
+        standort_typ: e.standort_typ,
+        wartungsintervall_monate: e.wartungsintervall_monate,
+        naechste_wartung: e.naechste_wartung,
+        notizen: e.notizen,
+      }));
+    const { error } = await supabase.from("equipment").insert(toInsert);
+    setAiImportSaving(false);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    toast({ title: `${toInsert.length} Geraete importiert` });
+    setAiImportOpen(false);
+    setAiImportResult(null);
+    fetchData();
   };
 
   return (
@@ -316,8 +398,16 @@ export default function EquipmentPage() {
           )}
           {canManage && (
             <label className="cursor-pointer inline-flex">
+              <input type="file" accept=".xlsx,.xls" onChange={handleAIImport} className="hidden" />
+              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="KI erkennt Spalten automatisch">
+                <Sparkles className="w-4 h-4 mr-1" /> KI-Import
+              </Button>
+            </label>
+          )}
+          {canManage && (
+            <label className="cursor-pointer inline-flex">
               <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
-              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }}>
+              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Standard-Import (feste Spaltennamen)">
                 <Upload className="w-4 h-4 mr-1" /> Import
               </Button>
             </label>
@@ -497,7 +587,13 @@ export default function EquipmentPage() {
             </div>
             <div>
               <Label>Notizen</Label>
-              <Textarea value={form.notizen} onChange={(e) => setForm({ ...form, notizen: e.target.value })} rows={2} />
+              <VoiceAIInput
+                multiline
+                rows={2}
+                context="notiz"
+                value={form.notizen}
+                onChange={(v) => setForm({ ...form, notizen: v })}
+              />
             </div>
             {/* Photo uploads */}
             <div className="grid grid-cols-2 gap-3">
@@ -585,6 +681,114 @@ export default function EquipmentPage() {
               <Button onClick={handleSave} disabled={saving}>{saving ? "Speichert..." : editingItem ? "Aktualisieren" : "Speichern"}</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KI-Import Preview Dialog */}
+      <Dialog open={aiImportOpen} onOpenChange={(o) => { if (!o && !aiImportSaving) { setAiImportOpen(false); setAiImportResult(null); } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5" /> KI-Import: Vorschau
+            </DialogTitle>
+          </DialogHeader>
+
+          {aiImportLoading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">KI analysiert die Excel-Datei und erkennt die Spalten...</p>
+            </div>
+          )}
+
+          {!aiImportLoading && aiImportResult && (
+            <>
+              <div className="text-sm p-3 rounded-lg bg-muted/50 border mb-3">
+                <p>
+                  <strong>{aiImportResult.equipment.length}</strong> Geräte aus <strong>{aiImportResult.total_input}</strong> Zeilen erkannt
+                  {aiImportResult.uebersprungen?.length > 0 && (
+                    <span className="text-orange-600"> · {aiImportResult.uebersprungen.length} übersprungen</span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Prüfe die Zuordnung und wähle aus, welche Geräte importiert werden sollen.
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50 sticky top-0">
+                    <tr>
+                      <th className="p-2 text-left w-8">
+                        <input
+                          type="checkbox"
+                          checked={aiImportSelectedIdxs.size === aiImportResult.equipment.length && aiImportResult.equipment.length > 0}
+                          onChange={() => {
+                            if (aiImportSelectedIdxs.size === aiImportResult.equipment.length) {
+                              setAiImportSelectedIdxs(new Set());
+                            } else {
+                              setAiImportSelectedIdxs(new Set(aiImportResult.equipment.map((_, i) => i)));
+                            }
+                          }}
+                        />
+                      </th>
+                      <th className="p-2 text-left">Name</th>
+                      <th className="p-2 text-left">Kategorie</th>
+                      <th className="p-2 text-left">Zustand</th>
+                      <th className="p-2 text-left">S/N</th>
+                      <th className="p-2 text-left">Kaufdatum</th>
+                      <th className="p-2 text-left">Wartung (Mo.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiImportResult.equipment.map((e, idx) => (
+                      <tr key={idx} className={`border-t ${aiImportSelectedIdxs.has(idx) ? "" : "opacity-40"}`}>
+                        <td className="p-2">
+                          <input
+                            type="checkbox"
+                            checked={aiImportSelectedIdxs.has(idx)}
+                            onChange={() => toggleAiRow(idx)}
+                          />
+                        </td>
+                        <td className="p-2 font-medium">{e.name}</td>
+                        <td className="p-2">{KATEGORIE_LABELS[e.kategorie] || e.kategorie}</td>
+                        <td className="p-2">{ZUSTAND_LABELS[e.zustand] || e.zustand}</td>
+                        <td className="p-2 text-muted-foreground">{e.seriennummer || "–"}</td>
+                        <td className="p-2 text-muted-foreground">{e.kaufdatum || "–"}</td>
+                        <td className="p-2 text-muted-foreground">{e.wartungsintervall_monate ?? "–"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {aiImportResult.equipment.length === 0 && (
+                  <p className="text-center py-8 text-muted-foreground text-sm">Keine Geräte erkannt</p>
+                )}
+              </div>
+
+              {aiImportResult.uebersprungen?.length > 0 && (
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer text-orange-600">
+                    {aiImportResult.uebersprungen.length} Zeilen übersprungen anzeigen
+                  </summary>
+                  <ul className="mt-1 space-y-1 text-muted-foreground">
+                    {aiImportResult.uebersprungen.map((s: any, i: number) => (
+                      <li key={i}>• Zeile {s.zeile ?? "?"}: {s.grund}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3">
+                <Button variant="outline" onClick={() => { setAiImportOpen(false); setAiImportResult(null); }} disabled={aiImportSaving}>
+                  Abbrechen
+                </Button>
+                <Button onClick={confirmAIImport} disabled={aiImportSaving || aiImportSelectedIdxs.size === 0}>
+                  {aiImportSaving
+                    ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Importiert...</>
+                    : <><CheckCircle2 className="w-4 h-4 mr-1" /> {aiImportSelectedIdxs.size} importieren</>}
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

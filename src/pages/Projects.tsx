@@ -993,27 +993,39 @@ const Projects = () => {
                       )}
                       
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-                        <div className="flex flex-col items-center gap-1 p-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/plans`); }}
+                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
+                        >
                           <FileText className="w-5 h-5 text-primary" />
                           <span className="text-xs font-medium">Pläne</span>
                           <span className="text-xs text-muted-foreground">
                             {project.fileCount?.plans || 0}
                           </span>
-                        </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/daily-reports?project=${project.id}`); }}
+                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
+                        >
                           <FileText className="w-5 h-5 text-primary" />
                           <span className="text-xs font-medium">Berichte</span>
                           <span className="text-xs text-muted-foreground">
                             {project.fileCount?.reports || 0}
                           </span>
-                        </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/photos`); }}
+                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-muted transition-colors"
+                        >
                           <Image className="w-5 h-5 text-primary" />
                           <span className="text-xs font-medium">Fotos</span>
                           <span className="text-xs text-muted-foreground">
                             {project.fileCount?.photos || 0}
                           </span>
-                        </div>
+                        </button>
                       </div>
 
                       <div

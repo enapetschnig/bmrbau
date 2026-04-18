@@ -21,6 +21,8 @@ import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
 import { PayslipBulkUploadDialog } from "@/components/PayslipBulkUploadDialog";
 import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
+import { ContactTemplatesManager } from "@/components/admin/ContactTemplatesManager";
+import { YearPlanningRolesPanel } from "@/components/admin/YearPlanningRolesPanel";
 
 type Profile = {
   id: string;
@@ -1297,6 +1299,24 @@ export default function Admin() {
               </div>
             </CardContent>
           </Card>
+        </section>
+
+        {/* ===== KONTAKT-VORLAGEN & STANDARD-KONTAKTE ===== */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <UserIcon className="h-6 w-6" />
+            Kontakt-Vorlagen & Standard-Kontakte
+          </h2>
+          <ContactTemplatesManager />
+        </section>
+
+        {/* ===== PLANTAFEL-RECHTE ===== */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Calendar className="h-6 w-6" />
+            Plantafel-Rechte
+          </h2>
+          <YearPlanningRolesPanel />
         </section>
 
         {/* ===== MENÜ-EINSTELLUNGEN ===== */}

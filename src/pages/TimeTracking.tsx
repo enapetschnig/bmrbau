@@ -30,6 +30,7 @@ import {
 } from "@/lib/workingHours";
 import { FillRemainingHoursDialog } from "@/components/FillRemainingHoursDialog";
 import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type Project = {
   id: string;
@@ -1358,9 +1359,10 @@ const TimeTracking = () => {
                         {/* Activity - optional */}
                         <div className="space-y-2">
                           <Label>Tätigkeit <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                          <Input 
-                            value={block.taetigkeit} 
-                            onChange={(e) => updateBlock(block.id, { taetigkeit: e.target.value })} 
+                          <VoiceAIInput
+                            context="zeiterfassung"
+                            value={block.taetigkeit}
+                            onChange={(v) => updateBlock(block.id, { taetigkeit: v })}
                             placeholder="Optional - z.B. Montage, Aufmaß..."
                           />
                         </div>
@@ -1652,9 +1654,10 @@ const TimeTracking = () => {
               {absenceData.type === "sonstige" && (
                 <div>
                   <Label>Grund</Label>
-                  <Input
+                  <VoiceAIInput
+                    context="anmerkung"
                     value={absenceData.sonstigerGrund}
-                    onChange={(e) => setAbsenceData({ ...absenceData, sonstigerGrund: e.target.value })}
+                    onChange={(v) => setAbsenceData({ ...absenceData, sonstigerGrund: v })}
                     placeholder="Grund der Abwesenheit..."
                   />
                 </div>
@@ -1995,10 +1998,11 @@ const TimeTracking = () => {
 
               <div>
                 <Label>Notizen</Label>
-                <Input
+                <VoiceAIInput
+                  context="notiz"
                   value={badWeatherData.notizen}
-                  onChange={(e) => setBadWeatherData({ ...badWeatherData, notizen: e.target.value })}
-                  placeholder="Zusaetzliche Informationen..."
+                  onChange={(v) => setBadWeatherData({ ...badWeatherData, notizen: v })}
+                  placeholder="Zusätzliche Informationen..."
                 />
               </div>
 

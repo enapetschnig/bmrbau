@@ -1,10 +1,11 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { format, parseISO, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
-import { Trash2 } from "lucide-react";
+import { Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +13,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ResourceAdder } from "./ResourceAdder";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 import type {
   Project,
   Assignment,
@@ -58,6 +62,50 @@ export function DayDetailSheet({
   onUpdateResource,
   onDeleteResource,
 }: Props) {
+  const { toast } = useToast();
+  const [transportErforderlich, setTransportErforderlich] = useState(false);
+  const [transportNotiz, setTransportNotiz] = useState("");
+  const [transportId, setTransportId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!project || !datum) return;
+    (async () => {
+      const { data } = await supabase
+        .from("project_day_transport")
+        .select("id, erforderlich, notiz")
+        .eq("project_id", project.id)
+        .eq("datum", datum)
+        .maybeSingle();
+      if (data) {
+        setTransportErforderlich(!!data.erforderlich);
+        setTransportNotiz(data.notiz || "");
+        setTransportId(data.id);
+      } else {
+        setTransportErforderlich(false);
+        setTransportNotiz("");
+        setTransportId(null);
+      }
+    })();
+  }, [project?.id, datum]);
+
+  const saveTransport = async (erforderlich: boolean, notiz: string) => {
+    if (!project || !datum) return;
+    const payload: any = {
+      project_id: project.id,
+      datum,
+      erforderlich,
+      notiz: notiz.trim() || null,
+    };
+    if (transportId) {
+      const { error } = await supabase.from("project_day_transport").update(payload).eq("id", transportId);
+      if (error) toast({ variant: "destructive", title: "Fehler", description: error.message });
+    } else {
+      const { data, error } = await supabase.from("project_day_transport").insert(payload).select("id").single();
+      if (error) toast({ variant: "destructive", title: "Fehler", description: error.message });
+      else if (data) setTransportId((data as any).id);
+    }
+  };
+
   if (!project || !datum) return null;
 
   const dateParsed = parseISO(datum);
@@ -112,18 +160,15 @@ export function DayDetailSheet({
             <label className="text-sm font-semibold mb-1 block">
               Tagesziel
             </label>
-            <Textarea
-              placeholder="Was soll heute erreicht werden?"
+            <VoiceAIInput
+              multiline
               rows={2}
+              context="tagesbericht"
               value={dailyTarget?.tagesziel || ""}
-              onChange={(e) =>
-                onUpdateTarget(
-                  project.id,
-                  datum,
-                  "tagesziel",
-                  e.target.value || null
-                )
+              onChange={(v) =>
+                onUpdateTarget(project.id, datum, "tagesziel", v || null)
               }
+              placeholder="Was soll heute erreicht werden?"
             />
           </div>
 
@@ -149,21 +194,43 @@ export function DayDetailSheet({
             />
           </div>
 
+          {/* Transport */}
+          <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={transportErforderlich}
+                onCheckedChange={(v) => {
+                  const next = !!v;
+                  setTransportErforderlich(next);
+                  saveTransport(next, transportNotiz);
+                }}
+              />
+              <Truck className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Transport erforderlich</span>
+            </label>
+            {transportErforderlich && (
+              <Input
+                className="h-9 text-sm"
+                placeholder="Notiz (z.B. Stahl liefern, LKW 7:00)"
+                value={transportNotiz}
+                onChange={(e) => setTransportNotiz(e.target.value)}
+                onBlur={() => saveTransport(transportErforderlich, transportNotiz)}
+              />
+            )}
+          </div>
+
           {/* Notizen */}
           <div>
             <label className="text-sm font-semibold mb-1 block">Notizen</label>
-            <Textarea
-              placeholder="Anmerkungen zum Tag..."
+            <VoiceAIInput
+              multiline
               rows={2}
+              context="notiz"
               value={dailyTarget?.notizen || ""}
-              onChange={(e) =>
-                onUpdateTarget(
-                  project.id,
-                  datum,
-                  "notizen",
-                  e.target.value || null
-                )
+              onChange={(v) =>
+                onUpdateTarget(project.id, datum, "notizen", v || null)
               }
+              placeholder="Anmerkungen zum Tag..."
             />
           </div>
 

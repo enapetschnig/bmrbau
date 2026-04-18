@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { WeatherSelector } from "@/components/WeatherSelector";
 import { TemperatureInput } from "@/components/TemperatureInput";
 import { GeschossSelector } from "@/components/GeschossSelector";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type MaterialEntry = {
   id: string;
@@ -534,23 +535,24 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             <div className="space-y-3">
               <div>
                 <Label htmlFor="beschreibung">Durchgeführte Arbeit *</Label>
-                <Textarea
-                  id="beschreibung"
-                  value={formData.beschreibung}
-                  onChange={(e) => setFormData({ ...formData, beschreibung: e.target.value })}
-                  placeholder="Beschreiben Sie die durchgeführten Arbeiten..."
+                <VoiceAIInput
+                  multiline
                   rows={4}
-                  required
+                  context="regiebericht"
+                  value={formData.beschreibung}
+                  onChange={(v) => setFormData({ ...formData, beschreibung: v })}
+                  placeholder="Beschreiben Sie die durchgeführten Arbeiten..."
                 />
               </div>
               <div>
                 <Label htmlFor="notizen">Notizen (optional)</Label>
-                <Textarea
-                  id="notizen"
-                  value={formData.notizen}
-                  onChange={(e) => setFormData({ ...formData, notizen: e.target.value })}
-                  placeholder="Zusätzliche Bemerkungen..."
+                <VoiceAIInput
+                  multiline
                   rows={2}
+                  context="notiz"
+                  value={formData.notizen}
+                  onChange={(v) => setFormData({ ...formData, notizen: v })}
+                  placeholder="Zusätzliche Bemerkungen..."
                 />
               </div>
             </div>

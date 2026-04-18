@@ -149,11 +149,13 @@ export type Database = {
           id: string
           project_id: string | null
           erstellt_von: string
+          zugewiesen_an: string | null
           typ: string
           titel: string
           beschreibung: string | null
           status: string
           lieferant: string | null
+          produktgruppe: string | null
           dokument_url: string | null
           notizen: string | null
           created_at: string
@@ -163,11 +165,13 @@ export type Database = {
           id?: string
           project_id?: string | null
           erstellt_von: string
+          zugewiesen_an?: string | null
           typ?: string
           titel: string
           beschreibung?: string | null
           status?: string
           lieferant?: string | null
+          produktgruppe?: string | null
           dokument_url?: string | null
           notizen?: string | null
           created_at?: string
@@ -177,11 +181,13 @@ export type Database = {
           id?: string
           project_id?: string | null
           erstellt_von?: string
+          zugewiesen_an?: string | null
           typ?: string
           titel?: string
           beschreibung?: string | null
           status?: string
           lieferant?: string | null
+          produktgruppe?: string | null
           dokument_url?: string | null
           notizen?: string | null
           created_at?: string
@@ -283,6 +289,7 @@ export type Database = {
           id: string
           datum: string
           bezeichnung: string | null
+          typ: string | null
           created_by: string
           created_at: string
         }
@@ -290,6 +297,7 @@ export type Database = {
           id?: string
           datum: string
           bezeichnung?: string | null
+          typ?: string | null
           created_by: string
           created_at?: string
         }
@@ -297,6 +305,7 @@ export type Database = {
           id?: string
           datum?: string
           bezeichnung?: string | null
+          typ?: string | null
           created_by?: string
           created_at?: string
         }
@@ -1799,6 +1808,45 @@ export type Database = {
           },
         ]
       }
+      contact_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          firma: string | null
+          id: string
+          name: string
+          notizen: string | null
+          rolle: string | null
+          telefon: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          firma?: string | null
+          id?: string
+          name: string
+          notizen?: string | null
+          rolle?: string | null
+          telefon?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          firma?: string | null
+          id?: string
+          name?: string
+          notizen?: string | null
+          rolle?: string | null
+          telefon?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       project_contacts: {
         Row: {
           created_at: string | null
@@ -1977,6 +2025,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payslip_metadata: {
+        Row: {
+          id: string
+          user_id: string
+          file_path: string
+          release_date: string
+          uploaded_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          file_path: string
+          release_date: string
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          file_path?: string
+          release_date?: string
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
       }
       projects: {
         Row: {
@@ -2427,6 +2502,7 @@ export type Database = {
           created_by: string
           end_week: number
           id: string
+          individual_name: string | null
           partie: string | null
           project_id: string | null
           sort_order: number | null
@@ -2441,6 +2517,7 @@ export type Database = {
           created_by: string
           end_week: number
           id?: string
+          individual_name?: string | null
           partie?: string | null
           project_id?: string | null
           sort_order?: number | null
@@ -2455,6 +2532,7 @@ export type Database = {
           created_by?: string
           end_week?: number
           id?: string
+          individual_name?: string | null
           partie?: string | null
           project_id?: string | null
           sort_order?: number | null
@@ -2462,6 +2540,123 @@ export type Database = {
           title?: string
           updated_at?: string
           year?: number
+        }
+        Relationships: []
+      }
+      yearly_resource_blocks: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          end_week: number
+          id: string
+          label: string | null
+          project_id: string | null
+          resource_id: string
+          sort_order: number | null
+          start_week: number
+          year: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_week: number
+          id?: string
+          label?: string | null
+          project_id?: string | null
+          resource_id: string
+          sort_order?: number | null
+          start_week: number
+          year: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_week?: number
+          id?: string
+          label?: string | null
+          project_id?: string | null
+          resource_id?: string
+          sort_order?: number | null
+          start_week?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      resources: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          einheit: string | null
+          farbe: string | null
+          flaeche_m2: number | null
+          id: string
+          is_active: boolean | null
+          kategorie: string
+          name: string
+          notizen: string | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          einheit?: string | null
+          farbe?: string | null
+          flaeche_m2?: number | null
+          id?: string
+          is_active?: boolean | null
+          kategorie?: string
+          name: string
+          notizen?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          einheit?: string | null
+          farbe?: string | null
+          flaeche_m2?: number | null
+          id?: string
+          is_active?: boolean | null
+          kategorie?: string
+          name?: string
+          notizen?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_day_transport: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          datum: string
+          erforderlich: boolean | null
+          id: string
+          notiz: string | null
+          project_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          datum: string
+          erforderlich?: boolean | null
+          id?: string
+          notiz?: string | null
+          project_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          datum?: string
+          erforderlich?: boolean | null
+          id?: string
+          notiz?: string | null
+          project_id?: string
         }
         Relationships: []
       }
@@ -2473,6 +2668,7 @@ export type Database = {
           id: string
           notizen: string | null
           project_id: string
+          transport_erforderlich: boolean | null
           user_id: string
         }
         Insert: {
@@ -2482,6 +2678,7 @@ export type Database = {
           id?: string
           notizen?: string | null
           project_id: string
+          transport_erforderlich?: boolean | null
           user_id: string
         }
         Update: {
@@ -2491,6 +2688,7 @@ export type Database = {
           id?: string
           notizen?: string | null
           project_id?: string
+          transport_erforderlich?: boolean | null
           user_id?: string
         }
         Relationships: [

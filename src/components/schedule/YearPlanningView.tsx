@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   startOfYear,
   endOfYear,
@@ -13,7 +13,7 @@ import {
   isAfter,
 } from "date-fns";
 import { de } from "date-fns/locale";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getProjectColor } from "./scheduleUtils";
+import { YearPlanExcelIO } from "./YearPlanExcelIO";
 import type {
   Project,
   Assignment,
@@ -38,6 +39,29 @@ interface PlanBlock {
   end_week: number;
   year: number;
   partie: string | null;
+  individual_name: string | null;
+  sort_order: number;
+}
+
+interface Resource {
+  id: string;
+  name: string;
+  kategorie: string;
+  einheit: string | null;
+  farbe: string | null;
+  is_active: boolean | null;
+  sort_order: number | null;
+}
+
+interface ResourceBlock {
+  id: string;
+  resource_id: string;
+  project_id: string | null;
+  year: number;
+  start_week: number;
+  end_week: number;
+  color: string;
+  label: string | null;
   sort_order: number;
 }
 
@@ -54,6 +78,16 @@ const BLOCK_COLORS = [
   "#EC4899", "#06B6D4", "#F97316", "#6366F1", "#84CC16",
 ];
 
+type DragState = {
+  id: string;
+  kind: "plan" | "resource";
+  mode: "move" | "resize-start" | "resize-end";
+  startPointerX: number;
+  originalStartWeek: number;
+  originalEndWeek: number;
+  deltaWeeks: number;
+};
+
 export function YearPlanningView({
   year,
   projects,
@@ -62,15 +96,29 @@ export function YearPlanningView({
 }: Props) {
   const { toast } = useToast();
   const [planBlocks, setPlanBlocks] = useState<PlanBlock[]>([]);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [editingBlock, setEditingBlock] = useState<PlanBlock | null>(null);
   const [blockForm, setBlockForm] = useState({
     title: "", projectId: "", color: BLOCK_COLORS[0],
-    startWeek: "1", endWeek: "4", partie: "",
+    startWeek: "1", endWeek: "4", partie: "", individualName: "",
+  });
+
+  // Ressourcen-Bloecke
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [resourceBlocks, setResourceBlocks] = useState<ResourceBlock[]>([]);
+  const [showResourceDialog, setShowResourceDialog] = useState(false);
+  const [editingResourceBlock, setEditingResourceBlock] = useState<ResourceBlock | null>(null);
+  const [resourceForm, setResourceForm] = useState({
+    resourceId: "", projectId: "", color: BLOCK_COLORS[3],
+    startWeek: "1", endWeek: "4", label: "",
   });
 
   useEffect(() => {
     fetchPlanBlocks();
+    fetchResources();
+    fetchResourceBlocks();
   }, [year]);
 
   const fetchPlanBlocks = async () => {
@@ -80,6 +128,144 @@ export function YearPlanningView({
       .eq("year", year)
       .order("sort_order");
     if (data) setPlanBlocks(data as PlanBlock[]);
+  };
+
+  const fetchResources = async () => {
+    const { data } = await supabase
+      .from("resources")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order")
+      .order("name");
+    if (data) setResources(data as Resource[]);
+  };
+
+  const fetchResourceBlocks = async () => {
+    const { data } = await supabase
+      .from("yearly_resource_blocks")
+      .select("*")
+      .eq("year", year)
+      .order("sort_order");
+    if (data) setResourceBlocks(data as ResourceBlock[]);
+  };
+
+  // Spaltenbreite messen fuer Drag-Berechnung
+  const getColumnWidthPx = useCallback((): number => {
+    if (!gridRef.current) return 24;
+    const firstRow = gridRef.current.querySelector("[data-yp-row='true']") as HTMLElement | null;
+    if (!firstRow) return 24;
+    const width = firstRow.getBoundingClientRect().width;
+    const labelWidth = 200; // approx sticky label column width
+    const weekCount = weeks.length;
+    if (weekCount === 0) return 24;
+    return Math.max(10, (width - labelWidth) / weekCount);
+  }, []);
+
+  const startDrag = (
+    e: React.PointerEvent,
+    id: string,
+    kind: "plan" | "resource",
+    mode: "move" | "resize-start" | "resize-end",
+    startWeek: number,
+    endWeek: number
+  ) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragState({
+      id,
+      kind,
+      mode,
+      startPointerX: e.clientX,
+      originalStartWeek: startWeek,
+      originalEndWeek: endWeek,
+      deltaWeeks: 0,
+    });
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragState) return;
+    const colW = getColumnWidthPx();
+    const deltaPx = e.clientX - dragState.startPointerX;
+    const deltaWeeks = Math.round(deltaPx / colW);
+    if (deltaWeeks !== dragState.deltaWeeks) {
+      setDragState({ ...dragState, deltaWeeks });
+    }
+  };
+
+  const endDrag = async (e: React.PointerEvent) => {
+    if (!dragState) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    const { id, kind, mode, originalStartWeek, originalEndWeek, deltaWeeks } = dragState;
+    setDragState(null);
+
+    if (deltaWeeks === 0) return;
+
+    let newStart = originalStartWeek;
+    let newEnd = originalEndWeek;
+    if (mode === "move") {
+      newStart = originalStartWeek + deltaWeeks;
+      newEnd = originalEndWeek + deltaWeeks;
+    } else if (mode === "resize-start") {
+      newStart = originalStartWeek + deltaWeeks;
+      if (newStart > originalEndWeek) newStart = originalEndWeek;
+    } else if (mode === "resize-end") {
+      newEnd = originalEndWeek + deltaWeeks;
+      if (newEnd < originalStartWeek) newEnd = originalStartWeek;
+    }
+
+    // Clamp to 1..53
+    newStart = Math.max(1, Math.min(53, newStart));
+    newEnd = Math.max(1, Math.min(53, newEnd));
+    if (newStart > newEnd) newStart = newEnd;
+
+    const table = kind === "plan" ? "yearly_plan_blocks" : "yearly_resource_blocks";
+    const { error } = await supabase
+      .from(table)
+      .update({ start_week: newStart, end_week: newEnd })
+      .eq("id", id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+    }
+    if (kind === "plan") fetchPlanBlocks();
+    else fetchResourceBlocks();
+  };
+
+  // Helper: bekommt effektive start/end_week waehrend Drag
+  const getEffectiveRange = (
+    id: string,
+    kind: "plan" | "resource",
+    originalStart: number,
+    originalEnd: number
+  ): { start: number; end: number } => {
+    if (!dragState || dragState.id !== id || dragState.kind !== kind) {
+      return { start: originalStart, end: originalEnd };
+    }
+    const { mode, deltaWeeks } = dragState;
+    if (mode === "move") return { start: originalStart + deltaWeeks, end: originalEnd + deltaWeeks };
+    if (mode === "resize-start") return { start: Math.min(originalStart + deltaWeeks, originalEnd), end: originalEnd };
+    if (mode === "resize-end") return { start: originalStart, end: Math.max(originalEnd + deltaWeeks, originalStart) };
+    return { start: originalStart, end: originalEnd };
+  };
+
+  // Check: Ressource darf nur Projekten zugewiesen werden, die im gleichen Zeitraum
+  // im oberen Planungssystem (planBlocks) eingeplant sind
+  const getAvailableProjectsForResource = (startWeek: number, endWeek: number) => {
+    const activeProjectIds = new Set<string>();
+    // Projekte mit Assignments in diesem Zeitraum
+    for (const a of assignments) {
+      const d = parseISO(a.datum);
+      const w = getISOWeek(d);
+      if (d.getFullYear() === year && w >= startWeek && w <= endWeek) {
+        activeProjectIds.add(a.project_id);
+      }
+    }
+    // Projekte mit Grobplanungsbloecken in diesem Zeitraum
+    for (const b of planBlocks) {
+      if (b.project_id && !(b.end_week < startWeek || b.start_week > endWeek)) {
+        activeProjectIds.add(b.project_id);
+      }
+    }
+    return projects.filter((p) => activeProjectIds.has(p.id));
   };
 
   const handleSaveBlock = async () => {
@@ -95,6 +281,7 @@ export function YearPlanningView({
       end_week: parseInt(blockForm.endWeek),
       year,
       partie: blockForm.partie.trim() || null,
+      individual_name: blockForm.individualName.trim() || null,
       created_by: user.id,
     };
 
@@ -105,7 +292,7 @@ export function YearPlanningView({
     }
     setShowBlockDialog(false);
     setEditingBlock(null);
-    setBlockForm({ title: "", projectId: "", color: BLOCK_COLORS[0], startWeek: "1", endWeek: "4", partie: "" });
+    setBlockForm({ title: "", projectId: "", color: BLOCK_COLORS[0], startWeek: "1", endWeek: "4", partie: "", individualName: "" });
     fetchPlanBlocks();
   };
 
@@ -123,8 +310,54 @@ export function YearPlanningView({
       startWeek: block.start_week.toString(),
       endWeek: block.end_week.toString(),
       partie: block.partie || "",
+      individualName: block.individual_name || "",
     });
     setShowBlockDialog(true);
+  };
+
+  const handleSaveResourceBlock = async () => {
+    if (!resourceForm.resourceId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const payload = {
+      resource_id: resourceForm.resourceId,
+      project_id: resourceForm.projectId || null,
+      color: resourceForm.color,
+      start_week: parseInt(resourceForm.startWeek),
+      end_week: parseInt(resourceForm.endWeek),
+      year,
+      label: resourceForm.label.trim() || null,
+      created_by: user.id,
+    };
+
+    if (editingResourceBlock) {
+      await supabase.from("yearly_resource_blocks").update(payload).eq("id", editingResourceBlock.id);
+    } else {
+      await supabase.from("yearly_resource_blocks").insert(payload);
+    }
+    setShowResourceDialog(false);
+    setEditingResourceBlock(null);
+    setResourceForm({ resourceId: "", projectId: "", color: BLOCK_COLORS[3], startWeek: "1", endWeek: "4", label: "" });
+    fetchResourceBlocks();
+  };
+
+  const handleDeleteResourceBlock = async (id: string) => {
+    await supabase.from("yearly_resource_blocks").delete().eq("id", id);
+    fetchResourceBlocks();
+  };
+
+  const openEditResourceBlock = (block: ResourceBlock) => {
+    setEditingResourceBlock(block);
+    setResourceForm({
+      resourceId: block.resource_id,
+      projectId: block.project_id || "",
+      color: block.color || BLOCK_COLORS[3],
+      startWeek: block.start_week.toString(),
+      endWeek: block.end_week.toString(),
+      label: block.label || "",
+    });
+    setShowResourceDialog(true);
   };
   // Generate all ISO weeks for the year
   const weeks = useMemo(() => {
@@ -195,7 +428,13 @@ export function YearPlanningView({
 
   return (
     <>
-    <div className="border rounded-lg overflow-x-auto">
+    <div
+      ref={gridRef}
+      className="border rounded-lg overflow-x-auto"
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+    >
       {/* Month header */}
       <div
         className="grid sticky top-0 z-20 bg-card border-b"
@@ -286,61 +525,211 @@ export function YearPlanningView({
 
       {/* Grobplanung Separator */}
       <div className="border-t-2 border-primary/30">
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 flex-wrap gap-2">
           <h3 className="text-sm font-semibold">Jahresgrobplanung</h3>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditingBlock(null);
-              setBlockForm({ title: "", projectId: "", color: BLOCK_COLORS[0], startWeek: "1", endWeek: "4", partie: "" });
-              setShowBlockDialog(true);
-            }}
-          >
-            <Plus className="h-3 w-3 mr-1" /> Block
-          </Button>
+          <div className="flex gap-1.5 flex-wrap">
+            <YearPlanExcelIO
+              year={year}
+              projects={projects}
+              resources={resources.map(r => ({ id: r.id, name: r.name, farbe: r.farbe }))}
+              onImported={() => { fetchPlanBlocks(); fetchResourceBlocks(); }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingBlock(null);
+                setBlockForm({ title: "", projectId: "", color: BLOCK_COLORS[0], startWeek: "1", endWeek: "4", partie: "", individualName: "" });
+                setShowBlockDialog(true);
+              }}
+            >
+              <Plus className="h-3 w-3 mr-1" /> Block
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Plan blocks */}
-      {planBlocks.map((block) => (
+      {planBlocks.map((block) => {
+        const { start: effStart, end: effEnd } = getEffectiveRange(block.id, "plan", block.start_week, block.end_week);
+        return (
         <div
           key={block.id}
-          className="grid border-b cursor-pointer hover:bg-muted/20"
+          data-yp-row="true"
+          className="grid border-b hover:bg-muted/20"
           style={{
             gridTemplateColumns: `minmax(140px, 200px) repeat(${weeks.length}, minmax(24px, 1fr))`,
           }}
-          onClick={() => openEditBlock(block)}
         >
-          <div className="p-1.5 border-r text-xs font-medium truncate sticky left-0 bg-card z-10 flex items-center gap-1">
+          <div
+            className="p-1.5 border-r text-xs font-medium truncate sticky left-0 bg-card z-10 flex items-center gap-1 cursor-pointer"
+            onClick={() => openEditBlock(block)}
+          >
             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
             <span>{block.title}</span>
+            {block.individual_name && <span className="text-primary font-semibold"> · {block.individual_name}</span>}
             {block.partie && <span className="text-muted-foreground">({block.partie})</span>}
           </div>
           {weeks.map((w) => {
-            const inRange = w.weekNum >= block.start_week && w.weekNum <= block.end_week;
+            const inRange = w.weekNum >= effStart && w.weekNum <= effEnd;
             const holiday = isHolidayWeek(w.start);
+            const isStartWeek = w.weekNum === effStart;
+            const isEndWeek = w.weekNum === effEnd;
             return (
               <div
                 key={w.weekNum}
-                className={`border-r min-h-[24px] ${holiday ? "bg-gray-100" : ""}`}
+                className={`border-r min-h-[24px] relative ${holiday ? "bg-gray-100" : ""}`}
               >
                 {inRange && (
                   <div
-                    className="h-full border-y"
-                    style={{ backgroundColor: block.color + "40", borderColor: block.color }}
-                    title={`${block.title}${block.partie ? ` (${block.partie})` : ""} – KW ${block.start_week}-${block.end_week}`}
-                  />
+                    className="absolute inset-0 border-y touch-none select-none flex items-stretch"
+                    style={{
+                      backgroundColor: block.color + "40",
+                      borderColor: block.color,
+                      cursor: dragState?.id === block.id ? "grabbing" : "grab",
+                    }}
+                    onPointerDown={(e) => startDrag(e, block.id, "plan", "move", block.start_week, block.end_week)}
+                    onClick={(e) => {
+                      if (dragState?.deltaWeeks === 0 || !dragState) openEditBlock(block);
+                    }}
+                    title={`${block.title}${block.partie ? ` (${block.partie})` : ""} – KW ${effStart}-${effEnd} · ziehen zum Verschieben`}
+                  >
+                    {isStartWeek && (
+                      <div
+                        className="w-1.5 cursor-ew-resize bg-white/30 hover:bg-white/60"
+                        onPointerDown={(e) => startDrag(e, block.id, "plan", "resize-start", block.start_week, block.end_week)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                    <div className="flex-1" />
+                    {isEndWeek && (
+                      <div
+                        className="w-1.5 cursor-ew-resize bg-white/30 hover:bg-white/60"
+                        onPointerDown={(e) => startDrag(e, block.id, "plan", "resize-end", block.start_week, block.end_week)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
-      ))}
+        );
+      })}
 
       {planBlocks.length === 0 && (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
           Noch keine Grobplanungsbloecke angelegt
+        </div>
+      )}
+
+      {/* Ressourcen Separator */}
+      <div className="border-t-2 border-orange-400/50">
+        <div className="flex items-center justify-between px-3 py-2 bg-orange-50 dark:bg-orange-950/20">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Package className="h-4 w-4" /> Ressourcen
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={resources.length === 0}
+            title={resources.length === 0 ? "Zuerst Ressource anlegen" : ""}
+            onClick={() => {
+              setEditingResourceBlock(null);
+              setResourceForm({ resourceId: "", projectId: "", color: BLOCK_COLORS[3], startWeek: "1", endWeek: "4", label: "" });
+              setShowResourceDialog(true);
+            }}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Ressource einplanen
+          </Button>
+        </div>
+      </div>
+
+      {/* Ressourcen-Zeilen: eine Zeile pro Ressource */}
+      {resources.map((resource) => {
+        const blocks = resourceBlocks.filter((b) => b.resource_id === resource.id);
+        return (
+          <div
+            key={resource.id}
+            data-yp-row="true"
+            className="grid border-b"
+            style={{
+              gridTemplateColumns: `minmax(140px, 200px) repeat(${weeks.length}, minmax(24px, 1fr))`,
+            }}
+          >
+            <div className="p-1.5 border-r text-xs font-medium truncate sticky left-0 bg-card z-10 flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded shrink-0" style={{ backgroundColor: resource.farbe || "#94A3B8" }} />
+              <span className="truncate">{resource.name}</span>
+            </div>
+            {weeks.map((w) => {
+              const holiday = isHolidayWeek(w.start);
+              const cells = blocks.map((b) => {
+                const { start: s, end: e } = getEffectiveRange(b.id, "resource", b.start_week, b.end_week);
+                return { b, s, e };
+              }).filter(({ s, e }) => w.weekNum >= s && w.weekNum <= e);
+              return (
+                <div
+                  key={w.weekNum}
+                  className={`border-r min-h-[24px] relative ${holiday ? "bg-gray-100" : ""}`}
+                >
+                  {cells.map(({ b, s, e }, idx) => {
+                    const projectName = b.project_id
+                      ? projects.find((p) => p.id === b.project_id)?.name || "?"
+                      : null;
+                    const isStart = w.weekNum === s;
+                    const isEnd = w.weekNum === e;
+                    return (
+                      <div
+                        key={b.id}
+                        className="absolute inset-0 border-y flex items-stretch overflow-hidden touch-none select-none"
+                        style={{
+                          backgroundColor: (b.color || "#F97316") + "40",
+                          borderColor: b.color || "#F97316",
+                          top: `${idx * 4}px`,
+                          cursor: dragState?.id === b.id ? "grabbing" : "grab",
+                        }}
+                        onPointerDown={(event) => startDrag(event, b.id, "resource", "move", b.start_week, b.end_week)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!dragState || dragState.deltaWeeks === 0) openEditResourceBlock(b);
+                        }}
+                        title={`${resource.name}${projectName ? " → " + projectName : ""}${b.label ? ": " + b.label : ""} – KW ${s}-${e} · ziehen zum Verschieben`}
+                      >
+                        {isStart && (
+                          <div
+                            className="w-1.5 cursor-ew-resize bg-white/30 hover:bg-white/60"
+                            onPointerDown={(event) => startDrag(event, b.id, "resource", "resize-start", b.start_week, b.end_week)}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        )}
+                        <div className="flex-1 flex items-center justify-center">
+                          {isStart && (
+                            <span className="text-[9px] font-medium truncate px-1 text-white drop-shadow-sm">
+                              {b.label || projectName || ""}
+                            </span>
+                          )}
+                        </div>
+                        {isEnd && (
+                          <div
+                            className="w-1.5 cursor-ew-resize bg-white/30 hover:bg-white/60"
+                            onPointerDown={(event) => startDrag(event, b.id, "resource", "resize-end", b.start_week, b.end_week)}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {resources.length === 0 && (
+        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+          Noch keine Ressourcen angelegt — über "Ressourcen"-Button im Header anlegen
         </div>
       )}
     </div>
@@ -366,9 +755,15 @@ export function YearPlanningView({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Partie</Label>
-            <Input value={blockForm.partie} onChange={(e) => setBlockForm({ ...blockForm, partie: e.target.value })} placeholder="z.B. Partie 1, Partie 2..." />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Partie</Label>
+              <Input value={blockForm.partie} onChange={(e) => setBlockForm({ ...blockForm, partie: e.target.value })} placeholder="Partie 1, Partie 2..." />
+            </div>
+            <div>
+              <Label>Individueller Name</Label>
+              <Input value={blockForm.individualName} onChange={(e) => setBlockForm({ ...blockForm, individualName: e.target.value })} placeholder="z.B. SEPP, MAX" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -403,6 +798,84 @@ export function YearPlanningView({
           )}
           <Button size="sm" onClick={handleSaveBlock} disabled={!blockForm.title.trim()}>
             {editingBlock ? "Speichern" : "Block erstellen"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Resource Block Dialog */}
+    <Dialog open={showResourceDialog} onOpenChange={setShowResourceDialog}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{editingResourceBlock ? "Ressource bearbeiten" : "Ressource einplanen"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Ressource *</Label>
+            <Select value={resourceForm.resourceId} onValueChange={(v) => setResourceForm({ ...resourceForm, resourceId: v })}>
+              <SelectTrigger><SelectValue placeholder="Ressource wählen..." /></SelectTrigger>
+              <SelectContent>
+                {resources.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Von KW</Label>
+              <Input type="number" min="1" max="53" value={resourceForm.startWeek} onChange={(e) => setResourceForm({ ...resourceForm, startWeek: e.target.value })} />
+            </div>
+            <div>
+              <Label>Bis KW</Label>
+              <Input type="number" min="1" max="53" value={resourceForm.endWeek} onChange={(e) => setResourceForm({ ...resourceForm, endWeek: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <Label>Projekt (nur im gleichen Zeitraum eingeplante)</Label>
+            <Select value={resourceForm.projectId} onValueChange={(v) => setResourceForm({ ...resourceForm, projectId: v })}>
+              <SelectTrigger><SelectValue placeholder="Kein Projekt" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Kein Projekt</SelectItem>
+                {(() => {
+                  const sw = parseInt(resourceForm.startWeek) || 1;
+                  const ew = parseInt(resourceForm.endWeek) || 1;
+                  const avail = getAvailableProjectsForResource(sw, ew);
+                  if (avail.length === 0) {
+                    return <SelectItem value="__none" disabled>Keine Projekte in diesem Zeitraum eingeplant</SelectItem>;
+                  }
+                  return avail.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>);
+                })()}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Label (optional)</Label>
+            <Input value={resourceForm.label} onChange={(e) => setResourceForm({ ...resourceForm, label: e.target.value })} placeholder="z.B. Partie 1" />
+          </div>
+          <div>
+            <Label>Farbe</Label>
+            <div className="flex gap-1.5 mt-1 flex-wrap">
+              {BLOCK_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`w-7 h-7 rounded-full border-2 ${resourceForm.color === c ? "border-gray-900 ring-2 ring-offset-1 ring-gray-400" : "border-transparent"}`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => setResourceForm({ ...resourceForm, color: c })}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="flex justify-between">
+          {editingResourceBlock && (
+            <Button variant="destructive" size="sm" onClick={() => { handleDeleteResourceBlock(editingResourceBlock.id); setShowResourceDialog(false); }}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen
+            </Button>
+          )}
+          <Button size="sm" onClick={handleSaveResourceBlock} disabled={!resourceForm.resourceId}>
+            {editingResourceBlock ? "Speichern" : "Einplanen"}
           </Button>
         </DialogFooter>
       </DialogContent>

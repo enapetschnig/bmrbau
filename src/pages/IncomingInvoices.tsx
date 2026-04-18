@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
-import { Download, Upload, Filter, FileText, Check, CheckCircle2, AlertTriangle, XCircle, Loader2, X, Plus } from "lucide-react";
+import { Download, Upload, Filter, FileText, Check, CheckCircle2, AlertTriangle, XCircle, Loader2, X, Plus, Sparkles } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as XLSX from "xlsx-js-style";
 import * as pdfjsLib from "pdfjs-dist";
@@ -108,6 +108,19 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   storniert: { label: "Storniert", color: "bg-gray-100 text-gray-800" },
 };
 
+type AIMatchResult = {
+  matches: Array<{
+    lieferschein_index: number;
+    rechnung_index: number;
+    status: "match" | "menge_abweichung" | "kein_match";
+    bemerkung: string;
+  }>;
+  nur_in_rechnung: Array<{ rechnung_index: number; material: string; hinweis: string }>;
+  nur_im_lieferschein: Array<{ lieferschein_index: number; material: string; hinweis: string }>;
+  zusammenfassung: string;
+  match_score: number;
+};
+
 type MatchResult = {
   status: "match" | "mismatch" | "none";
   lieferscheinId?: string;
@@ -164,6 +177,8 @@ export default function IncomingInvoices() {
   // Abgleich tab state
   const [abgleichLSId, setAbgleichLSId] = useState("");
   const [abgleichREId, setAbgleichREId] = useState("");
+  const [aiMatchResult, setAiMatchResult] = useState<AIMatchResult | null>(null);
+  const [aiMatchLoading, setAiMatchLoading] = useState(false);
 
   // Lieferscheine tab filter state
   const [filterLieferantLS, setFilterLieferantLS] = useState("");
@@ -516,6 +531,41 @@ export default function IncomingInvoices() {
 
   const selectedLS = lieferscheine.find((d) => d.id === abgleichLSId);
   const selectedRE = invoices.find((d) => d.id === abgleichREId);
+
+  // Reset KI-Ergebnis bei Auswahlaenderung
+  useEffect(() => {
+    setAiMatchResult(null);
+  }, [abgleichLSId, abgleichREId]);
+
+  const runAIMatch = async () => {
+    if (!selectedLS || !selectedRE) return;
+    setAiMatchLoading(true);
+    setAiMatchResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("compare-documents", {
+        body: {
+          lieferschein: {
+            lieferant: selectedLS.lieferant,
+            positionen: selectedLS.positionen,
+          },
+          rechnung: {
+            lieferant: selectedRE.lieferant,
+            positionen: selectedRE.positionen,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.matches) {
+        setAiMatchResult(data as AIMatchResult);
+      } else {
+        toast({ variant: "destructive", title: "Fehler", description: "KI-Antwort ungueltig" });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "KI-Abgleich fehlgeschlagen", description: err.message });
+    } finally {
+      setAiMatchLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -1012,74 +1062,153 @@ export default function IncomingInvoices() {
                   </div>
                 )}
 
-                {/* Positions-Vergleich */}
+                {/* KI-Abgleich */}
                 {selectedLS && selectedRE && (
-                  <div className="space-y-3">
-                    {/* Legende */}
-                    <div className="flex items-center gap-4 text-sm p-3 bg-muted/40 rounded-lg border">
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                        <span>Menge stimmt überein</span>
+                  <div className="space-y-4">
+                    {!aiMatchResult && (
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted/40 rounded-lg border">
+                        <div className="text-sm text-muted-foreground">
+                          Die KI vergleicht die Positionen beider Dokumente und zeigt Übereinstimmungen, Abweichungen und fehlende Positionen an. Preise werden dabei nicht berücksichtigt.
+                        </div>
+                        <Button onClick={runAIMatch} disabled={aiMatchLoading} className="shrink-0">
+                          {aiMatchLoading ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analysiere...</>
+                          ) : (
+                            <><Sparkles className="w-4 h-4 mr-2" />KI-Abgleich starten</>
+                          )}
+                        </Button>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-                        <span>Bitte kontrollieren</span>
-                      </div>
-                    </div>
+                    )}
 
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs w-8"></TableHead>
-                            <TableHead className="text-xs">Material</TableHead>
-                            <TableHead className="text-xs w-28">Menge (Lieferschein)</TableHead>
-                            <TableHead className="text-xs w-28">Menge (Rechnung)</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(() => {
-                            const lsPos: any[] = selectedLS.positionen as any[] || [];
-                            const rePos: any[] = selectedRE.positionen as any[] || [];
-                            const maxLen = Math.max(lsPos.length, rePos.length);
-                            if (maxLen === 0) {
-                              return (
-                                <TableRow>
-                                  <TableCell colSpan={4} className="text-center text-muted-foreground text-xs py-3">
-                                    Keine Positionen vorhanden
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            }
-                            const normNum = (val: string) => {
-                              const n = parseFloat(String(val).replace(",", ".").replace(/[^\d.]/g, ""));
-                              return isNaN(n) ? String(val).trim().toLowerCase() : n;
-                            };
-                            return Array.from({ length: maxLen }).map((_, i) => {
-                              const ls = lsPos[i];
-                              const re = rePos[i];
-                              const lsMenge = ls ? `${ls.menge || "–"} ${ls.einheit || ""}`.trim() : null;
-                              const reMenge = re ? `${re.menge || "–"} ${re.einheit || ""}`.trim() : null;
-                              const match = ls && re &&
-                                normNum(String(ls.menge || "")) === normNum(String(re.menge || ""));
-                              return (
-                                <TableRow key={i}>
-                                  <TableCell className="text-xs">
-                                    {match
-                                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                      : <XCircle className="w-4 h-4 text-red-500" />
-                                    }
-                                  </TableCell>
-                                  <TableCell className="text-xs">{ls?.material || re?.material || "–"}</TableCell>
-                                  <TableCell className="text-xs">{lsMenge ?? <span className="text-muted-foreground">–</span>}</TableCell>
-                                  <TableCell className="text-xs">{reMenge ?? <span className="text-muted-foreground">–</span>}</TableCell>
-                                </TableRow>
-                              );
-                            });
-                          })()}
-                        </TableBody>
-                      </Table>
-                    </div>
+                    {aiMatchResult && (() => {
+                      const lsPos: any[] = (selectedLS.positionen as any[]) || [];
+                      const rePos: any[] = (selectedRE.positionen as any[]) || [];
+                      const score = aiMatchResult.match_score ?? 0;
+                      const scoreColor =
+                        score >= 100 ? "bg-green-100 text-green-800 border-green-300"
+                        : score >= 80 ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                        : score >= 50 ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                        : "bg-red-100 text-red-800 border-red-300";
+                      return (
+                        <>
+                          {/* Zusammenfassung + Score */}
+                          <div className="p-4 rounded-lg border bg-card space-y-3">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-primary" />
+                                <h3 className="font-semibold">KI-Analyse</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge className={scoreColor + " border text-sm px-3 py-1"}>
+                                  Übereinstimmung: {score}%
+                                </Badge>
+                                <Button variant="outline" size="sm" onClick={runAIMatch} disabled={aiMatchLoading}>
+                                  {aiMatchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Neu analysieren"}
+                                </Button>
+                              </div>
+                            </div>
+                            {aiMatchResult.zusammenfassung && (
+                              <p className="text-sm text-muted-foreground">{aiMatchResult.zusammenfassung}</p>
+                            )}
+                          </div>
+
+                          {/* Matches */}
+                          {aiMatchResult.matches && aiMatchResult.matches.length > 0 && (
+                            <div className="border rounded-lg overflow-hidden">
+                              <div className="px-4 py-2 bg-muted/50 border-b">
+                                <h4 className="text-sm font-medium">Zuordnung der Positionen</h4>
+                              </div>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-xs w-8"></TableHead>
+                                    <TableHead className="text-xs">Lieferschein</TableHead>
+                                    <TableHead className="text-xs">Rechnung</TableHead>
+                                    <TableHead className="text-xs">Bemerkung</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {aiMatchResult.matches.map((m, idx) => {
+                                    const ls = lsPos[m.lieferschein_index];
+                                    const re = rePos[m.rechnung_index];
+                                    const icon =
+                                      m.status === "match" ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                      : m.status === "menge_abweichung" ? <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                                      : <XCircle className="w-4 h-4 text-red-500" />;
+                                    return (
+                                      <TableRow key={idx}>
+                                        <TableCell className="text-xs">{icon}</TableCell>
+                                        <TableCell className="text-xs">
+                                          {ls ? (
+                                            <div>
+                                              <div className="font-medium">{ls.material || "–"}</div>
+                                              <div className="text-muted-foreground">{ls.menge || "–"} {ls.einheit || ""}</div>
+                                            </div>
+                                          ) : <span className="text-muted-foreground">–</span>}
+                                        </TableCell>
+                                        <TableCell className="text-xs">
+                                          {re ? (
+                                            <div>
+                                              <div className="font-medium">{re.material || "–"}</div>
+                                              <div className="text-muted-foreground">{re.menge || "–"} {re.einheit || ""}</div>
+                                            </div>
+                                          ) : <span className="text-muted-foreground">–</span>}
+                                        </TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">{m.bemerkung}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+
+                          {/* Nur im Lieferschein */}
+                          {aiMatchResult.nur_im_lieferschein && aiMatchResult.nur_im_lieferschein.length > 0 && (
+                            <div className="border border-red-200 rounded-lg overflow-hidden bg-red-50/40">
+                              <div className="px-4 py-2 bg-red-100/60 border-b border-red-200">
+                                <h4 className="text-sm font-medium text-red-900">Nur im Lieferschein — fehlt in Rechnung</h4>
+                              </div>
+                              <div className="divide-y divide-red-100">
+                                {aiMatchResult.nur_im_lieferschein.map((p, idx) => {
+                                  const ls = lsPos[p.lieferschein_index];
+                                  return (
+                                    <div key={idx} className="px-4 py-2 text-sm">
+                                      <div className="font-medium">{p.material || ls?.material || "–"}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {ls ? `${ls.menge || "–"} ${ls.einheit || ""} — ` : ""}{p.hinweis}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Nur in Rechnung */}
+                          {aiMatchResult.nur_in_rechnung && aiMatchResult.nur_in_rechnung.length > 0 && (
+                            <div className="border border-yellow-200 rounded-lg overflow-hidden bg-yellow-50/40">
+                              <div className="px-4 py-2 bg-yellow-100/60 border-b border-yellow-200">
+                                <h4 className="text-sm font-medium text-yellow-900">Nur in Rechnung — zusätzlich</h4>
+                              </div>
+                              <div className="divide-y divide-yellow-100">
+                                {aiMatchResult.nur_in_rechnung.map((p, idx) => {
+                                  const re = rePos[p.rechnung_index];
+                                  return (
+                                    <div key={idx} className="px-4 py-2 text-sm">
+                                      <div className="font-medium">{p.material || re?.material || "–"}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {re ? `${re.menge || "–"} ${re.einheit || ""} — ` : ""}{p.hinweis}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </CardContent>

@@ -19,6 +19,7 @@ interface Props {
   onModeChange?: (mode: ScheduleMode) => void;
   title?: string;
   children?: React.ReactNode;
+  showYearToggle?: boolean;
 }
 
 export function ScheduleHeader({
@@ -28,6 +29,7 @@ export function ScheduleHeader({
   onModeChange,
   title,
   children,
+  showYearToggle = true,
 }: Props) {
   const weekEnd = addDays(weekStart, 4);
 
@@ -45,7 +47,7 @@ export function ScheduleHeader({
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Mode toggle */}
-        {onModeChange && (
+        {onModeChange && showYearToggle && (
           <Tabs
             value={mode}
             onValueChange={(v) => onModeChange(v as ScheduleMode)}

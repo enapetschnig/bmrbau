@@ -57,14 +57,39 @@ export default function MyDocuments() {
       return;
     }
 
-    if (data) {
-      const docs = data.map((file) => ({
-        name: file.name,
-        path: `${userId}/${type}/${file.name}`,
-        created_at: file.created_at,
-      }));
-      setter(docs);
+    if (!data) {
+      setter([]);
+      return;
     }
+
+    let docs = data.map((file) => ({
+      name: file.name,
+      path: `${userId}/${type}/${file.name}`,
+      created_at: file.created_at,
+    }));
+
+    // Lohnzettel: nach Freigabedatum filtern (MA sieht nur freigegebene)
+    if (type === "lohnzettel" && docs.length > 0) {
+      const paths = docs.map((d) => d.path);
+      const { data: meta } = await supabase
+        .from("payslip_metadata")
+        .select("file_path, release_date")
+        .in("file_path", paths);
+
+      const today = new Date().toISOString().split("T")[0];
+      const releaseByPath = new Map<string, string>(
+        (meta || []).map((m: any) => [m.file_path, m.release_date])
+      );
+
+      docs = docs.filter((d) => {
+        const release = releaseByPath.get(d.path);
+        // Kein Metadaten-Eintrag → alter Lohnzettel vor Feature-Einführung → immer sichtbar
+        if (!release) return true;
+        return release <= today;
+      });
+    }
+
+    setter(docs);
   };
 
   const handleUpload = async (type: "lohnzettel" | "krankmeldung", file: File | null) => {

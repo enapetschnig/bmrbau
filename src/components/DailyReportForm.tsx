@@ -12,10 +12,12 @@ import { WeatherSelector } from "@/components/WeatherSelector";
 import { TemperatureInput } from "@/components/TemperatureInput";
 import { GeschossSelector } from "@/components/GeschossSelector";
 import { Checkbox } from "@/components/ui/checkbox";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
+import { useProjectWeather } from "@/hooks/useProjectWeather";
 import { format } from "date-fns";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, CloudSun } from "lucide-react";
 
-type Project = { id: string; name: string; plz: string | null; baustellenart?: string | null };
+type Project = { id: string; name: string; plz: string | null; adresse?: string | null; baustellenart?: string | null };
 type Employee = { id: string; user_id: string; name: string };
 
 type Activity = {
@@ -81,11 +83,38 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
   const fetchProjects = useCallback(async () => {
     const { data } = await supabase
       .from("projects")
-      .select("id, name, plz, baustellenart")
+      .select("id, name, plz, adresse, baustellenart")
       .eq("status", "aktiv")
       .order("name");
     if (data) setProjects(data);
   }, []);
+
+  // Auto-Wetter fuer ausgewaehltes Projekt + Datum
+  const selectedProject = projects.find(p => p.id === projectId);
+  const weatherLocation = selectedProject
+    ? (selectedProject.plz || selectedProject.adresse || selectedProject.name)
+    : null;
+  const { data: autoWeather, loading: weatherLoading } = useProjectWeather(weatherLocation, datum);
+
+  // Auto-fuelle Temperatur wenn noch leer
+  useEffect(() => {
+    if (!autoWeather) return;
+    if (editData) return; // beim Bearbeiten nicht ueberschreiben
+    if (temperaturMin === null) setTemperaturMin(autoWeather.min);
+    if (temperaturMax === null) setTemperaturMax(autoWeather.max);
+    // Wetter-Chips nur setzen, wenn noch keine ausgewaehlt sind
+    if (wetter.length === 0) {
+      const code = autoWeather.weatherCode;
+      const chip =
+        code <= 3 ? "sonnig"
+        : code <= 48 ? "bewoelkt"
+        : code <= 67 ? "regen"
+        : code <= 77 ? "schnee"
+        : "gewitter";
+      setWetter([chip]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoWeather]);
 
   useEffect(() => {
     fetchProjects();
@@ -312,6 +341,44 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
             <Input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
           </div>
 
+          {/* Auto-Wetter Hinweis */}
+          {autoWeather && (
+            <div className="flex items-center gap-2 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-xs">
+              <span className="text-xl">{autoWeather.icon}</span>
+              <div className="flex-1">
+                <span className="font-medium">
+                  {autoWeather.min}°C / {autoWeather.max}°C · {autoWeather.description}
+                </span>
+                <span className="text-muted-foreground ml-2">
+                  (automatisch für {selectedProject?.name}, {autoWeather.source === "historical" ? "historisch" : "Prognose"})
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setTemperaturMin(autoWeather.min);
+                  setTemperaturMax(autoWeather.max);
+                  const code = autoWeather.weatherCode;
+                  const chip =
+                    code <= 3 ? "sonnig"
+                    : code <= 48 ? "bewoelkt"
+                    : code <= 67 ? "regen"
+                    : code <= 77 ? "schnee"
+                    : "gewitter";
+                  setWetter([chip]);
+                }}
+                title="Wetter übernehmen"
+              >
+                <CloudSun className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {weatherLoading && !autoWeather && projectId && (
+            <p className="text-xs text-muted-foreground">Wetter wird geladen...</p>
+          )}
+
           {/* Weather */}
           <WeatherSelector value={wetter} onChange={setWetter} />
           <TemperatureInput
@@ -344,11 +411,13 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
                     ))}
                   </SelectContent>
                 </Select>
-                <Textarea
-                  value={act.beschreibung}
-                  onChange={(e) => updateActivity(act.id, "beschreibung", e.target.value)}
-                  placeholder="Beschreibung der Tätigkeit..."
+                <VoiceAIInput
+                  multiline
                   rows={2}
+                  context="tagesbericht"
+                  value={act.beschreibung}
+                  onChange={(v) => updateActivity(act.id, "beschreibung", v)}
+                  placeholder="Beschreibung der Tätigkeit..."
                   className="flex-1"
                 />
                 <Button type="button" variant="ghost" size="sm" onClick={() => removeActivity(act.id)} className="h-9 px-2">
@@ -361,33 +430,39 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
           {/* Description */}
           <div>
             <Label>Beschreibung</Label>
-            <Textarea
-              value={beschreibung}
-              onChange={(e) => setBeschreibung(e.target.value)}
-              placeholder="Allgemeine Beschreibung des Tages..."
+            <VoiceAIInput
+              multiline
               rows={3}
+              context="tagesbericht"
+              value={beschreibung}
+              onChange={setBeschreibung}
+              placeholder="Allgemeine Beschreibung des Tages..."
             />
           </div>
 
           {/* Notes */}
           <div>
             <Label>Notizen (optional)</Label>
-            <Textarea
-              value={notizen}
-              onChange={(e) => setNotizen(e.target.value)}
-              placeholder="Zusaetzliche Bemerkungen..."
+            <VoiceAIInput
+              multiline
               rows={2}
+              context="notiz"
+              value={notizen}
+              onChange={setNotizen}
+              placeholder="Zusätzliche Bemerkungen..."
             />
           </div>
 
           {/* Interne Anmerkungen */}
           <div>
             <Label>Interne Anmerkungen (optional, wahlweise mitdruckbar)</Label>
-            <Textarea
-              value={interneAnmerkungen}
-              onChange={(e) => setInterneAnmerkungen(e.target.value)}
-              placeholder="Interne Notizen (nur fuer Team sichtbar)..."
+            <VoiceAIInput
+              multiline
               rows={2}
+              context="anmerkung"
+              value={interneAnmerkungen}
+              onChange={setInterneAnmerkungen}
+              placeholder="Interne Notizen (nur für Team sichtbar)..."
             />
           </div>
 
