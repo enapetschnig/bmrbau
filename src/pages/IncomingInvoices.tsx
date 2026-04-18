@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
+import { BatchInvoiceProcessor } from "@/components/BatchInvoiceProcessor";
+import { Layers } from "lucide-react";
 import { Download, Upload, Filter, FileText, Check, CheckCircle2, AlertTriangle, XCircle, Loader2, X, Plus, Sparkles } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as XLSX from "xlsx-js-style";
@@ -158,6 +160,7 @@ export default function IncomingInvoices() {
   // Detail dialog
   const [selectedDoc, setSelectedDoc] = useState<IncomingDocument | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
 
   // Upload tab state
   const [dragOver, setDragOver] = useState(false);
@@ -654,6 +657,11 @@ export default function IncomingInvoices() {
                     </Select>
                   </div>
 
+                  <Button variant="outline" onClick={() => setShowBatchDialog(true)}>
+                    <Layers className="w-4 h-4 mr-2" />
+                    <span className="hidden sm:inline">Mehrere analysieren</span>
+                    <span className="sm:hidden">Batch</span>
+                  </Button>
                   <Button variant="outline" onClick={exportToExcel} disabled={filtered.length === 0}>
                     <Download className="w-4 h-4 mr-2" />
                     <span className="hidden sm:inline">Excel</span>
@@ -1295,6 +1303,9 @@ export default function IncomingInvoices() {
         onUpdate={() => { fetchData(); setShowDetailDialog(false); }}
         onDelete={() => fetchData()}
       />
+
+      {/* Batch-Verarbeitung */}
+      <BatchInvoiceProcessor open={showBatchDialog} onOpenChange={setShowBatchDialog} />
     </div>
   );
 }

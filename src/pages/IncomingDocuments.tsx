@@ -353,7 +353,12 @@ export default function IncomingDocuments() {
                                   : format(new Date(doc.created_at), "dd.MM.yyyy")}
                               </TableCell>
                               <TableCell>
-                                <Badge className={typInfo.color + " text-xs"}>{typInfo.label}</Badge>
+                                <div className="flex gap-1 flex-wrap">
+                                  <Badge className={typInfo.color + " text-xs"}>{typInfo.label}</Badge>
+                                  {(doc as any).ist_retour && (
+                                    <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-200">Retour</Badge>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="font-medium">{doc.lieferant || "–"}</TableCell>
                               <TableCell className="hidden md:table-cell">{doc.project_name}</TableCell>

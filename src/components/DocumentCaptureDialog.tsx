@@ -66,6 +66,8 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [signatureName, setSignatureName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [istRetour, setIstRetour] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [step, setStep] = useState<"photo" | "review" | "sign">("photo");
 
@@ -82,6 +84,19 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
     if (open) {
       fetchProjects();
       if (defaultProjectId) setProjectId(defaultProjectId);
+      (async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const admin = data?.role === "administrator";
+        setIsAdmin(admin);
+        // Non-Admin darf keine Rechnung erfassen - auf Lieferschein zwingen
+        if (!admin && docType === "rechnung") setDocType("lieferschein");
+      })();
     }
   }, [open, fetchProjects, defaultProjectId]);
 
@@ -104,6 +119,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
     setStep("photo");
     setExtracting(false);
     setSaving(false);
+    setIstRetour(false);
   };
 
   const handleFileSelected = (file: File) => {
@@ -390,6 +406,9 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
       unterschrift_name: empName || null,
       zusatz_seiten_urls: zusatzUrls.length > 0 ? zusatzUrls : null,
       waren_fotos_urls: warenUrls.length > 0 ? warenUrls : null,
+      ist_retour: istRetour,
+      // Retour bleibt "offen", normale auf "offen" (Default)
+      status: "offen",
     });
 
     if (error) {
@@ -439,7 +458,7 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
               {/* Document Type */}
               <div className="space-y-2">
                 <Label>Was möchtest du erfassen?</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className={`grid ${isAdmin ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
                   <button
                     type="button"
                     onClick={() => setDocType("lieferschein")}
@@ -452,31 +471,45 @@ export function DocumentCaptureDialog({ open, onOpenChange, onSuccess, onShowAll
                     <div className="text-2xl mb-1">📦</div>
                     <div className="text-sm font-medium">Lieferschein</div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDocType("rechnung")}
-                    className={`rounded-xl border-2 p-4 text-center transition-all ${
-                      mainType === "rechnung"
-                        ? "border-primary bg-primary/10 font-semibold text-primary"
-                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="text-2xl mb-1">🧾</div>
-                    <div className="text-sm font-medium">Rechnung</div>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setDocType("rechnung")}
+                      className={`rounded-xl border-2 p-4 text-center transition-all ${
+                        mainType === "rechnung"
+                          ? "border-primary bg-primary/10 font-semibold text-primary"
+                          : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="text-2xl mb-1">🧾</div>
+                      <div className="text-sm font-medium">Rechnung</div>
+                    </button>
+                  )}
                 </div>
                 {mainType === "lieferschein" && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Checkbox
-                      id="lager-check"
-                      checked={isLagerlieferschein}
-                      onCheckedChange={(checked) =>
-                        setDocType(checked ? "lagerlieferschein" : "lieferschein")
-                      }
-                    />
-                    <label htmlFor="lager-check" className="text-sm text-muted-foreground cursor-pointer select-none">
-                      Lagerbewegung (Lagerlieferschein)
-                    </label>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="lager-check"
+                        checked={isLagerlieferschein}
+                        onCheckedChange={(checked) =>
+                          setDocType(checked ? "lagerlieferschein" : "lieferschein")
+                        }
+                      />
+                      <label htmlFor="lager-check" className="text-sm text-muted-foreground cursor-pointer select-none">
+                        Lagerbewegung (Lagerlieferschein)
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="retour-check"
+                        checked={istRetour}
+                        onCheckedChange={(checked) => setIstRetour(!!checked)}
+                      />
+                      <label htmlFor="retour-check" className="text-sm text-muted-foreground cursor-pointer select-none">
+                        Retourlieferschein (Ware geht zurück ins Lager oder auf andere Baustelle)
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
