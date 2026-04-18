@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { Plus, ShieldCheck, FileSpreadsheet, Download, X } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,13 @@ export default function SafetyEvaluations() {
 
   // Filters
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  // Modul aus URL-Pfad ableiten
+  const pathModul =
+    location.pathname.includes("jahresunterweisungen") ? "jahresunterweisung"
+    : location.pathname.includes("geraeteunterweisungen") ? "geraeteunterweisung"
+    : location.pathname.includes("baustellenunterweisungen") ? "baustellenunterweisung"
+    : null;
   const [filterProject, setFilterProject] = useState(() => searchParams.get("project") || "alle");
   const [filterTyp, setFilterTyp] = useState("alle");
   const [filterStatus, setFilterStatus] = useState("alle");
@@ -139,7 +146,9 @@ export default function SafetyEvaluations() {
         created_by: userId,
         checklist_items: checklistItems,
         status: "warte_auf_unterschrift",
-      })
+        modul: pathModul || "baustellenunterweisung",
+        jahr: pathModul === "jahresunterweisung" ? new Date().getFullYear() : null,
+      } as any)
       .select("id")
       .single();
 
@@ -208,6 +217,7 @@ export default function SafetyEvaluations() {
   };
 
   const filtered = evaluations.filter((e) => {
+    if (pathModul && (e as any).modul !== pathModul) return false;
     if (filterProject !== "alle" && e.project_id !== filterProject) return false;
     if (filterTyp !== "alle" && e.typ !== filterTyp) return false;
     if (filterStatus !== "alle" && e.status !== filterStatus) return false;
@@ -242,7 +252,15 @@ export default function SafetyEvaluations() {
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <PageHeader title="Evaluierungen & Unterweisungen" backPath="/" />
+      <PageHeader
+        title={
+          pathModul === "jahresunterweisung" ? "Jahresunterweisungen"
+          : pathModul === "geraeteunterweisung" ? "Geräteunterweisungen"
+          : pathModul === "baustellenunterweisung" ? "Baustellenunterweisungen"
+          : "Evaluierungen & Unterweisungen"
+        }
+        backPath={pathModul ? "/safety" : "/"}
+      />
 
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-muted-foreground">

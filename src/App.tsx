@@ -44,6 +44,9 @@ import OrderManagement from "./pages/OrderManagement";
 import IncomingDocuments from "./pages/IncomingDocuments";
 import Warehouse from "./pages/Warehouse";
 import SafetyEvaluations from "./pages/SafetyEvaluations";
+import SafetyHub from "./pages/SafetyHub";
+import SafetySchulungen from "./pages/SafetySchulungen";
+import SafetyNachweise from "./pages/SafetyNachweise";
 import SafetyEvaluationDetail from "./pages/SafetyEvaluationDetail";
 import MySafety from "./pages/MySafety";
 import NotFound from "./pages/NotFound";
@@ -161,6 +164,14 @@ function AppContent() {
           <Route path="/daily-reports" element={<ProtectedRoute minRole="vorarbeiter"><DailyReports /></ProtectedRoute>} />
           <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="vorarbeiter"><DailyReportDetail /></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute minRole="vorarbeiter"><DocumentLibrary /></ProtectedRoute>} />
+          <Route path="/safety" element={<SafetyHub />} />
+          <Route path="/safety/jahresunterweisungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
+          <Route path="/safety/baustellenunterweisungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
+          <Route path="/safety/geraeteunterweisungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
+          <Route path="/safety/schulungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetySchulungen /></ProtectedRoute>} />
+          <Route path="/safety/nachweise" element={<SafetyNachweise />} />
+          <Route path="/safety/erinnerungen" element={<SafetyHub />} />
+          {/* Alte Routen fuer Rueckwaertskompatibilitaet */}
           <Route path="/safety-evaluations" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />
           <Route path="/safety-evaluations/:id" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluationDetail /></ProtectedRoute>} />
           {/* Nur Admin */}

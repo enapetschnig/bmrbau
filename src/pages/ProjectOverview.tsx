@@ -930,7 +930,7 @@ const ProjectOverview = () => {
           </Card>
 
           {/* 7. Unterweisungen */}
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/safety-evaluations?project=${projectId}`)}>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate(`/safety/baustellenunterweisungen?project=${projectId}`)}>
             <CardHeader>
               <div className="text-primary"><Shield className="h-8 w-8" /></div>
               <CardTitle className="text-xl">Unterweisungen</CardTitle>

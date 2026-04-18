@@ -861,7 +861,7 @@ const Projects = () => {
                     { key: "berichte", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}`, count: project.fileCount?.berichte },
                     { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos`, count: project.fileCount?.photos },
                     { key: "bestellungen", label: "Bestell.", icon: <Package className="w-5 h-5 text-primary" />, path: `/bestellungen?project=${project.id}`, count: project.fileCount?.bestellungen },
-                    { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety-evaluations?project=${project.id}`, count: project.fileCount?.unterweisungen },
+                    { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety/baustellenunterweisungen?project=${project.id}`, count: project.fileCount?.unterweisungen },
                     { key: "polier", label: "Polier", icon: <FileText className="w-5 h-5 text-amber-600" />, path: `/projects/${project.id}/polier`, count: project.fileCount?.polier },
                     ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-red-600" />, path: `/projects/${project.id}/chef`, count: project.fileCount?.chef }] : []),
                   ].map((item) => (
@@ -1026,7 +1026,7 @@ const Projects = () => {
                           { key: "berichte", label: "Berichte", icon: <FileText className="w-5 h-5 text-primary" />, path: `/daily-reports?project=${project.id}`, count: project.fileCount?.berichte },
                           { key: "photos", label: "Fotos", icon: <Image className="w-5 h-5 text-primary" />, path: `/projects/${project.id}/photos`, count: project.fileCount?.photos },
                           { key: "bestellungen", label: "Bestell.", icon: <Package className="w-5 h-5 text-primary" />, path: `/bestellungen?project=${project.id}`, count: project.fileCount?.bestellungen },
-                          { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety-evaluations?project=${project.id}`, count: project.fileCount?.unterweisungen },
+                          { key: "unterweisungen", label: "Unterw.", icon: <Shield className="w-5 h-5 text-primary" />, path: `/safety/baustellenunterweisungen?project=${project.id}`, count: project.fileCount?.unterweisungen },
                           { key: "polier", label: "Polier", icon: <FileText className="w-5 h-5 text-amber-600" />, path: `/projects/${project.id}/polier`, count: project.fileCount?.polier },
                           ...(isAdmin ? [{ key: "chef", label: "Chef", icon: <Lock className="w-5 h-5 text-red-600" />, path: `/projects/${project.id}/chef`, count: project.fileCount?.chef }] : []),
                         ].map((item) => (

@@ -1610,7 +1610,7 @@ export default function Index() {
           {menuVisible("evaluierungen") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/safety-evaluations")}
+              onClick={() => navigate("/safety")}
             >
               <CardHeader className="space-y-2 pb-3 relative">
                 {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
@@ -1628,7 +1628,7 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Arbeitsschutz */}
+          {/* Sicherheit */}
           {menuVisible("arbeitsschutz") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
@@ -1639,13 +1639,13 @@ export default function Index() {
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                   <ShieldCheck className="h-6 w-6 text-green-500" />
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Arbeitsschutz</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Sicherheit</CardTitle>
                 <CardDescription className="text-sm">
                   Meine Unterweisungen & Evaluierungen
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Arbeitsschutz öffnen</Button>
+                <Button className="w-full" size="sm" variant="outline">Sicherheit öffnen</Button>
               </CardContent>
             </Card>
           )}
