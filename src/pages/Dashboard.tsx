@@ -108,7 +108,7 @@ const Dashboard = () => {
       title: "Baustellen",
       description: "Aktuelle Baustellenübersicht",
       icon: Building2,
-      action: () => navigate("/construction-sites"),
+      action: () => navigate("/projects"),
       color: "bg-secondary text-secondary-foreground"
     },
   ];
@@ -233,7 +233,7 @@ const Dashboard = () => {
               <FileText className="w-6 h-6" />
               <span>Bericht erstellen</span>
             </Button>
-            <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => navigate("/construction-sites")}>
+            <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => navigate("/projects")}>
               <Building2 className="w-6 h-6" />
               <span>Baustelle öffnen</span>
             </Button>

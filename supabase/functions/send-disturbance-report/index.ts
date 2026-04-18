@@ -92,13 +92,13 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
 
   const BLACK  = { r: 20,  g: 20,  b: 20  };
   const GRAY   = { r: 110, g: 110, b: 110 };
-  const DGRAY  = { r: 74,  g: 74,  b: 74  }; // #4a4a4a – logo text
-  const MGRAY  = { r: 106, g: 106, b: 106 }; // #6a6a6a – logo subtitle
-  const D1     = { r: 90,  g: 90,  b: 90  }; // #5a5a5a – upper diamond
-  const D2     = { r: 46,  g: 46,  b: 46  }; // #2e2e2e – lower diamond
+  const DGRAY  = { r: 74,  g: 74,  b: 74  }; // Firmen-Name
+  const MGRAY  = { r: 106, g: 106, b: 106 }; // Untertitel
+  const D1     = { r: 146, g: 179, b: 136 }; // BMR-Gruen hell (oberes Diamant)
+  const D2     = { r: 92,  g: 128, b: 82  }; // BMR-Gruen dunkel (unteres Diamant)
   const LGRAY  = { r: 240, g: 240, b: 240 };
   const WHITE  = { r: 255, g: 255, b: 255 };
-  const ACCENT = { r: 74,  g: 74,  b: 74  }; // #4a4a4a – matches logo text
+  const ACCENT = { r: 124, g: 163, b: 115 }; // BMR-Gruen #7CA373 – passt zum Wortmark
 
   let y = 0;
 
@@ -169,16 +169,16 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   setTxt(DGRAY);
-  doc.text("SCHAFFERHOFER BAU", txtX, ly + 8);
-  // Separator line under company name
-  setDraw({ r: 216, g: 11, b: 5 });
+  doc.text("BMR BAU GMBH", txtX, ly + 8);
+  // Separator line under company name (BMR-Gruen)
+  setDraw({ r: 124, g: 163, b: 115 });
   doc.setLineWidth(0.3);
   doc.line(txtX, ly + 10, txtX + 58, ly + 10);
   // Subtitle
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   setTxt(MGRAY);
-  doc.text("Häuser fürs Leben", txtX, ly + 16);
+  doc.text("Ausführung · Beratung · Sanierung", txtX, ly + 16);
 
   // Document title on the right
   doc.setFont("helvetica", "bold");

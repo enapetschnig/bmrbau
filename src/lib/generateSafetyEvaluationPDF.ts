@@ -59,7 +59,7 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(61, 63, 71);
-  doc.text("SCHAFFERHOFER BAU", margin, yPos);
+  doc.text("BMR BAU GMBH", margin, yPos);
   yPos += 8;
 
   doc.setDrawColor(61, 63, 71);

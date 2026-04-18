@@ -77,7 +77,7 @@ export async function generateDailyReportPDF(
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(61, 63, 71);
-  doc.text("SCHAFFERHOFER BAU", margin, y);
+  doc.text("BMR BAU GMBH", margin, y);
   y += 8;
 
   doc.setDrawColor(61, 63, 71);

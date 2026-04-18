@@ -160,7 +160,7 @@ export default function SafetyNachweise() {
     let y = 20;
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("SCHAFFERHOFER BAU", 20, y);
+    doc.text("BMR BAU GMBH", 20, y);
     y += 7;
     doc.setDrawColor(61, 63, 71);
     doc.line(20, y, 190, y);
