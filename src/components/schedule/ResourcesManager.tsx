@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { confirm } from "@/lib/confirm";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Package, Truck, Container, Wrench, Layers } from "lucide-react";
 
@@ -112,7 +113,12 @@ export function ResourcesManager({ onChange }: Props) {
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Ressource wirklich löschen? Zuweisungen bleiben verlinkt.")) return;
+    if (!(await confirm({
+      title: "Ressource wirklich löschen?",
+      description: "Bestehende Zuweisungen bleiben bestehen, sind aber nicht mehr über diese Ressource auffindbar.",
+      destructive: true,
+      confirmLabel: "Löschen",
+    }))) return;
     const { error } = await supabase.from("resources").delete().eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });

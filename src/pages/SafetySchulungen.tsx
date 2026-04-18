@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { confirm } from "@/lib/confirm";
 import { useToast } from "@/hooks/use-toast";
 import { GraduationCap, Plus, Pencil, Trash2, Upload, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { format, addMonths, parseISO, differenceInDays } from "date-fns";
@@ -139,7 +140,12 @@ export default function SafetySchulungen() {
   };
 
   const removeSchulung = async (s: Schulung) => {
-    if (!confirm(`Schulung "${s.name}" löschen? Alle Zertifikate werden ebenfalls entfernt.`)) return;
+    if (!(await confirm({
+      title: `Schulung "${s.name}" löschen?`,
+      description: "Alle zugehörigen Zertifikate werden ebenfalls entfernt.",
+      destructive: true,
+      confirmLabel: "Löschen",
+    }))) return;
     await supabase.from("schulungen").delete().eq("id", s.id);
     toast({ title: "Gelöscht" });
     fetchAll();

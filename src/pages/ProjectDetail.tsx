@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
+import { confirm } from "@/lib/confirm";
 import { FileViewer } from "@/components/FileViewer";
 import { Nachkalkulation } from "@/components/Nachkalkulation";
 
@@ -238,7 +239,12 @@ const ProjectDetail = () => {
   // Endgültig löschen (nur Admin, aus dem Archiv)
   const handlePermanentDelete = async (file: StorageFile) => {
     if (!projectId || !type || !isAdmin) return;
-    if (!confirm(`"${file.name}" endgültig löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
+    if (!(await confirm({
+      title: `"${file.name}" endgültig löschen?`,
+      description: "Dies kann nicht rückgängig gemacht werden.",
+      destructive: true,
+      confirmLabel: "Endgültig löschen",
+    }))) return;
     const bucket = bucketMap[type];
     const filePath = `${projectId}/${file.name}`;
     const { error } = await supabase.storage.from(bucket).remove([filePath]);
@@ -620,7 +626,12 @@ const ProjectDetail = () => {
                           </Button>
                           {isAdmin && (
                             <Button size="sm" variant="destructive" onClick={async () => {
-                              if (!confirm(`${selectedFiles.size} Datei(en) endgültig löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
+                              if (!(await confirm({
+                                title: `${selectedFiles.size} Datei(en) endgültig löschen?`,
+                                description: "Dies kann nicht rückgängig gemacht werden.",
+                                destructive: true,
+                                confirmLabel: "Endgültig löschen",
+                              }))) return;
                               for (const fn of Array.from(selectedFiles)) {
                                 const file = files.find(f => f.name === fn);
                                 if (file) await handlePermanentDelete(file);
@@ -727,7 +738,11 @@ const ProjectDetail = () => {
                                 size="icon"
                                 className="h-8 w-8 text-destructive shrink-0"
                                 onClick={async () => {
-                                  if (!confirm(`"${doc.name}" endgültig löschen?`)) return;
+                                  if (!(await confirm({
+                                    title: `"${doc.name}" endgültig löschen?`,
+                                    destructive: true,
+                                    confirmLabel: "Endgültig löschen",
+                                  }))) return;
                                   await supabase.from("documents").delete().eq("id", doc.id);
                                   fetchDocRecords();
                                   toast({ title: "Endgültig gelöscht" });

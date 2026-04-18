@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { confirm } from "@/lib/confirm";
 import { PageHeader } from "@/components/PageHeader";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
 
@@ -259,7 +260,7 @@ export default function Bestellungen() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bestellung wirklich löschen?")) return;
+    if (!(await confirm({ title: "Bestellung wirklich löschen?", destructive: true, confirmLabel: "Löschen" }))) return;
     await supabase.from("bestellungen").delete().eq("id", id);
     setBestellungen(prev => prev.filter(b => b.id !== id));
     setSelectedOrder(null);

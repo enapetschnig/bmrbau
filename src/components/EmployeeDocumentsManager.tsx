@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { confirm } from "@/lib/confirm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -177,7 +178,11 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
       return;
     }
 
-    if (!confirm(`Dokument "${fileName}" wirklich löschen?`)) return;
+    if (!(await confirm({
+      title: `Dokument "${fileName}" wirklich löschen?`,
+      destructive: true,
+      confirmLabel: "Löschen",
+    }))) return;
 
     try {
       const { error } = await supabase.storage

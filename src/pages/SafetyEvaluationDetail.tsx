@@ -12,6 +12,7 @@ import { SafetySignatureCollector } from "@/components/safety/SafetySignatureCol
 import { SafetyExcelImportDialog, type ChecklistItem } from "@/components/safety/SafetyExcelImportDialog";
 import { SafetyEmployeeSelector } from "@/components/safety/SafetyEmployeeSelector";
 import { generateSafetyEvaluationPDF } from "@/lib/generateSafetyEvaluationPDF";
+import { confirm } from "@/lib/confirm";
 
 const STATUS_LABELS: Record<string, string> = {
   warte_auf_unterschrift: "Zur Unterschrift",
@@ -132,7 +133,12 @@ export default function SafetyEvaluationDetail() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Evaluierung wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.")) return;
+    if (!(await confirm({
+      title: "Evaluierung wirklich löschen?",
+      description: "Dieser Vorgang kann nicht rückgängig gemacht werden.",
+      destructive: true,
+      confirmLabel: "Löschen",
+    }))) return;
     const { error } = await supabase.from("safety_evaluations").delete().eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });

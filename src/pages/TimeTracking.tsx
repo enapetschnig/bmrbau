@@ -843,6 +843,23 @@ const TimeTracking = () => {
     const dateObj = new Date(selectedDate);
     const daySplit = splitHours(dayTotalHours, dateObj, employeeSchedule, employeeSchwellenwert);
 
+    // Baustellen-Anfahrtspauschale: greift einmal pro Tag, wenn das erste Baustellen-Projekt
+    // das Flag `anfahrt_ueber_100km` gesetzt hat. Dafuer Projekt-Infos vor Insert laden.
+    const projectIdsToday = Array.from(new Set(
+      timeBlocks
+        .filter((b) => b.locationType === "baustelle" && b.projectId)
+        .map((b) => b.projectId as string)
+    ));
+    let dayHasAnfahrt = false;
+    if (!isExternalUser && projectIdsToday.length > 0) {
+      const { data: anfahrtProjects } = await supabase
+        .from("projects")
+        .select("id, anfahrt_ueber_100km")
+        .in("id", projectIdsToday);
+      dayHasAnfahrt = (anfahrtProjects || []).some((p) => p.anfahrt_ueber_100km === true);
+    }
+    const diaetenForDay = calculateDiaeten(dayTotalHours, dayHasAnfahrt);
+
     // Distribute lohnstunden/zeitausgleich proportionally across blocks
     let remainingLohn = daySplit.lohnstunden;
 
@@ -875,8 +892,9 @@ const TimeTracking = () => {
         kilometer: km,
         km_beschreibung: block.kmBeschreibung || null,
         zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
-        diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
-        diaeten_betrag: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).betrag : null),
+        diaeten_typ: isExternalUser ? null : (bi === 0 ? diaetenForDay.typ : null),
+        diaeten_betrag: isExternalUser ? null : (bi === 0 ? diaetenForDay.betrag : null),
+        diaeten_anfahrt: isExternalUser ? null : (bi === 0 ? dayHasAnfahrt : false),
       };
       // Neue Spalten nur senden wenn sie vorhanden sein koennten (nach Migration)
       if (blockLohn > 0) entryData.lohnstunden = blockLohn;
@@ -922,8 +940,9 @@ const TimeTracking = () => {
             kilometer: km,
             km_beschreibung: block.kmBeschreibung || null,
             zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
-            diaeten_typ: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).typ : null),
-            diaeten_betrag: isExternalUser ? null : (bi === 0 ? calculateDiaeten(dayTotalHours, false).betrag : null),
+            diaeten_typ: isExternalUser ? null : (bi === 0 ? diaetenForDay.typ : null),
+            diaeten_betrag: isExternalUser ? null : (bi === 0 ? diaetenForDay.betrag : null),
+            diaeten_anfahrt: isExternalUser ? null : (bi === 0 ? dayHasAnfahrt : false),
           };
           if (blockLohn > 0) empEntry.lohnstunden = blockLohn;
           if (blockZA > 0) empEntry.zeitausgleich_stunden = blockZA;

@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { InstallPromptDialog } from "./components/InstallPromptDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ConfirmDialogProvider } from "./components/ConfirmDialogProvider";
 import { useOnboarding } from "./contexts/OnboardingContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -202,6 +203,9 @@ function AppContent() {
         open={showInstallDialog}
         onClose={handleInstallDialogClose}
       />
+
+      {/* Globaler Bestaetigungs-Dialog – ersetzt native window.confirm() */}
+      <ConfirmDialogProvider />
     </>
   );
 }

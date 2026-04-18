@@ -13,6 +13,7 @@ import { SafetyChecklist, DEFAULT_SAFETY_ITEMS, type SafetyItem } from "@/compon
 import { DailyReportForm } from "@/components/DailyReportForm";
 import { SignaturePad } from "@/components/SignaturePad";
 import { SerialPhotoCapture } from "@/components/SerialPhotoCapture";
+import { confirm } from "@/lib/confirm";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { generateDailyReportPDF } from "@/lib/generateDailyReportPDF";
@@ -75,7 +76,13 @@ export default function DailyReportDetail() {
   const [signatureData, setSignatureData] = useState<string | null>(null);
 
   const handleDelete = async () => {
-    if (!id || !window.confirm("Tagesbericht wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.")) return;
+    if (!id) return;
+    if (!(await confirm({
+      title: "Tagesbericht wirklich löschen?",
+      description: "Diese Aktion kann nicht rückgängig gemacht werden.",
+      destructive: true,
+      confirmLabel: "Löschen",
+    }))) return;
     if (photos.length > 0) {
       await supabase.storage.from("daily-report-photos").remove(photos.map(p => p.file_path));
     }

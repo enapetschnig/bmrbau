@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { FileText, Camera, Upload, Download, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { FileViewer } from "@/components/FileViewer";
+import { confirm } from "@/lib/confirm";
 
 interface Document {
   name: string;
@@ -144,7 +145,7 @@ export default function MyDocuments() {
   };
 
   const handleDelete = async (doc: Document, type: "lohnzettel" | "krankmeldung") => {
-    if (!confirm(`Möchten Sie "${doc.name}" wirklich löschen?`)) return;
+    if (!(await confirm({ title: `"${doc.name}" wirklich löschen?`, destructive: true, confirmLabel: "Löschen" }))) return;
 
     const { error } = await supabase.storage
       .from("employee-documents")

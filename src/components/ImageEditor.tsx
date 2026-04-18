@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Undo2, Redo2, Eraser, Trash2, Send, Pencil, X, AlertCircle, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { confirm } from "@/lib/confirm";
 
 interface Props {
   open: boolean;
@@ -152,8 +153,12 @@ export function ImageEditor({ open, onClose, imageUrl, onSave, onShareToChat, ti
 
   const handleUndo = () => canvasRef.current?.undo();
   const handleRedo = () => canvasRef.current?.redo();
-  const handleClear = () => {
-    if (confirm("Alle Anmerkungen entfernen?")) {
+  const handleClear = async () => {
+    if (await confirm({
+      title: "Alle Anmerkungen entfernen?",
+      destructive: true,
+      confirmLabel: "Entfernen",
+    })) {
       canvasRef.current?.resetCanvas();
     }
   };

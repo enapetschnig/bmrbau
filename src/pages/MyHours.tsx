@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { confirm } from "@/lib/confirm";
 
 type ProjectOption = { id: string; name: string; plz: string | null };
 
@@ -25,6 +26,8 @@ type TimeEntry = {
   start_time: string | null;
   end_time: string | null;
   pause_minutes: number | null;
+  pause_start: string | null;
+  pause_end: string | null;
   location_type: string;
   notizen: string | null;
   projects: { name: string; plz: string } | null;
@@ -143,19 +146,31 @@ const MyHours = () => {
   const hasPause = (entry: TimeEntry) =>
     !!(entry.pause_minutes && entry.pause_minutes > 0);
 
+  const pauseRange = (entry: TimeEntry): { start: string; end: string } | null => {
+    if (!hasPause(entry)) return null;
+    if (entry.pause_start && entry.pause_end) {
+      return { start: entry.pause_start.substring(0, 5), end: entry.pause_end.substring(0, 5) };
+    }
+    // Fallback: alte Eintraege ohne explizite Pausenzeit — Standardpause 12:00–13:00
+    return { start: "12:00", end: "13:00" };
+  };
+
   const calculateMorningEnd = (entry: TimeEntry) => {
     if (!entry.start_time || !entry.end_time) return "Alte Buchung";
-    return hasPause(entry) ? "12:00" : entry.end_time?.substring(0, 5) || '-';
+    const p = pauseRange(entry);
+    return p ? p.start : entry.end_time?.substring(0, 5) || '-';
   };
 
   const calculateAfternoonStart = (entry: TimeEntry) => {
     if (!entry.start_time || !entry.end_time) return '-';
-    return hasPause(entry) ? "13:00" : '-';
+    const p = pauseRange(entry);
+    return p ? p.end : '-';
   };
 
   const formatPauseTime = (entry: TimeEntry) => {
     if (!entry.start_time || !entry.end_time) return '-';
-    return hasPause(entry) ? "12:00 - 13:00" : '-';
+    const p = pauseRange(entry);
+    return p ? `${p.start} - ${p.end}` : '-';
   };
 
   const isEditable = (datum: string) => {
@@ -218,7 +233,7 @@ const MyHours = () => {
   };
 
   const handleDeleteEntry = async (id: string) => {
-    if (!confirm("Möchtest du diesen Eintrag wirklich löschen?")) return;
+    if (!(await confirm({ title: "Eintrag wirklich löschen?", destructive: true, confirmLabel: "Löschen" }))) return;
 
     const { error } = await supabase
       .from("time_entries")

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { confirm } from "@/lib/confirm";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 
 type Category = {
@@ -74,9 +75,18 @@ export function WarehouseCategoriesManager() {
       .select("id", { count: "exact", head: true })
       .eq("category", c.slug);
     if ((count || 0) > 0) {
-      if (!confirm(`${count} Produkt(e) nutzen die Kategorie "${c.label}" noch. Trotzdem löschen?`)) return;
+      if (!(await confirm({
+        title: `Kategorie "${c.label}" trotzdem löschen?`,
+        description: `${count} Produkt(e) nutzen diese Kategorie noch.`,
+        destructive: true,
+        confirmLabel: "Löschen",
+      }))) return;
     } else {
-      if (!confirm(`Kategorie "${c.label}" löschen?`)) return;
+      if (!(await confirm({
+        title: `Kategorie "${c.label}" löschen?`,
+        destructive: true,
+        confirmLabel: "Löschen",
+      }))) return;
     }
     const { error } = await supabase.from("warehouse_categories").delete().eq("id", c.id);
     if (error) {
