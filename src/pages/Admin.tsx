@@ -845,6 +845,47 @@ export default function Admin() {
       </header>
 
       <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 space-y-8">
+        {/* ===== APP-EINSTELLUNGEN ===== (ganz oben, damit leicht zu finden) */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Settings className="h-6 w-6 text-primary" />
+            Einstellungen
+          </h2>
+          <Card className="border-primary/40">
+            <CardHeader>
+              <CardTitle>Regiebericht-Empfänger-E-Mail</CardTitle>
+              <CardDescription>
+                An diese Adresse gehen alle abgeschickten Regieberichte
+                und sie wird gleichzeitig als Reply-To gesetzt, damit
+                Kunden-Antworten direkt ins richtige Postfach landen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="regie-email">E-Mail-Adresse</Label>
+                  <Input
+                    id="regie-email"
+                    type="email"
+                    value={regiereportEmail}
+                    onChange={(e) => setRegiereportEmail(e.target.value)}
+                    placeholder="z.B. office@bmr-bau.at"
+                    disabled={loadingSettings}
+                  />
+                </div>
+                <Button onClick={saveRegiereportEmail} disabled={savingSettings || loadingSettings} className="w-full sm:w-auto">
+                  {savingSettings ? "Speichert…" : "Speichern"}
+                </Button>
+              </div>
+              {regiereportEmail && (
+                <p className="text-xs text-muted-foreground">
+                  Aktuell gespeichert: <strong>{regiereportEmail}</strong>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
         {/* ===== NEUE MITARBEITER FREISCHALTEN ===== */}
         {profiles.filter(p => !p.is_active).length > 0 && (
           <section>
@@ -1221,42 +1262,6 @@ export default function Admin() {
             </CardHeader>
             <CardContent>
               <Button size="sm" variant="outline">Öffnen</Button>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* ===== APP-EINSTELLUNGEN ===== */}
-        <section>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <Settings className="h-6 w-6" />
-            Einstellungen
-          </h2>
-          <Card>
-            <CardHeader>
-              <CardTitle>Regiebericht-Empfaenger</CardTitle>
-              <CardDescription>
-                An diese E-Mail gehen alle abgeschickten Regieberichte.
-                Wird gleichzeitig als Reply-To gesetzt, damit Kunden-
-                Rueckfragen direkt ins richtige Postfach kommen.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="regie-email">E-Mail-Adresse</Label>
-                  <Input
-                    id="regie-email"
-                    type="email"
-                    value={regiereportEmail}
-                    onChange={(e) => setRegiereportEmail(e.target.value)}
-                    placeholder="z.B. office@bmr-bau.at"
-                    disabled={loadingSettings}
-                  />
-                </div>
-                <Button onClick={saveRegiereportEmail} disabled={savingSettings || loadingSettings}>
-                  {savingSettings ? "Speichert..." : "Speichern"}
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </section>
