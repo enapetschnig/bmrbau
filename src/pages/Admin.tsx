@@ -1298,6 +1298,7 @@ export default function Admin() {
                   { key: "eingangsrechnungen", label: "Eingangsrechnungen" },
                   { key: "sicherheit", label: "Sicherheit" },
                   { key: "lieferscheine", label: "Lieferscheine" },
+                  { key: "bestellungen", label: "Bestellungen" },
                   { key: "lagerverwaltung", label: "Lagerverwaltung" },
                   { key: "admin_bereich", label: "Admin-Bereich" },
                 ];

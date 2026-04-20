@@ -206,7 +206,9 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
   };
 
   const canProceedStep2 = () => selectedItems.length > 0;
-  const canProceedStep3 = () => photos.length > 0;
+  // Fotos sind optional - wer will kann welche hinzufuegen, blockiert den
+  // Dialog aber nicht.
+  const canProceedStep3 = () => true;
   const canSave = () => !!signature;
 
   const handleSave = async () => {
@@ -421,7 +423,7 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-auto">
+      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             Neuer Lieferschein — Schritt {step}/4
@@ -507,49 +509,51 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
         {/* Step 2: Products */}
         {step === 2 && (
           <div className="space-y-4">
-            {/* Selected items */}
+            {/* Selected items - mobile: Name oben, Menge-Row unten */}
             {selectedItems.length > 0 && (
               <div className="space-y-2">
                 <Label>Ausgewählte Positionen ({selectedItems.length})</Label>
                 {selectedItems.map((item) => (
-                  <div key={item.product.id} className="flex items-center gap-2 p-2 bg-muted rounded">
-                    <span className="flex-1 text-sm truncate">{item.product.name}</span>
+                  <div key={item.product.id} className="p-2 bg-muted rounded space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="flex-1 text-sm break-words min-w-0">{item.product.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive shrink-0"
+                        onClick={() => removeItem(item.product.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-8 w-8 p-0 shrink-0"
                         onClick={() => updateMenge(item.product.id, item.menge - 1)}
                         disabled={item.menge <= 1}
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3.5 h-3.5" />
                       </Button>
                       <Input
                         type="number"
                         value={item.menge}
                         onChange={(e) => updateMenge(item.product.id, parseFloat(e.target.value) || 1)}
-                        className="w-16 h-7 text-center text-sm"
+                        className="w-20 h-8 text-center text-sm"
                         min={0.001}
                         step="any"
                       />
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-8 w-8 p-0 shrink-0"
                         onClick={() => updateMenge(item.product.id, item.menge + 1)}
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                       </Button>
-                      <span className="text-xs text-muted-foreground w-10">{item.product.einheit}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{item.product.einheit}</span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive"
-                      onClick={() => removeItem(item.product.id)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
                   </div>
                 ))}
               </div>
@@ -674,7 +678,7 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
         {/* Step 3: Photos */}
         {step === 3 && (
           <div className="space-y-4">
-            <Label>Fotos (min. 1) *</Label>
+            <Label>Fotos (optional)</Label>
 
             {photoPreviewUrls.length > 0 && (
               <div className="grid grid-cols-3 gap-2">

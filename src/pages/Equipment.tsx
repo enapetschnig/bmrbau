@@ -386,35 +386,40 @@ export default function EquipmentPage() {
     <div className="container mx-auto p-4 max-w-4xl">
       <PageHeader title="Geräteverwaltung" />
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <p className="text-sm text-muted-foreground">
           {items.length} Geräte gesamt
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {items.length > 0 && (
-            <Button size="sm" variant="outline" onClick={exportToExcel}>
-              <Download className="w-4 h-4 mr-1" /> Export
+            <Button size="sm" variant="outline" onClick={exportToExcel} className="h-9" aria-label="Export">
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Export</span>
             </Button>
           )}
           {canManage && (
             <label className="cursor-pointer inline-flex">
               <input type="file" accept=".xlsx,.xls" onChange={handleAIImport} className="hidden" />
-              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="KI erkennt Spalten automatisch">
-                <Sparkles className="w-4 h-4 mr-1" /> KI-Import
+              <Button size="sm" variant="outline" type="button" className="h-9" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="KI erkennt Spalten automatisch" aria-label="KI-Import">
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden sm:inline ml-1">KI-Import</span>
               </Button>
             </label>
           )}
           {canManage && (
             <label className="cursor-pointer inline-flex">
               <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
-              <Button size="sm" variant="outline" type="button" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Standard-Import (feste Spaltennamen)">
-                <Upload className="w-4 h-4 mr-1" /> Import
+              <Button size="sm" variant="outline" type="button" className="h-9" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} title="Standard-Import (feste Spaltennamen)" aria-label="Import">
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline ml-1">Import</span>
               </Button>
             </label>
           )}
           {canManage && (
-            <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
-              <Plus className="w-4 h-4 mr-1" /> Neues Gerät
+            <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} className="h-9">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Neues Gerät</span>
+              <span className="sm:hidden ml-1">Neu</span>
             </Button>
           )}
         </div>
@@ -513,7 +518,7 @@ export default function EquipmentPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); setShowForm(open); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{editingItem ? "Gerät bearbeiten" : "Neues Gerät"}</DialogTitle>
           </DialogHeader>
@@ -686,7 +691,7 @@ export default function EquipmentPage() {
 
       {/* KI-Import Preview Dialog */}
       <Dialog open={aiImportOpen} onOpenChange={(o) => { if (!o && !aiImportSaving) { setAiImportOpen(false); setAiImportResult(null); } }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-hidden flex flex-col p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" /> KI-Import: Vorschau

@@ -197,20 +197,24 @@ export default function Bestellungen() {
 
     // Benachrichtigungen
     if (typ === "mitarbeiter") {
-      // Alle Admins benachrichtigen
+      // Alle Admins ausser dem Ersteller benachrichtigen (sonst kriegt
+      // ein Admin, der im MA-Modus bestellt, eine Selbst-Benachrichtigung).
       const { data: admins } = await supabase.from("user_roles").select("user_id").eq("role", "administrator");
-      const adminIds = (admins || []).map((a: any) => a.user_id);
+      const adminIds = (admins || [])
+        .map((a: any) => a.user_id as string)
+        .filter((uid) => uid !== userId);
       if (adminIds.length > 0) {
+        const erstellerName = profiles[userId] || "Ein Mitarbeiter";
         await supabase.from("notifications").insert(
           adminIds.map(uid => ({
             user_id: uid,
             type: "bestellung_angefragt",
             title: "Neue Bestellung angefragt",
-            message: `${formData.titel} wurde angefragt.`,
+            message: `${erstellerName}: ${formData.titel}`,
             metadata: { bestellung_id: newOrder.id },
           }))
         );
-        triggerPush(adminIds, "Neue Bestellung angefragt", `${formData.titel} wurde angefragt.`, "/bestellungen");
+        triggerPush(adminIds, "Neue Bestellung angefragt", `${erstellerName}: ${formData.titel}`, "/bestellungen");
       }
     } else if (typ === "chef" && formData.zugewiesenAn) {
       // Zugewiesenem Polier benachrichtigen
