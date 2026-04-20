@@ -103,13 +103,13 @@ export default function DailyReportDetail() {
     if (!report || !id) return;
     const { error } = await supabase
       .from("daily_reports")
-      .update({ status: "gesendet" })
+      .update({ status: "abgeschlossen" })
       .eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
       return;
     }
-    toast({ title: "Abgeschickt", description: "Bericht wurde als abgeschickt markiert." });
+    toast({ title: "Abgeschlossen", description: "Bericht wurde als abgeschlossen markiert." });
     fetchReport();
   };
 
@@ -414,8 +414,8 @@ export default function DailyReportDetail() {
         <h1 className="text-2xl font-bold">
           {report.report_type === "tagesbericht" ? "Tagesbericht" : "Zwischenbericht"}
         </h1>
-        <Badge variant={isSigned ? "default" : "outline"}>
-          {report.status === "offen" ? "Offen" : report.status === "gesendet" ? "Gesendet" : "Abgeschlossen"}
+        <Badge variant={report.status === "offen" ? "outline" : "default"}>
+          {report.status === "offen" ? "Offen" : "Abgeschlossen"}
         </Badge>
       </div>
 
@@ -569,8 +569,10 @@ export default function DailyReportDetail() {
           </CardContent>
         </Card>
 
-        {/* Signature section */}
-        {isSigned ? (
+        {/* Alte Unterschrift nur anzeigen wenn vorhanden - zukuenftig
+            werden keine Unterschriften mehr gesetzt (BMR-Wunsch:
+            Absenden -> direkt abgeschlossen). */}
+        {isSigned && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Unterschrift</CardTitle></CardHeader>
             <CardContent className="space-y-2">
@@ -583,29 +585,32 @@ export default function DailyReportDetail() {
                   {format(new Date(report.unterschrift_am), "dd.MM.yyyy HH:mm", { locale: de })}
                 </p>
               )}
-              {report.sicherheit_bestaetigt && (
-                <Badge variant="default" className="bg-green-600">
-                  <CheckCircle2 className="w-3 h-3 mr-1" /> Sicherheitscheckliste bestätigt
-                </Badge>
-              )}
-              <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="mt-3">
-                <Download className="w-4 h-4 mr-2" /> PDF herunterladen
-              </Button>
             </CardContent>
           </Card>
-        ) : (
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setShowEditForm(true)}>
-              <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
-            </Button>
-            <Button onClick={handleAbschicken}>
-              Absenden
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4 mr-2" /> Löschen
-            </Button>
-          </div>
         )}
+
+        {/* Actions - Loeschen ist immer verfuegbar, nicht mehr an
+            isSigned/Status gekoppelt. */}
+        <div className="flex gap-2 flex-wrap">
+          {report.status === "offen" && (
+            <>
+              <Button variant="outline" onClick={() => setShowEditForm(true)}>
+                <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
+              </Button>
+              <Button onClick={handleAbschicken}>
+                Absenden
+              </Button>
+            </>
+          )}
+          {report.status !== "offen" && (
+            <Button variant="outline" onClick={handleDownloadPDF}>
+              <Download className="w-4 h-4 mr-2" /> PDF herunterladen
+            </Button>
+          )}
+          <Button variant="destructive" onClick={handleDelete}>
+            <Trash2 className="w-4 h-4 mr-2" /> Löschen
+          </Button>
+        </div>
       </div>
 
       {/* Edit Form */}

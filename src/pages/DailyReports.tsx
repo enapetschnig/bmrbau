@@ -39,8 +39,10 @@ const WETTER_ICONS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   offen: "bg-yellow-100 text-yellow-800",
-  gesendet: "bg-blue-100 text-blue-800",
   abgeschlossen: "bg-green-100 text-green-800",
+  // Legacy-Status "gesendet" wird nicht mehr vergeben, aber alte Eintraege
+  // koennen noch damit markiert sein.
+  gesendet: "bg-green-100 text-green-800",
 };
 
 export default function DailyReports() {
@@ -186,7 +188,6 @@ export default function DailyReports() {
             <SelectContent>
               <SelectItem value="alle">Alle Status</SelectItem>
               <SelectItem value="offen">Offen</SelectItem>
-              <SelectItem value="gesendet">Gesendet</SelectItem>
               <SelectItem value="abgeschlossen">Abgeschlossen</SelectItem>
             </SelectContent>
           </Select>
@@ -330,13 +331,11 @@ export default function DailyReports() {
                         {report.report_type === "regiebericht" ? "Regiebericht" : report.report_type === "tagesbericht" ? "Tagesbericht" : "Zwischenbericht"}
                       </Badge>
                       <Badge className={`text-xs ${STATUS_COLORS[report.status] || ""}`}>
-                        {report.status === "offen" ? "Offen" : report.status === "gesendet" ? "Gesendet" : "Abgeschlossen"}
+                        {report.status === "offen" ? "Offen" : "Abgeschlossen"}
                       </Badge>
-                      {report.unterschrift_kunde ? (
+                      {report.unterschrift_kunde && (
                         <Badge className="text-xs bg-green-100 text-green-800">Kunde unterschrieben</Badge>
-                      ) : report.status === "gesendet" ? (
-                        <Badge className="text-xs bg-red-100 text-red-800">Keine Unterschrift</Badge>
-                      ) : null}
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {(report.projects as any)?.name || "Unbekanntes Projekt"}
