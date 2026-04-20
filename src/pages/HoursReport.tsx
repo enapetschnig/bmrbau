@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Warehouse, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, Save, Users, Clock } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Warehouse, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, Save, Users, Clock, CloudRain } from "lucide-react";
 import { format, isSameDay, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
@@ -1087,7 +1087,7 @@ export default function HoursReport() {
               {selectedUserId && (
                 <>
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className={`grid gap-4 ${selectedIsExternal ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+                    <div className={`grid gap-4 ${selectedIsExternal ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-5"}`}>
                       <div>
                         <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                         <p className="text-2xl font-bold">{totalHours.toFixed(2)} h</p>
@@ -1107,6 +1107,19 @@ export default function HoursReport() {
                         <div>
                           <p className="text-sm text-muted-foreground">Diäten</p>
                           <p className="text-2xl font-bold">{totalDiaeten} Tag{totalDiaeten !== 1 ? "e" : ""}</p>
+                        </div>
+                      )}
+                      {!selectedIsExternal && (
+                        <div>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <CloudRain className="h-3.5 w-3.5" /> Schlechtwetter
+                          </p>
+                          <p className="text-2xl font-bold">
+                            {badWeatherRecords.reduce((s, r) => s + (r.schlechtwetter_stunden || 0), 0).toFixed(2)} h
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {badWeatherRecords.length} Tag{badWeatherRecords.length !== 1 ? "e" : ""}
+                          </p>
                         </div>
                       )}
                     </div>

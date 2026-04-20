@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree, Download } from "lucide-react";
+import { ArrowLeft, Clock, Building2, Warehouse, Pencil, Trash2, Palmtree, Download, CloudRain } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,13 +58,32 @@ const MyHours = () => {
   const [vacationBalance, setVacationBalance] = useState<{ total: number; used: number } | null>(null);
   const [vacationHistory, setVacationHistory] = useState<{ datum: string; stunden: number }[]>([]);
   const [isExternal, setIsExternal] = useState(false);
+  const [badWeatherRecords, setBadWeatherRecords] = useState<{ datum: string; schlechtwetter_stunden: number }[]>([]);
 
   useEffect(() => {
     fetchEntries();
     fetchProjects();
     fetchVacationData();
     checkIfExternal();
+    fetchBadWeather();
   }, [selectedMonth]);
+
+  const fetchBadWeather = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const { data } = await supabase
+      .from("bad_weather_records")
+      .select("datum, schlechtwetter_stunden")
+      .eq("user_id", user.id)
+      .gte("datum", startDate)
+      .lte("datum", endDate)
+      .order("datum");
+    setBadWeatherRecords(data || []);
+  };
 
   const checkIfExternal = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -361,6 +380,18 @@ const MyHours = () => {
                     </span>
                   </div>
                 ) : null}
+                {badWeatherRecords.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <CloudRain className="h-3.5 w-3.5 text-blue-600" />
+                    <span className="text-muted-foreground">Schlechtwetter: </span>
+                    <span className="font-bold">
+                      {badWeatherRecords.reduce((s, r) => s + (r.schlechtwetter_stunden || 0), 0).toFixed(2)} h
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({badWeatherRecords.length} Tag{badWeatherRecords.length !== 1 ? "e" : ""})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
