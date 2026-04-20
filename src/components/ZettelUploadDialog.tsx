@@ -135,15 +135,15 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
   };
 
   const canProceedToSign = (): boolean => {
+    // Fotos und Unterschrift sind komplett optional. Pflicht: Projekt + Zettel.
     if (!projectId) return false;
     if (!zettelFile) return false;
-    if (photos.length < 4) return false;
     return true;
   };
 
   const handleFinalSave = async () => {
-    if (!projectId || !zettelFile || photos.length < 4) {
-      toast({ variant: "destructive", title: "Unvollständig", description: "Zettel + 4 Fotos erforderlich" });
+    if (!projectId || !zettelFile) {
+      toast({ variant: "destructive", title: "Unvollständig", description: "Projekt und Zettel erforderlich" });
       return;
     }
 
@@ -221,7 +221,7 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            {step === "form" ? "Handschriftlichen Bericht hochladen" : "Unterschrift"}
+            {step === "form" ? "Handschriftlichen Bericht hochladen" : "Abschicken"}
           </DialogTitle>
         </DialogHeader>
 
@@ -304,10 +304,10 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
               )}
             </div>
 
-            {/* 4 Fotos */}
+            {/* Fotos (optional) */}
             <div>
-              <Label>Baustellenfotos ({photos.length}/4) *</Label>
-              <p className="text-xs text-muted-foreground mb-2">Mindestens 4 Fotos von der Baustelle erforderlich</p>
+              <Label>Baustellenfotos ({photos.length})</Label>
+              <p className="text-xs text-muted-foreground mb-2">Optional - so viele Fotos wie du willst</p>
               <input
                 ref={photoInputRef}
                 type="file"
@@ -317,7 +317,7 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
                 onChange={handlePhotoSelect}
                 className="hidden"
               />
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {photoPreviews.map((preview, idx) => (
                   <div key={idx} className="relative aspect-square border rounded overflow-hidden">
                     <img src={preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
@@ -329,14 +329,12 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
                     </button>
                   </div>
                 ))}
-                {photos.length < 4 && (
-                  <button
-                    onClick={() => photoInputRef.current?.click()}
-                    className="aspect-square border-2 border-dashed rounded flex items-center justify-center hover:bg-muted/50"
-                  >
-                    <Camera className="h-6 w-6 text-muted-foreground" />
-                  </button>
-                )}
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  className="aspect-square border-2 border-dashed rounded flex items-center justify-center hover:bg-muted/50"
+                >
+                  <Camera className="h-6 w-6 text-muted-foreground" />
+                </button>
               </div>
             </div>
 
@@ -345,14 +343,13 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
                 {!canProceedToSign() && (
                   <div className="flex items-center gap-1 text-xs text-amber-600">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    {!projectId && "Projekt wählen · "}
-                    {!zettelFile && "Zettel hochladen · "}
-                    {photos.length < 4 && `${4 - photos.length} Foto(s) fehlt`}
+                    {!projectId && "Projekt wählen "}
+                    {!zettelFile && "· Zettel hochladen"}
                   </div>
                 )}
               </div>
               <Button onClick={() => setStep("sign")} disabled={!canProceedToSign()}>
-                <Pencil className="h-4 w-4 mr-1" /> Weiter - Unterschreiben
+                Weiter
               </Button>
             </DialogFooter>
           </div>
@@ -383,7 +380,7 @@ export function ZettelUploadDialog({ open, onOpenChange, onSuccess, defaultProje
               </Button>
               <Button onClick={handleFinalSave} disabled={saving}>
                 <CheckCircle2 className="h-4 w-4 mr-1" />
-                {saving ? "Speichert..." : "Speichern"}
+                {saving ? "Speichert..." : "Absenden"}
               </Button>
             </DialogFooter>
           </div>

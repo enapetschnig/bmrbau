@@ -601,7 +601,7 @@ export default function DailyReportDetail() {
               <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
             </Button>
             <Button onClick={openSignDialog}>
-              Unterschreiben & Absenden
+              Absenden
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
               <Trash2 className="w-4 h-4 mr-2" /> Löschen
