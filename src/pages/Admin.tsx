@@ -310,6 +310,11 @@ export default function Admin() {
 
   const handleActivateWithRole = async (userId: string) => {
     const kategorie = pendingKategorie[userId] || "facharbeiter";
+    // Wenn "administrator" gewaehlt wird, setzen wir user_roles.role = administrator
+    // und als employees.kategorie den Fallback "facharbeiter" (Admin ist in unserem
+    // Schema ein Facharbeiter mit administrator-Rolle oben drauf).
+    const isAdminRole = kategorie === "administrator";
+    const employeeKategorie = isAdminRole ? "facharbeiter" : kategorie;
 
     // 1. Activate user
     const { error: activateError } = await supabase
@@ -331,14 +336,28 @@ export default function Admin() {
       .maybeSingle();
 
     if (existingEmp) {
-      await supabase.from("employees").update({ kategorie }).eq("id", existingEmp.id);
+      await supabase.from("employees").update({ kategorie: employeeKategorie }).eq("id", existingEmp.id);
     } else {
       await supabase.from("employees").insert({
         user_id: userId,
         vorname: profile?.vorname || "",
         nachname: profile?.nachname || "",
-        kategorie,
+        kategorie: employeeKategorie,
       });
+    }
+
+    // 2b. user_roles setzen (administrator oder mitarbeiter).
+    // Upsert, damit es auch funktioniert wenn kein user_roles-Eintrag existiert
+    // (z. B. wenn der Trigger handle_new_user ihn aus irgendeinem Grund nicht erzeugt hat).
+    const systemRole = isAdminRole ? "administrator" : "mitarbeiter";
+    // Erst alle existierenden Zeilen dieses Users loeschen, damit kein UNIQUE(user_id, role)
+    // Konflikt auftritt, wenn mehrere Zeilen existieren.
+    await supabase.from("user_roles").delete().eq("user_id", userId);
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({ user_id: userId, role: systemRole });
+    if (roleError) {
+      toast({ variant: "destructive", title: "Rolle konnte nicht gesetzt werden", description: roleError.message });
     }
 
     // 3. Notify user
@@ -354,7 +373,11 @@ export default function Admin() {
 
     // 4. Update UI
     setProfiles(prev => prev.map(p => p.id === userId ? { ...p, is_active: true } : p));
-    toast({ title: "Mitarbeiter freigeschaltet", description: `${profile?.vorname} ${profile?.nachname} kann sich jetzt anmelden.` });
+    setUserRoles(prev => ({ ...prev, [userId]: systemRole }));
+    toast({
+      title: isAdminRole ? "Als Administrator freigeschaltet" : "Mitarbeiter freigeschaltet",
+      description: `${profile?.vorname} ${profile?.nachname} kann sich jetzt anmelden.`,
+    });
     fetchUsers({ silent: true });
     fetchEmployees();
     scrollToRegisteredUser(userId);
@@ -635,13 +658,22 @@ export default function Admin() {
   const handleRoleChange = async (userId: string, newEffectiveRole: string) => {
     const systemRole = newEffectiveRole === "administrator" ? "administrator" : "mitarbeiter";
 
-    const { error: roleError } = await supabase
+    // Alle existierenden Rollen-Zeilen des Users ersetzen, damit es auch
+    // funktioniert wenn mehrere Zeilen existieren oder gar keine.
+    const { error: deleteError } = await supabase
       .from("user_roles")
-      .update({ role: systemRole })
+      .delete()
       .eq("user_id", userId);
+    if (deleteError) {
+      toast({ variant: "destructive", title: "Fehler", description: deleteError.message });
+      return;
+    }
 
-    if (roleError) {
-      toast({ variant: "destructive", title: "Fehler", description: roleError.message });
+    const { error: insertError } = await supabase
+      .from("user_roles")
+      .insert({ user_id: userId, role: systemRole });
+    if (insertError) {
+      toast({ variant: "destructive", title: "Fehler", description: insertError.message });
       return;
     }
 
@@ -857,7 +889,7 @@ export default function Admin() {
                           value={pendingKategorie[profile.id] || "facharbeiter"}
                           onValueChange={(val) => setPendingKategorie(prev => ({ ...prev, [profile.id]: val }))}
                         >
-                          <SelectTrigger className="w-full sm:w-[160px]">
+                          <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -865,6 +897,7 @@ export default function Admin() {
                             <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
                             <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                             <SelectItem value="extern">Extern</SelectItem>
+                            <SelectItem value="administrator">Administrator</SelectItem>
                           </SelectContent>
                         </Select>
                         <Button
