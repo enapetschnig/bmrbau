@@ -151,12 +151,14 @@ export default function SafetyEvaluations() {
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
   const handleCreate = async () => {
-    // Fuer Vorlage: kein Projekt noetig
+    // Projekt ist nur bei Baustellenunterweisung erforderlich.
+    // Jahres- und Geraete-Unterweisungen haben keinen Projekt-Bezug.
+    const projektPflicht = pathModul === "baustellenunterweisung" && !alsVorlageSpeichern;
     if (!form.titel.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Titel ist erforderlich" });
       return;
     }
-    if (!alsVorlageSpeichern && !form.project_id) {
+    if (projektPflicht && !form.project_id) {
       toast({ variant: "destructive", title: "Fehler", description: "Projekt ist erforderlich" });
       return;
     }
@@ -180,7 +182,8 @@ export default function SafetyEvaluations() {
         titel: form.titel.trim(),
         typ: form.typ,
         kategorie: form.kategorie.trim() || null,
-        project_id: alsVorlageSpeichern ? null : form.project_id,
+        // Projekt nur bei Baustellenunterweisung + nicht-Vorlage speichern
+        project_id: (alsVorlageSpeichern || pathModul !== "baustellenunterweisung") ? null : (form.project_id || null),
         created_by: userId,
         checklist_items: checklistItems,
         status: alsVorlageSpeichern ? "entwurf" : "warte_auf_unterschrift",
@@ -305,7 +308,7 @@ export default function SafetyEvaluations() {
           pathModul === "jahresunterweisung" ? "Jahresunterweisungen"
           : pathModul === "geraeteunterweisung" ? "Geräteunterweisungen"
           : pathModul === "baustellenunterweisung" ? "Baustellenunterweisungen"
-          : "Evaluierungen & Unterweisungen"
+          : "Unterweisungen"
         }
         backPath={pathModul ? "/safety" : "/"}
       />
@@ -321,7 +324,7 @@ export default function SafetyEvaluations() {
             </Button>
           )}
           <Button size="sm" onClick={() => { resetForm(); setShowCreate(true); }}>
-            <Plus className="w-4 h-4 mr-1" /> Neue Evaluierung
+            <Plus className="w-4 h-4 mr-1" /> Neue Unterweisung
           </Button>
         </div>
       </div>
@@ -359,7 +362,7 @@ export default function SafetyEvaluations() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <ShieldCheck className="w-12 h-12 mx-auto mb-4" />
-            <p>Keine Evaluierungen gefunden</p>
+            <p>Keine Unterweisungen gefunden</p>
           </CardContent>
         </Card>
       ) : (
@@ -419,27 +422,17 @@ export default function SafetyEvaluations() {
                 placeholder="z.B. Sicherheitsunterweisung Hochbau Q1/2026"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Typ *</Label>
-                <Select value={form.typ} onValueChange={(v) => setForm({ ...form, typ: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="evaluierung">Evaluierung</SelectItem>
-                    <SelectItem value="sicherheitsunterweisung">Sicherheitsunterweisung</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Kategorie</Label>
-                <Input
-                  value={form.kategorie}
-                  onChange={(e) => setForm({ ...form, kategorie: e.target.value })}
-                  placeholder="z.B. Hochbau"
-                />
-              </div>
+            <div>
+              <Label>Kategorie</Label>
+              <Input
+                value={form.kategorie}
+                onChange={(e) => setForm({ ...form, kategorie: e.target.value })}
+                placeholder="z.B. Hochbau, Elektro, …"
+              />
             </div>
-            {!alsVorlageSpeichern && (
+            {/* Projekt-Auswahl nur bei Baustellenunterweisung. Jahres- und
+                Geraete-Unterweisungen haengen an keinem einzelnen Projekt. */}
+            {pathModul === "baustellenunterweisung" && !alsVorlageSpeichern && (
               <div>
                 <Label>Projekt *</Label>
                 <Select value={form.project_id} onValueChange={(v) => setForm({ ...form, project_id: v })}>

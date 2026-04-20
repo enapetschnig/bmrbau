@@ -97,30 +97,46 @@ export default function ScheduleBoard() {
   // es keinen Duplicate-Key-Fehler geben kann (auch bei Multi-Day-Range-Select).
   const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string) => {
     const datum = format(date, "yyyy-MM-dd");
-    const existingToday = getAssignmentsForDay(assignments, uid, date);
 
-    // Wenn schon genau dieselbe Zuweisung (uid, projectId, datum) da ist:
-    // nur Notizen aktualisieren, nicht neu einfuegen.
+    // Frisch aus der DB holen statt aus React-State, damit Stale-State bei
+    // schnellen Klicks oder Mehrfach-Range-Select keinen UNIQUE-Konflikt
+    // produzieren kann.
+    const { data: existingRows, error: readError } = await supabase
+      .from("worker_assignments")
+      .select("id, project_id, notizen")
+      .eq("user_id", uid)
+      .eq("datum", datum);
+    if (readError) {
+      toast({ variant: "destructive", title: "Fehler", description: readError.message });
+      return;
+    }
+    const existingToday = (existingRows || []) as { id: string; project_id: string; notizen: string | null }[];
+
+    // Wenn genau dasselbe Projekt schon zugewiesen ist: nur ggf. Notizen updaten.
     const sameProject = existingToday.find((a) => a.project_id === projectId);
     if (sameProject) {
       if ((sameProject.notizen ?? null) !== (notizen ?? null)) {
-        const { error } = await supabase
+        await supabase
           .from("worker_assignments")
           .update({ notizen: notizen ?? null })
           .eq("id", sameProject.id);
-        if (error) {
-          toast({ variant: "destructive", title: "Fehler", description: error.message });
-          return;
-        }
-        setAssignments((prev) =>
-          prev.map((a) => (a.id === sameProject.id ? { ...a, notizen: notizen ?? null } : a)),
-        );
       }
+      setAssignments((prev) => {
+        // Kompletten Day-State mit DB-Inhalten synchronisieren
+        const other = prev.filter((a) => !(a.user_id === uid && a.datum === datum));
+        const mapped = existingToday.map((r) => ({
+          id: r.id,
+          user_id: uid,
+          project_id: r.project_id,
+          datum,
+          notizen: r.id === sameProject.id ? (notizen ?? null) : r.notizen,
+        })) as Assignment[];
+        return [...other, ...mapped];
+      });
       return;
     }
 
-    // Andere Projekt-Zuweisungen dieses Users an diesem Tag weg, damit der UNIQUE-Key
-    // nicht ausloest und die UI konsistent nur ein Projekt pro Tag zeigt.
+    // Andere Projekt-Zuweisungen dieses Users an diesem Tag entfernen.
     const idsToDelete = existingToday.map((a) => a.id);
     if (idsToDelete.length > 0) {
       const { error: deleteError } = await supabase
@@ -133,15 +149,21 @@ export default function ScheduleBoard() {
       }
     }
 
+    // Upsert als Sicherheitsnetz – falls zwischen Delete und Insert eine
+    // parallele Zuweisung entstanden ist, wird sie hier ersetzt statt einen
+    // Duplicate-Key zu werfen.
     const { data, error } = await supabase
       .from("worker_assignments")
-      .insert({
-        user_id: uid,
-        project_id: projectId,
-        datum,
-        created_by: userId,
-        notizen: notizen ?? null,
-      })
+      .upsert(
+        {
+          user_id: uid,
+          project_id: projectId,
+          datum,
+          created_by: userId,
+          notizen: notizen ?? null,
+        },
+        { onConflict: "user_id,datum,project_id" },
+      )
       .select()
       .single();
     if (error) {
@@ -150,7 +172,7 @@ export default function ScheduleBoard() {
     }
 
     setAssignments((prev) => {
-      const filtered = prev.filter((a) => !idsToDelete.includes(a.id));
+      const filtered = prev.filter((a) => !(a.user_id === uid && a.datum === datum));
       return data ? [...filtered, data as Assignment] : filtered;
     });
   };
