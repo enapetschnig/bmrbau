@@ -31,7 +31,7 @@ import {
   type BuakWeekType,
   type EmployeeSchedules,
 } from "@/lib/workingHours";
-import { useBuakWeekType } from "@/hooks/useBuakWeekType";
+import { useBuakWeekType, setBuakWeekTypeForWeek } from "@/hooks/useBuakWeekType";
 import { FillRemainingHoursDialog } from "@/components/FillRemainingHoursDialog";
 import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
@@ -173,12 +173,12 @@ const TimeTracking = () => {
   const [employeeSchwellenwert, setEmployeeSchwellenwert] = useState<import("@/lib/workingHours").Schwellenwert | null>(null);
   const [isExternalUser, setIsExternalUser] = useState(false);
 
-  // BUAK-Wochentyp fuer das gewaehlte Datum (ggf. durch User ueberschrieben).
+  // BUAK-Wochentyp fuer das gewaehlte Datum. Aenderungen persistieren
+  // direkt fuer die ganze KW (setBuakWeekTypeForWeek), damit Mo–Fr konsistent
+  // gleichen Typ haben. is_manual wird im Hub sichtbar.
   const buak = useBuakWeekType(selectedDate);
-  const [weekTypeOverride, setWeekTypeOverride] = useState<BuakWeekType | null>(null);
-  // Beim Datums-Wechsel Override zuruecksetzen
-  useEffect(() => { setWeekTypeOverride(null); }, [selectedDate]);
-  const activeWeekType: BuakWeekType = weekTypeOverride ?? buak.weekType;
+  const [togglingWeekType, setTogglingWeekType] = useState(false);
+  const activeWeekType: BuakWeekType = buak.weekType;
 
   // Konkreter Wochenplan fuer das aktuelle Datum
   const employeeSchedule: WeekSchedule | null = pickScheduleForDate(
@@ -1178,25 +1178,43 @@ const TimeTracking = () => {
                 )}
               </div>
 
-              {/* BUAK-Wochentyp: jederzeit manuell umschaltbar pro Eintrag */}
+              {/* BUAK-Wochentyp: persistiert fuer ganze KW, jederzeit umschaltbar */}
               {!isExternalUser && selectedDate && (
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={activeWeekType === "lang" ? "default" : "secondary"} className="text-xs">
                         KW {buak.kw} · {activeWeekType === "lang" ? "Lange Woche (Mo–Fr)" : "Kurze Woche (Mo–Do)"}
                       </Badge>
-                      {weekTypeOverride && (
-                        <Badge variant="outline" className="text-xs">manuell korrigiert</Badge>
+                      {buak.isManual && (
+                        <Badge variant="outline" className="text-xs" title="Wochentyp wurde manuell angepasst – gilt für die gesamte KW">
+                          manuell gesetzt
+                        </Badge>
                       )}
                     </div>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setWeekTypeOverride(activeWeekType === "lang" ? "kurz" : "lang")}
+                      disabled={togglingWeekType}
+                      onClick={async () => {
+                        const next: BuakWeekType = activeWeekType === "lang" ? "kurz" : "lang";
+                        setTogglingWeekType(true);
+                        const { error } = await setBuakWeekTypeForWeek(buak.year, buak.kw, next, buak.notiz);
+                        setTogglingWeekType(false);
+                        if (error) {
+                          toast({ variant: "destructive", title: "Fehler", description: error.message });
+                        } else {
+                          toast({
+                            title: "Wochentyp geändert",
+                            description: `KW ${buak.kw} ist jetzt eine ${next === "lang" ? "Lange" : "Kurze"} Woche (Mo–Fr).`,
+                          });
+                        }
+                      }}
                     >
-                      Auf {activeWeekType === "lang" ? "Kurze Woche" : "Lange Woche"} umschalten
+                      {togglingWeekType
+                        ? "…"
+                        : `Ganze KW auf ${activeWeekType === "lang" ? "Kurze Woche" : "Lange Woche"} setzen`}
                     </Button>
                   </div>
                   {buak.notiz && (

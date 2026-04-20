@@ -18,6 +18,7 @@ type CalendarRow = {
   kw: number;
   week_type: BuakWeekType;
   notiz: string | null;
+  is_manual: boolean;
 };
 
 function mondayOfIsoWeek(year: number, week: number): Date {
@@ -63,11 +64,11 @@ export default function BuakCalendarAdmin() {
     setLoading(true);
     const { data } = await supabase
       .from("buak_week_calendar")
-      .select("year, kw, week_type, notiz")
+      .select("year, kw, week_type, notiz, is_manual")
       .eq("year", y)
       .order("kw");
     const map = new Map<number, CalendarRow>();
-    (data || []).forEach((r) => map.set(r.kw, r as CalendarRow));
+    (data || []).forEach((r) => map.set(r.kw, { ...r, is_manual: (r as any).is_manual ?? false } as CalendarRow));
     setRows(map);
     setLoading(false);
   };
@@ -196,8 +197,10 @@ export default function BuakCalendarAdmin() {
                         <TableCell>
                           {saving === kw ? (
                             <Badge variant="outline" className="text-xs">…</Badge>
+                          ) : row?.is_manual ? (
+                            <Badge variant="secondary" className="text-xs" title="Wurde manuell gesetzt (von Admin oder MA)">manuell</Badge>
                           ) : row ? (
-                            <Badge variant="secondary" className="text-xs">✓</Badge>
+                            <Badge variant="secondary" className="text-xs">Seed</Badge>
                           ) : (
                             <Badge variant="outline" className="text-xs">auto</Badge>
                           )}

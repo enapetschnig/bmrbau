@@ -10,10 +10,13 @@ import {
  * ein einfaches In-Memory-Cache an. Wenn ein Eintrag fehlt, wird der
  * Regel-Fallback (gerade KW = lang, ungerade = kurz) verwendet.
  *
- * Liefert: { weekType, weekLabel, kw, year, isLoading, refresh, overrideLocally }
+ * Fuer Schreibzugriffe gibt es die exportierte Funktion
+ * `setBuakWeekTypeForWeek()` — sie persistiert den Wochentyp fuer die ganze
+ * KW und invalidiert den Cache.
  */
 
-type YearMap = Map<string, { week_type: BuakWeekType; notiz: string | null }>;
+type CachedEntry = { week_type: BuakWeekType; notiz: string | null; is_manual: boolean };
+type YearMap = Map<string, CachedEntry>;
 
 const cache = new Map<number, YearMap>();
 const listeners = new Set<(year: number) => void>();
@@ -37,15 +40,16 @@ async function loadYear(year: number): Promise<YearMap> {
 
   const { data, error } = await supabase
     .from("buak_week_calendar")
-    .select("year, kw, week_type, notiz")
+    .select("year, kw, week_type, notiz, is_manual")
     .eq("year", year);
 
   const map: YearMap = new Map();
   if (!error && data) {
-    for (const row of data) {
+    for (const row of data as Array<{ year: number; kw: number; week_type: BuakWeekType; notiz: string | null; is_manual: boolean | null }>) {
       map.set(keyOf(row.year, row.kw), {
-        week_type: row.week_type as BuakWeekType,
+        week_type: row.week_type,
         notiz: row.notiz ?? null,
+        is_manual: row.is_manual ?? false,
       });
     }
   }
@@ -64,6 +68,32 @@ export function invalidateBuakCalendarCache(year?: number) {
   }
 }
 
+/**
+ * Setzt den Wochentyp fuer eine bestimmte ISO-KW. Macht einen UPSERT in die
+ * Tabelle; der Trigger aus Migration 20260420100000 kuemmert sich um
+ * is_manual, updated_by und updated_at.
+ *
+ * Gibt ein Error-Objekt zurueck falls etwas schiefgeht (z. B. RLS).
+ */
+export async function setBuakWeekTypeForWeek(
+  year: number,
+  kw: number,
+  weekType: BuakWeekType,
+  notiz: string | null = null,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from("buak_week_calendar")
+    .upsert(
+      { year, kw, week_type: weekType, notiz },
+      { onConflict: "year,kw" },
+    );
+  if (error) {
+    return { error: new Error(error.message) };
+  }
+  invalidateBuakCalendarCache(year);
+  return { error: null };
+}
+
 export function useBuakWeekType(date: Date | string | null) {
   const parsed = date ? (typeof date === "string" ? new Date(date) : date) : null;
   const { year, week } = parsed ? isoYearWeek(parsed) : { year: 0, week: 0 };
@@ -71,13 +101,15 @@ export function useBuakWeekType(date: Date | string | null) {
   const [state, setState] = useState<{
     weekType: BuakWeekType;
     notiz: string | null;
+    isManual: boolean;
     isLoading: boolean;
   }>(() => {
-    if (!parsed) return { weekType: "lang", notiz: null, isLoading: false };
+    if (!parsed) return { weekType: "lang", notiz: null, isManual: false, isLoading: false };
     const cached = cache.get(year)?.get(keyOf(year, week));
     return {
       weekType: cached?.week_type ?? getBuakWeekTypeFallback(parsed),
       notiz: cached?.notiz ?? null,
+      isManual: cached?.is_manual ?? false,
       isLoading: !cached,
     };
   });
@@ -93,6 +125,7 @@ export function useBuakWeekType(date: Date | string | null) {
       setState({
         weekType: entry?.week_type ?? getBuakWeekTypeFallback(parsed),
         notiz: entry?.notiz ?? null,
+        isManual: entry?.is_manual ?? false,
         isLoading: false,
       });
     })();
@@ -106,6 +139,7 @@ export function useBuakWeekType(date: Date | string | null) {
         setState({
           weekType: entry?.week_type ?? getBuakWeekTypeFallback(parsed),
           notiz: entry?.notiz ?? null,
+          isManual: entry?.is_manual ?? false,
           isLoading: false,
         });
       })();
@@ -124,6 +158,7 @@ export function useBuakWeekType(date: Date | string | null) {
     weekType: state.weekType,
     weekLabel: state.weekType === "lang" ? "Lange Woche (Mo–Fr)" : "Kurze Woche (Mo–Do)",
     notiz: state.notiz,
+    isManual: state.isManual,
     isLoading: state.isLoading,
   };
 }

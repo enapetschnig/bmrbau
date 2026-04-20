@@ -135,6 +135,7 @@ export default function HoursReport() {
 
   const [kategorieFilter, setKategorieFilter] = useState<string>("alle");
   const [employeeKategorien, setEmployeeKategorien] = useState<Record<string, string>>({});
+  const [badWeatherRecords, setBadWeatherRecords] = useState<{ datum: string; schlechtwetter_stunden: number }[]>([]);
 
   const [selectedView, setSelectedView] = useState<"mitarbeiter" | "externe" | null>(() => {
     const tab = searchParams.get("tab");
@@ -158,8 +159,23 @@ export default function HoursReport() {
       fetchTimeEntries();
       fetchEmployeeSchedule(selectedUserId);
       fetchReportExtras();
+      fetchBadWeather();
     }
   }, [month, year, selectedUserId]);
+
+  const fetchBadWeather = async () => {
+    if (!selectedUserId) return;
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const { data } = await supabase
+      .from("bad_weather_records")
+      .select("datum, schlechtwetter_stunden")
+      .eq("user_id", selectedUserId)
+      .gte("datum", startDate)
+      .lte("datum", endDate);
+    setBadWeatherRecords(data || []);
+  };
 
   const [selectedIsExternal, setSelectedIsExternal] = useState(false);
 
@@ -703,6 +719,64 @@ export default function HoursReport() {
       }
       return summe;
     };
+
+    // Fahrtengeld, Diaeten, Schlechtwetter (konsolidiert pro Monat)
+    const totalDiaetenBetrag = uniqueEntriesByDay.reduce(
+      (s, e) => s + (e.diaeten_betrag ?? 0),
+      0,
+    );
+    const diaetenKleinTage = uniqueEntriesByDay.filter((e) => e.diaeten_typ === "klein").length;
+    const diaetenGrossTage = uniqueEntriesByDay.filter((e) => e.diaeten_typ === "gross").length;
+    const anfahrtTage = uniqueEntriesByDay.filter((e) => e.diaeten_anfahrt === true).length;
+    const totalBadWeatherHours = badWeatherRecords.reduce(
+      (s, r) => s + (r.schlechtwetter_stunden || 0),
+      0,
+    );
+
+    worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
+    worksheetData.push(["Fahrtengeld, Diäten & Schlechtwetter:", "", "", "", "", "", "", "", "", "", "", ""]);
+    worksheetData.push([
+      "",
+      "Kilometer gesamt:",
+      "",
+      totalKilometer.toFixed(0),
+      "Fahrtengeld €:",
+      "",
+      totalKmGeld.toFixed(2),
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    worksheetData.push([
+      "",
+      "Diäten klein (Tage):",
+      "",
+      String(diaetenKleinTage),
+      "Diäten groß (Tage):",
+      "",
+      String(diaetenGrossTage),
+      "Anfahrt (Tage):",
+      String(anfahrtTage),
+      "Summe €:",
+      totalDiaetenBetrag.toFixed(2),
+      "",
+    ]);
+    worksheetData.push([
+      "",
+      "Schlechtwetter-Std.:",
+      "",
+      totalBadWeatherHours.toFixed(2),
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
 
     // Zusatzaufwendungen Block (vor SUMME)
     if (reportExtras.length > 0) {
