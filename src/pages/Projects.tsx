@@ -794,7 +794,7 @@ const Projects = () => {
                   </p>
                 )}
                 
-                <div className={`grid ${isAdmin ? 'grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
+                <div className={`grid ${isAdmin ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
                   <div className="flex flex-col items-center gap-1 p-2">
                     <FileText className="w-5 h-5 text-primary" />
                     <span className="text-xs font-medium">Pläne</span>
