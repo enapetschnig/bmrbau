@@ -86,6 +86,25 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   const [geschoss, setGeschoss] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>("");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Admin-Check: Admins duerfen bis 7 Tage vorausbuchen (z. B. geplante
+  // Kundentermine eintragen), Mitarbeiter nur bis heute.
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
+      setIsAdmin(data?.role === "administrator");
+    })();
+  }, [open]);
+
+  const maxBookingDate = (() => {
+    const d = new Date();
+    if (isAdmin) d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
 
   // Projekte laden (aktive + abgeschlossene, fuer Rueckwaerts-Erfassung)
   useEffect(() => {
@@ -216,6 +235,13 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
     }
 
     // Validation
+    if (formData.datum > maxBookingDate) {
+      toast({ variant: "destructive", title: "Datum ungueltig", description: isAdmin
+        ? "Regieberichte duerfen max. 7 Tage in die Zukunft datiert werden."
+        : "Regieberichte duerfen nicht in der Zukunft liegen." });
+      setSaving(false);
+      return;
+    }
     if (!formData.kundeName.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Kundenname ist erforderlich" });
       setSaving(false);
@@ -564,6 +590,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                   id="datum"
                   type="date"
                   value={formData.datum}
+                  max={maxBookingDate}
                   onChange={(e) => setFormData({ ...formData, datum: e.target.value })}
                   required
                 />

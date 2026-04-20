@@ -26,6 +26,7 @@ import { AssignmentPopover } from "@/components/schedule/AssignmentPopover";
 import { DayDetailSheet } from "@/components/schedule/DayDetailSheet";
 import { CompanyHolidayManager } from "@/components/schedule/CompanyHolidayManager";
 import { YearPlanningView } from "@/components/schedule/YearPlanningView";
+import { useBuakWeekType } from "@/hooks/useBuakWeekType";
 
 export default function ScheduleBoard() {
   const navigate = useNavigate();
@@ -61,8 +62,14 @@ export default function ScheduleBoard() {
 
   const isExternView = isExtern && !isAdmin && !isVorarbeiter;
 
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
-  const weekEnd = addDays(weekStart, 4);
+  // BUAK-Wochentyp fuer die angezeigte Woche. Kurze Woche = Mo-Do (4 Tage),
+  // Lange Woche = Mo-Fr (5 Tage). Sonst wuerde die Plantafel Freitag als
+  // Arbeitstag anzeigen, obwohl in der Zeiterfassung + Regelarbeitszeit
+  // Freitag frei ist (-> verwirrende Inkonsistenz).
+  const buakWeek = useBuakWeekType(weekStart);
+  const weekDaysCount = buakWeek.weekType === "kurz" ? 4 : 5;
+  const weekDays = Array.from({ length: weekDaysCount }, (_, i) => addDays(weekStart, i));
+  const weekEnd = addDays(weekStart, weekDaysCount - 1);
 
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
 

@@ -369,7 +369,12 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
           {/* Date */}
           <div>
             <Label>Datum</Label>
-            <Input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
+            <Input
+              type="date"
+              value={datum}
+              max={format(new Date(), "yyyy-MM-dd")}
+              onChange={(e) => setDatum(e.target.value)}
+            />
           </div>
 
           {/* Auto-Wetter Hinweis */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +36,19 @@ interface LegalWorkTimeReportProps {
 
 export default function LegalWorkTimeReport({ embedded = false }: LegalWorkTimeReportProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [selectedUserId, setSelectedUserId] = useState("");
+  // Mitarbeiter-Filter aus URL teilen - wenn auf dem parent-Tab
+  // (HoursReport) schon ein Mitarbeiter gewaehlt war, wird der hier
+  // uebernommen und umgekehrt.
+  const [selectedUserId, setSelectedUserIdState] = useState(searchParams.get("user") || "");
+  const setSelectedUserId = (id: string) => {
+    setSelectedUserIdState(id);
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set("user", id); else next.delete("user");
+    setSearchParams(next, { replace: true });
+  };
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [rows, setRows] = useState<DayRow[]>([]);
   const [loading, setLoading] = useState(false);

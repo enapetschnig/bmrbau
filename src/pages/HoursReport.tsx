@@ -112,7 +112,7 @@ const monthNames = [
 
 export default function HoursReport() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [month, setMonth] = useState(() => {
     const p = searchParams.get("month");
     return p ? parseInt(p) : new Date().getMonth() + 1;
@@ -121,7 +121,17 @@ export default function HoursReport() {
     const p = searchParams.get("year");
     return p ? parseInt(p) : new Date().getFullYear();
   });
-  const [selectedUserId, setSelectedUserId] = useState<string>(searchParams.get("user") || "");
+  const [selectedUserId, setSelectedUserIdState] = useState<string>(searchParams.get("user") || "");
+  // Den gewaehlten Mitarbeiter auch in den URL-Params halten - damit
+  // gilt er tab-uebergreifend (Zeiterfassung / Arbeitszeitaufzeichnung /
+  // Projektzeiterfassung teilen sich dieselbe URL).
+  const setSelectedUserId = (id: string | ((prev: string) => string)) => {
+    const nextId = typeof id === "function" ? id(selectedUserId) : id;
+    setSelectedUserIdState(nextId);
+    const next = new URLSearchParams(searchParams);
+    if (nextId) next.set("user", nextId); else next.delete("user");
+    setSearchParams(next, { replace: true });
+  };
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [projects, setProjects] = useState<Record<string, Project>>({});
@@ -1163,8 +1173,8 @@ export default function HoursReport() {
                           <TableHead className="text-right">km</TableHead>
                           {!selectedIsExternal && <TableHead className="text-right">Diäten</TableHead>}
                           {!selectedIsExternal && <TableHead>Ort</TableHead>}
-                          <TableHead>Projekt</TableHead>
-                          <TableHead>Tätigkeit</TableHead>
+                          <TableHead className="min-w-[160px]">Projekt</TableHead>
+                          <TableHead className="min-w-[200px]">Tätigkeit</TableHead>
                           {isAdmin && <TableHead className="w-[50px]"></TableHead>}
                         </TableRow>
                       </TableHeader>
