@@ -282,14 +282,19 @@ const TimeTracking = () => {
         zeit_typ: entry.zeit_typ || null,
       }));
       setExistingDayEntries(entries);
-      
+
+      // Fahrtengeld-Eintraege haben start=end=00:00 und keine echte Arbeitszeit.
+      // Fuer die "nechster Block ab..."-Empfehlung darf das nicht als letzter
+      // Eintrag gewertet werden - sonst springt der Vorschlag auf 00:30 Uhr.
+      const zeitEntries = entries.filter(e => e.taetigkeit !== "Fahrtengeld" && !(Number(e.stunden) === 0 && Number(e.kilometer) > 0));
+
       // If entries exist, suggest next time slot for first block
-      if (entries.length > 0 && !entries.some(e => ALL_ABSENCE_LABELS.includes(e.taetigkeit))) {
-        const lastEntry = entries[entries.length - 1];
+      if (zeitEntries.length > 0 && !entries.some(e => ALL_ABSENCE_LABELS.includes(e.taetigkeit))) {
+        const lastEntry = zeitEntries[zeitEntries.length - 1];
         const [lastEndHours, lastEndMinutes] = lastEntry.end_time.split(':').map(Number);
         const nextStartMinutes = lastEndHours * 60 + lastEndMinutes + 30;
         const suggestedStart = `${String(Math.floor(nextStartMinutes / 60)).padStart(2, '0')}:${String(nextStartMinutes % 60).padStart(2, '0')}`;
-        
+
         setTimeBlocks([createDefaultBlock(suggestedStart)]);
       } else if (!entries.some(e => ALL_ABSENCE_LABELS.includes(e.taetigkeit))) {
         // Auto-fill default work times for the selected date
@@ -1320,23 +1325,45 @@ const TimeTracking = () => {
                     )}
                   </div>
                   
-                  {!isDayBlocked && (
-                    <div className="space-y-1.5">
-                      {existingDayEntries.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between gap-2 text-sm bg-background/60 rounded px-2 py-1.5">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <Badge variant="outline" className="font-mono text-xs whitespace-nowrap shrink-0">
-                              {entry.start_time.substring(0, 5)}–{entry.end_time.substring(0, 5)}
-                            </Badge>
-                            <span className="truncate">
-                              {entry.project_name ? `${entry.project_name}` : entry.taetigkeit}
-                            </span>
+                  {!isDayBlocked && (() => {
+                    // Fahrtengeld taucht mit start=end=00:00 und stunden=0
+                    // in time_entries auf, gehoert aber inhaltlich nicht
+                    // zur Liste der "gebuchten Zeiten". Wir filtern das
+                    // raus und zeigen die Gesamtkilometer separat an.
+                    const fahrtengeldEntries = existingDayEntries.filter(e => e.taetigkeit === "Fahrtengeld" || (Number(e.stunden) === 0 && Number(e.kilometer) > 0));
+                    const zeitEntries = existingDayEntries.filter(e => !fahrtengeldEntries.includes(e));
+                    const kmSum = fahrtengeldEntries.reduce((s, e) => s + Number(e.kilometer || 0), 0);
+                    return (
+                      <>
+                        {zeitEntries.length > 0 && (
+                          <div className="space-y-1.5">
+                            {zeitEntries.map((entry) => (
+                              <div key={entry.id} className="flex items-center justify-between gap-2 text-sm bg-background/60 rounded px-2 py-1.5">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <Badge variant="outline" className="font-mono text-xs whitespace-nowrap shrink-0">
+                                    {entry.start_time.substring(0, 5)}–{entry.end_time.substring(0, 5)}
+                                  </Badge>
+                                  <span className="truncate">
+                                    {entry.project_name ? `${entry.project_name}` : entry.taetigkeit}
+                                  </span>
+                                </div>
+                                <span className="font-medium whitespace-nowrap">{Number(entry.stunden).toFixed(2)}h</span>
+                              </div>
+                            ))}
                           </div>
-                          <span className="font-medium whitespace-nowrap">{Number(entry.stunden).toFixed(2)}h</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        )}
+                        {fahrtengeldEntries.length > 0 && (
+                          <div className="flex items-center justify-between gap-2 text-sm bg-background/60 rounded px-2 py-1.5">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <Car className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate">Fahrtengeld erfasst</span>
+                            </div>
+                            <span className="font-medium whitespace-nowrap">{kmSum.toFixed(0)} km</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   
                   <div className="flex items-center justify-between pt-2 border-t border-amber-200 dark:border-amber-700">
                     <span className="text-sm font-medium">Tagessumme</span>
