@@ -12,15 +12,19 @@ import { useToast } from "@/hooks/use-toast";
 import { SignaturePad } from "@/components/SignaturePad";
 import { FileText, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
+type ChecklistItem = { id: string; category: string; question: string };
+
 type Evaluation = {
   id: string;
   titel: string;
   modul: string;
   pdf_urls: string[] | null;
   fragen: Array<{ id: string; frage: string; optionen: string[]; korrekt: number }> | null;
-  checklist_items: any;
+  checklist_items: ChecklistItem[] | null;
   project_id: string;
 };
+
+type Step = "intro" | "pdfs" | "checkliste" | "fragen" | "bestaetigung" | "unterschrift" | "fertig";
 
 export default function SafetyCompletion() {
   const { id } = useParams<{ id: string }>();
@@ -28,9 +32,10 @@ export default function SafetyCompletion() {
   const { toast } = useToast();
 
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
-  const [step, setStep] = useState<"intro" | "pdfs" | "fragen" | "bestaetigung" | "unterschrift" | "fertig">("intro");
+  const [step, setStep] = useState<Step>("intro");
   const [pdfIdx, setPdfIdx] = useState(0);
   const [antworten, setAntworten] = useState<Record<string, number>>({}); // frage_id -> gewaehlte option
+  const [checklistAbgehakt, setChecklistAbgehakt] = useState<Record<string, boolean>>({});
   const [bestaetigt, setBestaetigt] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [signatureName, setSignatureName] = useState("");
@@ -83,11 +88,16 @@ export default function SafetyCompletion() {
 
   const pdfs = evaluation.pdf_urls || [];
   const fragen = evaluation.fragen || [];
+  const checklist: ChecklistItem[] = Array.isArray(evaluation.checklist_items) ? evaluation.checklist_items : [];
+  const checklistCategories = Array.from(new Set(checklist.map(i => i.category || "Allgemein")));
+  const checklistAbgehaktCount = checklist.filter(i => checklistAbgehakt[i.id]).length;
+  const allChecklistDone = checklist.length === 0 || checklist.every(i => checklistAbgehakt[i.id]);
   const allQuestionsAnswered = fragen.every(f => antworten[f.id] != null);
   const richtige = fragen.filter(f => antworten[f.id] === f.korrekt).length;
 
-  const steps: typeof step[] = ["intro"];
+  const steps: Step[] = ["intro"];
   if (pdfs.length > 0) steps.push("pdfs");
+  if (checklist.length > 0) steps.push("checkliste");
   if (fragen.length > 0) steps.push("fragen");
   steps.push("bestaetigung", "unterschrift");
   const stepIdx = steps.indexOf(step);
@@ -112,6 +122,11 @@ export default function SafetyCompletion() {
       korrekt: f.korrekt,
       ist_richtig: antworten[f.id] === f.korrekt,
     }));
+    const personal_answers = checklist.map(item => ({
+      item_id: item.id,
+      checked: !!checklistAbgehakt[item.id],
+      bemerkung: null,
+    }));
     const { error } = await supabase.from("safety_evaluation_signatures").insert({
       evaluation_id: evaluation.id,
       user_id: userId,
@@ -119,6 +134,7 @@ export default function SafetyCompletion() {
       unterschrift_name: signatureName.trim(),
       unterschrieben_am: new Date().toISOString(),
       fragen_antworten,
+      personal_answers,
       inhalte_bestaetigt: bestaetigt,
     });
     setSaving(false);
@@ -165,6 +181,7 @@ export default function SafetyCompletion() {
               </p>
               <ul className="text-sm space-y-1.5 list-inside">
                 {pdfs.length > 0 && <li>📄 {pdfs.length} PDF-Dokument{pdfs.length === 1 ? "" : "e"} lesen</li>}
+                {checklist.length > 0 && <li>☑️ {checklist.length} Prüfpunkt{checklist.length === 1 ? "" : "e"} abarbeiten</li>}
                 {fragen.length > 0 && <li>❓ {fragen.length} Frage{fragen.length === 1 ? "" : "n"} beantworten</li>}
                 <li>✅ Inhalte bestätigen</li>
                 <li>✍️ Digital unterschreiben</li>
@@ -195,6 +212,54 @@ export default function SafetyCompletion() {
                 <Button variant="ghost" onClick={prev}><ChevronLeft className="w-4 h-4 mr-1" /> Zurück</Button>
                 <Button className="flex-1" onClick={next}>Gelesen — weiter <ChevronRight className="w-4 h-4 ml-1" /></Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === "checkliste" && checklist.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Checkliste</CardTitle>
+              <CardDescription>
+                {checklistAbgehaktCount} von {checklist.length} Punkten abgehakt
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {checklistCategories.map((cat) => (
+                <div key={cat} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1">
+                    {cat}
+                  </p>
+                  <div className="space-y-2">
+                    {checklist
+                      .filter((i) => (i.category || "Allgemein") === cat)
+                      .map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex items-start gap-3 p-2.5 rounded-md border hover:bg-muted/50 cursor-pointer transition-colors"
+                        >
+                          <Checkbox
+                            checked={checklistAbgehakt[item.id] ?? false}
+                            onCheckedChange={(val) =>
+                              setChecklistAbgehakt((prev) => ({ ...prev, [item.id]: !!val }))
+                            }
+                            className="mt-0.5 shrink-0"
+                          />
+                          <span className="text-sm leading-snug">{item.question}</span>
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-2 border-t">
+                <Button variant="ghost" onClick={prev}><ChevronLeft className="w-4 h-4 mr-1" /> Zurück</Button>
+                <Button className="flex-1" onClick={next} disabled={!allChecklistDone}>
+                  Weiter <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+              {!allChecklistDone && (
+                <p className="text-xs text-muted-foreground text-center">Bitte alle Punkte abhaken</p>
+              )}
             </CardContent>
           </Card>
         )}
