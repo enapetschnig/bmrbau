@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Clock, FolderKanban, FileText, Calendar, Building2, Truck,
-  Shield, FileCheck, BookOpen, Settings, BarChart3, Package, Wrench,
+  Shield, FileCheck, BookOpen, Settings, BarChart3, Package, Wrench, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const MENU_ITEMS: MenuItem[] = [
   { key: "projekte", label: "Projekte", icon: <FolderKanban className="h-4 w-4" />, path: "/projects" },
   { key: "meine_stunden", label: "Meine Stunden", icon: <BarChart3 className="h-4 w-4" />, path: "/my-hours" },
   { key: "tagesberichte", label: "Tagesberichte", icon: <FileText className="h-4 w-4" />, path: "/daily-reports" },
+  { key: "regiearbeiten", label: "Regieberichte", icon: <Zap className="h-4 w-4" />, path: "/disturbances" },
   { key: "meine_dokumente", label: "Meine Dokumente", icon: <FileCheck className="h-4 w-4" />, path: "/my-documents" },
   { key: "dokumentenbibliothek", label: "Bibliothek", icon: <BookOpen className="h-4 w-4" />, path: "/documents" },
   { key: "stundenubersicht", label: "Stundenübersicht", icon: <BarChart3 className="h-4 w-4" />, path: "/hours-report", adminOnly: true },

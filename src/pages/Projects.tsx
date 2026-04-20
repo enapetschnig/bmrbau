@@ -52,6 +52,7 @@ const Projects = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [newProject, setNewProject] = useState({
     name: "",
+    bauherr: "",
     adresse: "",
     kunde_telefon: "",
     kunde_email: "",
@@ -216,6 +217,7 @@ const Projects = () => {
       .from("projects")
       .insert({
         name: newProject.name.trim(),
+        bauherr: newProject.bauherr.trim() || null,
         adresse: newProject.adresse.trim() || null,
         kunde_telefon: newProject.kunde_telefon.trim() || null,
         kunde_email: newProject.kunde_email.trim() || null,
@@ -262,7 +264,7 @@ const Projects = () => {
         title: "Erfolg",
         description: "Projekt wurde erstellt",
       });
-      setNewProject({ name: "", adresse: "", kunde_telefon: "", kunde_email: "", erreichbarkeit: "", besonderheiten: "", hinweise: "" });
+      setNewProject({ name: "", bauherr: "", adresse: "", kunde_telefon: "", kunde_email: "", erreichbarkeit: "", besonderheiten: "", hinweise: "" });
       setNewContacts([]);
       setAccessEmployeeIds([]);
       setShowNewDialog(false);
@@ -525,6 +527,18 @@ const Projects = () => {
                         onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                         placeholder="z.B. Einfamilienhaus Müller"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bauherr">Kundenname / Bauherr</Label>
+                      <Input
+                        id="bauherr"
+                        value={newProject.bauherr}
+                        onChange={(e) => setNewProject({ ...newProject, bauherr: e.target.value })}
+                        placeholder="z.B. Familie Müller"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Wird in Regieberichten als Kundenname übernommen.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="adresse">Adresse</Label>

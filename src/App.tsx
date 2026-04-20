@@ -167,8 +167,8 @@ function AppContent() {
           {/* /my-safety entfernt - nutze /safety/nachweise */}
           {/* Ab Vorarbeiter */}
           <Route path="/reports" element={<ProtectedRoute minRole="vorarbeiter"><Reports /></ProtectedRoute>} />
-          <Route path="/disturbances" element={<ProtectedRoute minRole="vorarbeiter"><Disturbances /></ProtectedRoute>} />
-          <Route path="/disturbances/:id" element={<ProtectedRoute minRole="vorarbeiter"><DisturbanceDetail /></ProtectedRoute>} />
+          <Route path="/disturbances" element={<ProtectedRoute minRole="extern"><Disturbances /></ProtectedRoute>} />
+          <Route path="/disturbances/:id" element={<ProtectedRoute minRole="extern"><DisturbanceDetail /></ProtectedRoute>} />
           <Route path="/bad-weather" element={<ProtectedRoute minRole="vorarbeiter"><BadWeather /></ProtectedRoute>} />
           <Route path="/daily-reports" element={<ProtectedRoute minRole="vorarbeiter"><DailyReports /></ProtectedRoute>} />
           <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="vorarbeiter"><DailyReportDetail /></ProtectedRoute>} />

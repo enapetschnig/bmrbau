@@ -455,19 +455,24 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
           <div className="space-y-2">
             <Label className="flex items-center gap-2 font-medium">
               <FolderOpen className="h-4 w-4" />
-              Projekt
+              Projekt (optional)
             </Label>
             <Select
-              value={projectId}
+              value={projectId || "__none"}
               onValueChange={(v) => {
-                setProjectId(v);
-                applyProjectContact(v);
+                if (v === "__none") {
+                  setProjectId("");
+                } else {
+                  setProjectId(v);
+                  applyProjectContact(v);
+                }
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Projekt auswählen – Kundendaten werden automatisch übernommen" />
+                <SelectValue placeholder="Projekt auswählen oder ohne Projekt erfassen" />
               </SelectTrigger>
               <SelectContent className="max-h-72">
+                <SelectItem value="__none">— Kein Projekt —</SelectItem>
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
@@ -478,7 +483,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Bauherr, Kontaktdaten und Adresse werden aus dem Projekt übernommen und unten angezeigt – du kannst sie bei Bedarf überschreiben.
+              Wenn ein Projekt gewählt ist, werden Bauherr (Kundenname), Kontaktdaten und Adresse automatisch übernommen. Du kannst sie bei Bedarf überschreiben. Bei „Kein Projekt" gibst du die Kundendaten selbst ein.
             </p>
           </div>
 
