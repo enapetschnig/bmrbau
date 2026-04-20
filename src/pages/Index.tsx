@@ -790,22 +790,8 @@ export default function Index() {
           </div>
         )}
 
-        {/* Missing Hours Reminder — nicht für Externe */}
-        {!isExternal && missingHoursDate && (
-          <div
-            className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 p-3 cursor-pointer"
-            onClick={() => navigate(`/time-tracking?date=${missingHoursDate}`)}
-          >
-            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
-            <div className="flex-1">
-              <p className="font-semibold text-sm text-yellow-800 dark:text-yellow-200">Stunden nicht erfasst</p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                Du hast am {new Date(missingHoursDate).toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" })} keine Stunden erfasst — jetzt nachtragen?
-              </p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-yellow-600 shrink-0" />
-          </div>
-        )}
+        {/* Missing Hours Reminder auf Wunsch von BMR deaktiviert -
+            gelbe Warnung war bei nicht erfassten Stunden zu aufdringlich. */}
 
         {/* Ausstehende Sicherheitsunterweisungen */}
         {pendingSafetyCount > 0 && (

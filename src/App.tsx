@@ -170,8 +170,8 @@ function AppContent() {
           <Route path="/disturbances" element={<ProtectedRoute minRole="extern"><Disturbances /></ProtectedRoute>} />
           <Route path="/disturbances/:id" element={<ProtectedRoute minRole="extern"><DisturbanceDetail /></ProtectedRoute>} />
           <Route path="/bad-weather" element={<ProtectedRoute minRole="vorarbeiter"><BadWeather /></ProtectedRoute>} />
-          <Route path="/daily-reports" element={<ProtectedRoute minRole="vorarbeiter"><DailyReports /></ProtectedRoute>} />
-          <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="vorarbeiter"><DailyReportDetail /></ProtectedRoute>} />
+          <Route path="/daily-reports" element={<ProtectedRoute minRole="facharbeiter"><DailyReports /></ProtectedRoute>} />
+          <Route path="/daily-reports/:id" element={<ProtectedRoute minRole="facharbeiter"><DailyReportDetail /></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute minRole="vorarbeiter"><DocumentLibrary /></ProtectedRoute>} />
           <Route path="/safety" element={<SafetyHub />} />
           <Route path="/safety/jahresunterweisungen" element={<ProtectedRoute minRole="vorarbeiter"><SafetyEvaluations /></ProtectedRoute>} />

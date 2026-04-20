@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Camera, Plus, Minus, Trash2, ArrowLeft, ArrowRight, Image } from "lucide-react";
+import { Camera, Plus, Minus, Trash2, ArrowLeft, ArrowRight, Image, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePad } from "@/components/SignaturePad";
+import { VoiceAIInput } from "@/components/VoiceAIInput";
 import {
   CATEGORY_LABELS,
   CATEGORY_OPTIONS,
@@ -60,6 +61,13 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
   const [signatureName, setSignatureName] = useState("");
 
   const [saving, setSaving] = useState(false);
+
+  // Freitext-Material (fuer Material, das nicht im Katalog ist)
+  const [showAdhocForm, setShowAdhocForm] = useState(false);
+  const [adhocName, setAdhocName] = useState("");
+  const [adhocEinheit, setAdhocEinheit] = useState("Stück");
+  const [adhocCategory, setAdhocCategory] = useState<WarehouseProductCategory>("kleinteile");
+  const [adhocSaving, setAdhocSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -125,6 +133,41 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
   const addItem = (product: WarehouseProduct) => {
     if (selectedItems.find((i) => i.product.id === product.id)) return;
     setSelectedItems((prev) => [...prev, { product, menge: 1 }]);
+  };
+
+  const handleCreateAdhoc = async () => {
+    const name = adhocName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Name fehlt", description: "Bitte Materialname eingeben" });
+      return;
+    }
+    setAdhocSaving(true);
+    // Neues Produkt im Katalog anlegen - so bleibt die Historie (Stock-Transactions
+    // brauchen eine product_id) korrekt. RLS erlaubt jedem authentifizierten User
+    // ein Material neu anzulegen, auch Mitarbeiter.
+    const { data, error } = await supabase
+      .from("warehouse_products")
+      .insert({
+        name,
+        einheit: adhocEinheit || "Stück",
+        category: adhocCategory,
+        is_active: true,
+      })
+      .select("*")
+      .single();
+    setAdhocSaving(false);
+    if (error || !data) {
+      toast({ variant: "destructive", title: "Fehler", description: error?.message || "Konnte nicht angelegt werden" });
+      return;
+    }
+    const newProduct = data as unknown as WarehouseProduct;
+    setProducts((prev) => [newProduct, ...prev]);
+    addItem(newProduct);
+    setAdhocName("");
+    setAdhocEinheit("Stück");
+    setAdhocCategory("kleinteile");
+    setShowAdhocForm(false);
+    toast({ title: "Material hinzugefügt", description: name });
   };
 
   const updateMenge = (productId: string, menge: number) => {
@@ -511,6 +554,61 @@ export function WarehouseDeliveryNoteDialog({ open, onOpenChange, onSaved }: Pro
                 ))}
               </div>
             )}
+
+            {/* Freitext-Material - fuer Material, das nicht im Katalog ist */}
+            <div className="space-y-2 rounded-md border border-dashed p-3 bg-muted/20">
+              {!showAdhocForm ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setShowAdhocForm(true)}
+                >
+                  <Sparkles className="w-4 h-4" /> Material nicht im Katalog? Selbst anlegen
+                </Button>
+              ) : (
+                <>
+                  <Label className="text-xs">Neues Material (auch per Sprache)</Label>
+                  <VoiceAIInput
+                    context="anmerkung"
+                    value={adhocName}
+                    onChange={setAdhocName}
+                    placeholder="z.B. Kantholz 5x10cm 3m"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Einheit</Label>
+                      <Input
+                        value={adhocEinheit}
+                        onChange={(e) => setAdhocEinheit(e.target.value)}
+                        placeholder="Stück, m, kg…"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Kategorie</Label>
+                      <Select value={adhocCategory} onValueChange={(v) => setAdhocCategory(v as WarehouseProductCategory)}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CATEGORY_OPTIONS.map((c) => (
+                            <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => { setShowAdhocForm(false); setAdhocName(""); }} disabled={adhocSaving}>
+                      Abbrechen
+                    </Button>
+                    <Button size="sm" onClick={handleCreateAdhoc} disabled={adhocSaving || !adhocName.trim()} className="flex-1">
+                      {adhocSaving ? "Speichere…" : "Hinzufügen"}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Product search */}
             <div className="space-y-2">

@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  Clock, FolderKanban, FileText, Calendar, Building2, Truck,
-  Shield, FileCheck, BookOpen, Settings, BarChart3, Package, Wrench, Zap,
+  Clock, FolderKanban, FileText, Calendar, Shield, FileCheck,
+  BookOpen, Settings, BarChart3, Package, Wrench, Zap, ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,10 +10,26 @@ interface MenuItem {
   label: string;
   icon: React.ReactNode;
   path: string;
-  adminOnly?: boolean;
 }
 
-const MENU_ITEMS: MenuItem[] = [
+// Reihenfolge fuer Mitarbeiter (nicht-Admin). Genau die 9 Haupt-Menues
+// plus Tagesberichte + Bestellungen am Ende, damit Mitarbeiter auch
+// Tagesberichte schreiben und Bestellungen aufgeben koennen.
+const EMPLOYEE_ITEMS: MenuItem[] = [
+  { key: "zeiterfassung", label: "Zeiterfassung", icon: <Clock className="h-4 w-4" />, path: "/time-tracking" },
+  { key: "regiearbeiten", label: "Regieberichte", icon: <Zap className="h-4 w-4" />, path: "/disturbances" },
+  { key: "projekte", label: "Projekte", icon: <FolderKanban className="h-4 w-4" />, path: "/projects" },
+  { key: "meine_stunden", label: "Meine Stunden", icon: <BarChart3 className="h-4 w-4" />, path: "/my-hours" },
+  { key: "lieferscheine", label: "Lieferscheine", icon: <FileText className="h-4 w-4" />, path: "/incoming-documents" },
+  { key: "gerateverwaltung", label: "Geräteverwaltung", icon: <Wrench className="h-4 w-4" />, path: "/equipment" },
+  { key: "lagerverwaltung", label: "Lagerverwaltung", icon: <Package className="h-4 w-4" />, path: "/warehouse" },
+  { key: "sicherheit", label: "Sicherheit", icon: <Shield className="h-4 w-4" />, path: "/safety" },
+  { key: "meine_dokumente", label: "Meine Dokumente", icon: <FileCheck className="h-4 w-4" />, path: "/my-documents" },
+  { key: "tagesberichte", label: "Tagesberichte", icon: <FileText className="h-4 w-4" />, path: "/daily-reports" },
+  { key: "bestellungen", label: "Bestellungen", icon: <ShoppingCart className="h-4 w-4" />, path: "/bestellungen" },
+];
+
+const ADMIN_ITEMS: MenuItem[] = [
   { key: "zeiterfassung", label: "Zeiterfassung", icon: <Clock className="h-4 w-4" />, path: "/time-tracking" },
   { key: "projekte", label: "Projekte", icon: <FolderKanban className="h-4 w-4" />, path: "/projects" },
   { key: "meine_stunden", label: "Meine Stunden", icon: <BarChart3 className="h-4 w-4" />, path: "/my-hours" },
@@ -21,14 +37,14 @@ const MENU_ITEMS: MenuItem[] = [
   { key: "regiearbeiten", label: "Regieberichte", icon: <Zap className="h-4 w-4" />, path: "/disturbances" },
   { key: "meine_dokumente", label: "Meine Dokumente", icon: <FileCheck className="h-4 w-4" />, path: "/my-documents" },
   { key: "dokumentenbibliothek", label: "Bibliothek", icon: <BookOpen className="h-4 w-4" />, path: "/documents" },
-  { key: "stundenubersicht", label: "Stundenübersicht", icon: <BarChart3 className="h-4 w-4" />, path: "/hours-report", adminOnly: true },
+  { key: "stundenubersicht", label: "Stundenübersicht", icon: <BarChart3 className="h-4 w-4" />, path: "/hours-report" },
   { key: "plantafel", label: "Plantafel", icon: <Calendar className="h-4 w-4" />, path: "/schedule" },
   { key: "gerateverwaltung", label: "Geräteverwaltung", icon: <Wrench className="h-4 w-4" />, path: "/equipment" },
-  { key: "bestellungen", label: "Bestellungen", icon: <Package className="h-4 w-4" />, path: "/bestellungen" },
-  { key: "eingangsrechnungen", label: "Eingangsrechnungen", icon: <FileText className="h-4 w-4" />, path: "/incoming-documents" },
+  { key: "bestellungen", label: "Bestellungen", icon: <ShoppingCart className="h-4 w-4" />, path: "/bestellungen" },
+  { key: "lieferscheine", label: "Lieferscheine", icon: <FileText className="h-4 w-4" />, path: "/incoming-documents" },
   { key: "lagerverwaltung", label: "Lagerverwaltung", icon: <Package className="h-4 w-4" />, path: "/warehouse" },
-  { key: "arbeitsschutz", label: "Sicherheit", icon: <Shield className="h-4 w-4" />, path: "/safety" },
-  { key: "admin_bereich", label: "Administration", icon: <Settings className="h-4 w-4" />, path: "/admin", adminOnly: true },
+  { key: "sicherheit", label: "Sicherheit", icon: <Shield className="h-4 w-4" />, path: "/safety" },
+  { key: "admin_bereich", label: "Administration", icon: <Settings className="h-4 w-4" />, path: "/admin" },
 ];
 
 interface Props {
@@ -41,9 +57,8 @@ export function DesktopSidebar({ isAdmin, menuVisible }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const visibleItems = MENU_ITEMS.filter(
-    (item) => menuVisible(item.key) && (!item.adminOnly || isAdmin)
-  );
+  const source = isAdmin ? ADMIN_ITEMS : EMPLOYEE_ITEMS;
+  const visibleItems = source.filter((item) => menuVisible(item.key));
 
   return (
     <aside className="hidden lg:flex flex-col w-56 border-r bg-card h-screen sticky top-0 shrink-0">
