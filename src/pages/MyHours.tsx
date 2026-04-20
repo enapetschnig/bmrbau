@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
 import { calculateKilometergeld } from "@/lib/workingHours";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 type ProjectOption = { id: string; name: string; plz: string | null };
 
@@ -44,6 +45,7 @@ type TimeEntry = {
 const MyHours = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const appSettings = useAppSettings();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
@@ -365,7 +367,7 @@ const MyHours = () => {
                     <span className="text-muted-foreground">km: </span>
                     <span className="font-bold">{entries.reduce((s, e) => s + (e.kilometer || 0), 0).toFixed(0)}</span>
                     <span className="text-xs text-muted-foreground ml-1">
-                      (€ {calculateKilometergeld(entries.reduce((s, e) => s + (e.kilometer || 0), 0)).toFixed(2)})
+                      (€ {calculateKilometergeld(entries.reduce((s, e) => s + (e.kilometer || 0), 0), appSettings.kilometergeldRate).toFixed(2)})
                     </span>
                   </div>
                 )}

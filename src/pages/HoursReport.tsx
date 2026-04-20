@@ -34,6 +34,8 @@ import {
   DEFAULT_SCHEDULE,
 } from "@/lib/workingHours";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface TimeEntry {
   id: string;
@@ -126,6 +128,10 @@ export default function HoursReport() {
   const [loading, setLoading] = useState(true);
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule | null>(null);
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedules>({ lang: null, kurz: null });
+  const appSettings = useAppSettings();
+  const [showKmRateEdit, setShowKmRateEdit] = useState(false);
+  const [kmRateInput, setKmRateInput] = useState("0.42");
+  const [savingKmRate, setSavingKmRate] = useState(false);
   const [buakCalendar, setBuakCalendar] = useState<Map<string, BuakWeekType>>(new Map());
   const [reportExtras, setReportExtras] = useState<ReportExtra[]>([]);
   const [newExtraName, setNewExtraName] = useState("");
@@ -470,7 +476,7 @@ export default function HoursReport() {
     return sum + calculateOvertime(entryDate, entry.stunden);
   }, 0);
   const totalKilometer = uniqueEntriesByDay.reduce((sum, entry) => sum + (entry.kilometer || 0), 0);
-  const totalKmGeld = calculateKilometergeld(totalKilometer);
+  const totalKmGeld = calculateKilometergeld(totalKilometer, appSettings.kilometergeldRate);
   const totalDiaeten = uniqueEntriesByDay.filter(e => e.diaeten_typ && e.diaeten_typ !== "keine").length;
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {
@@ -1099,9 +1105,26 @@ export default function HoursReport() {
                         </div>
                       )}
                       <div>
-                        <p className="text-sm text-muted-foreground">Kilometer</p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-sm text-muted-foreground">Kilometer</p>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="text-[10px] text-muted-foreground hover:text-primary underline underline-offset-2"
+                              onClick={() => {
+                                setKmRateInput(String(appSettings.kilometergeldRate));
+                                setShowKmRateEdit(true);
+                              }}
+                              title={`Kilometergeld-Rate anpassen (aktuell ${appSettings.kilometergeldRate.toFixed(2)} €/km)`}
+                            >
+                              (Rate ändern)
+                            </button>
+                          )}
+                        </div>
                         <p className="text-2xl font-bold">{totalKilometer.toFixed(0)} km</p>
-                        <p className="text-xs text-muted-foreground">€ {totalKmGeld.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          € {totalKmGeld.toFixed(2)} <span className="opacity-60">({appSettings.kilometergeldRate.toFixed(2)} €/km)</span>
+                        </p>
                       </div>
                       {!selectedIsExternal && (
                         <div>
@@ -1459,6 +1482,68 @@ export default function HoursReport() {
           <ProjectHoursReport />
         </TabsContent>
       </Tabs>
+
+      {/* Admin: Kilometergeld-Rate anpassen */}
+      <Dialog open={showKmRateEdit} onOpenChange={setShowKmRateEdit}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Kilometergeld-Rate</DialogTitle>
+            <DialogDescription>
+              Euro pro Kilometer. Wird für alle Mitarbeiter und im Excel-Export verwendet.
+              Derzeit: {appSettings.kilometergeldRate.toFixed(2)} €/km.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="kmrate-input">€/km</label>
+            <Input
+              id="kmrate-input"
+              type="number"
+              step="0.01"
+              min="0"
+              value={kmRateInput}
+              onChange={(e) => setKmRateInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Amtlicher Satz AT 2025: 0,50 €/km. BauKV kann abweichen.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowKmRateEdit(false)} disabled={savingKmRate}>
+              Abbrechen
+            </Button>
+            <Button
+              disabled={savingKmRate}
+              onClick={async () => {
+                const rate = parseFloat(kmRateInput.replace(",", "."));
+                if (!isFinite(rate) || rate < 0) {
+                  toast({ variant: "destructive", title: "Ungültige Rate" });
+                  return;
+                }
+                setSavingKmRate(true);
+                const { error } = await supabase
+                  .from("app_settings")
+                  .upsert(
+                    { key: "kilometergeld_rate", value: rate.toFixed(4), updated_at: new Date().toISOString() },
+                    { onConflict: "key" },
+                  );
+                setSavingKmRate(false);
+                if (error) {
+                  toast({ variant: "destructive", title: "Fehler", description: error.message });
+                  return;
+                }
+                toast({ title: "Rate gespeichert", description: `Kilometergeld ist jetzt ${rate.toFixed(2)} €/km.` });
+                setShowKmRateEdit(false);
+                // Hook-Cache faehrt beim naechsten Seiten-Reload; fuer den aktuellen
+                // View reicht ein Reload der Seite. Alternativ koennte useAppSettings
+                // eine manuelle refresh-Funktion exportieren (spaeter).
+                window.location.reload();
+              }}
+            >
+              {savingKmRate ? "Speichert …" : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

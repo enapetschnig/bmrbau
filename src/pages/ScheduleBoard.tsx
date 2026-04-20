@@ -15,7 +15,7 @@ import type {
   DailyTarget,
   ScheduleMode,
 } from "@/components/schedule/scheduleTypes";
-import { getAssignmentForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
+import { getAssignmentForDay, getAssignmentsForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
@@ -90,51 +90,88 @@ export default function ScheduleBoard() {
   }, [weekStart, mode, permLoading]);
 
   // --- Assignment handlers ---
+  // Modell: pro User + Tag soll es EINE Zuweisung geben (ein Mitarbeiter = ein Projekt/Tag).
+  // Der UNIQUE-Constraint ist (user_id, datum, project_id) – das heisst rein DB-seitig waeren
+  // zwar mehrere Projekte pro Tag moeglich, die UI modelliert aber eindeutig. Wir ersetzen
+  // deshalb beim Assign alle bestehenden Zuweisungen des Users am Tag durch die neue, damit
+  // es keinen Duplicate-Key-Fehler geben kann (auch bei Multi-Day-Range-Select).
   const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string) => {
     const datum = format(date, "yyyy-MM-dd");
-    const existing = getAssignmentForDay(assignments, uid, date);
+    const existingToday = getAssignmentsForDay(assignments, uid, date);
 
-    if (existing) {
-      const { error } = await supabase
-        .from("worker_assignments")
-        .update({ project_id: projectId, notizen: notizen ?? null })
-        .eq("id", existing.id);
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
+    // Wenn schon genau dieselbe Zuweisung (uid, projectId, datum) da ist:
+    // nur Notizen aktualisieren, nicht neu einfuegen.
+    const sameProject = existingToday.find((a) => a.project_id === projectId);
+    if (sameProject) {
+      if ((sameProject.notizen ?? null) !== (notizen ?? null)) {
+        const { error } = await supabase
+          .from("worker_assignments")
+          .update({ notizen: notizen ?? null })
+          .eq("id", sameProject.id);
+        if (error) {
+          toast({ variant: "destructive", title: "Fehler", description: error.message });
+          return;
+        }
+        setAssignments((prev) =>
+          prev.map((a) => (a.id === sameProject.id ? { ...a, notizen: notizen ?? null } : a)),
+        );
       }
-      setAssignments((prev) =>
-        prev.map((a) =>
-          a.id === existing.id ? { ...a, project_id: projectId, notizen: notizen ?? null } : a
-        )
-      );
-    } else {
-      const { data, error } = await supabase
-        .from("worker_assignments")
-        .insert({ user_id: uid, project_id: projectId, datum, created_by: userId, notizen: notizen ?? null })
-        .select()
-        .single();
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
-      }
-      if (data) setAssignments((prev) => [...prev, data as Assignment]);
+      return;
     }
-  };
 
-  const handleRemove = async (uid: string, date: Date) => {
-    const existing = getAssignmentForDay(assignments, uid, date);
-    if (!existing) return;
+    // Andere Projekt-Zuweisungen dieses Users an diesem Tag weg, damit der UNIQUE-Key
+    // nicht ausloest und die UI konsistent nur ein Projekt pro Tag zeigt.
+    const idsToDelete = existingToday.map((a) => a.id);
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("worker_assignments")
+        .delete()
+        .in("id", idsToDelete);
+      if (deleteError) {
+        toast({ variant: "destructive", title: "Fehler", description: deleteError.message });
+        return;
+      }
+    }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("worker_assignments")
-      .delete()
-      .eq("id", existing.id);
+      .insert({
+        user_id: uid,
+        project_id: projectId,
+        datum,
+        created_by: userId,
+        notizen: notizen ?? null,
+      })
+      .select()
+      .single();
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
       return;
     }
-    setAssignments((prev) => prev.filter((a) => a.id !== existing.id));
+
+    setAssignments((prev) => {
+      const filtered = prev.filter((a) => !idsToDelete.includes(a.id));
+      return data ? [...filtered, data as Assignment] : filtered;
+    });
+  };
+
+  const handleRemove = async (uid: string, date: Date) => {
+    // Alle Zuweisungen dieses Users an diesem Tag entfernen (nicht nur die erste
+    // – der alte Code hat bei Mehrfach-Zuweisungen nur eine geloescht, der Rest
+    // blieb im UI haengen).
+    const existingToday = getAssignmentsForDay(assignments, uid, date);
+    if (existingToday.length === 0) return;
+    const ids = existingToday.map((a) => a.id);
+
+    const { error } = await supabase
+      .from("worker_assignments")
+      .delete()
+      .in("id", ids);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    setAssignments((prev) => prev.filter((a) => !ids.includes(a.id)));
   };
 
   // --- Daily target handlers ---
