@@ -140,6 +140,8 @@ const TimeTracking = () => {
 
   const [absenceData, setAbsenceData] = useState({
     date: new Date().toISOString().split('T')[0],
+    dateEnd: "" as string,
+    isMultiDay: false,
     type: "urlaub" as "urlaub" | "krankenstand" | "weiterbildung" | "feiertag" | "za" | "arzttermin" | "begraebnis" | "pflegeurlaub" | "sonstige",
     document: null as File | null,
     customHours: "" as string,
@@ -563,7 +565,7 @@ const TimeTracking = () => {
 
   const handleAbsenceSubmit = async () => {
     if (submittingAbsence) return;
-    
+
     setSubmittingAbsence(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -573,17 +575,42 @@ const TimeTracking = () => {
       return;
     }
 
-    const { count: existingCount } = await supabase
-      .from("time_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("datum", absenceData.date);
+    // Multi-day: iterate from date to dateEnd, one entry per working day
+    const isMulti = absenceData.isMultiDay && absenceData.dateEnd && absenceData.dateEnd > absenceData.date;
+    const startDateStr = absenceData.date;
+    const endDateStr = isMulti ? absenceData.dateEnd : absenceData.date;
 
-    if ((existingCount ?? 0) > 0) {
-      toast({ 
-        variant: "destructive", 
-        title: "Eintrag bereits vorhanden", 
-        description: "Für diesen Tag wurden die Stunden bereits eingetragen, gehe unter Meine Stunden rein." 
+    if (isMulti && !absenceData.isFullDay) {
+      toast({ variant: "destructive", title: "Fehler", description: "Mehrtages-Abwesenheit nur als ganzer Tag möglich" });
+      setSubmittingAbsence(false);
+      return;
+    }
+
+    // Build list of target dates
+    const targetDates: string[] = [];
+    {
+      const cur = new Date(startDateStr + "T00:00:00");
+      const end = new Date(endDateStr + "T00:00:00");
+      while (cur <= end) {
+        targetDates.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // Check existing entries for any of the dates
+    const { data: existingRows } = await supabase
+      .from("time_entries")
+      .select("datum")
+      .eq("user_id", user.id)
+      .in("datum", targetDates);
+
+    const existingSet = new Set((existingRows || []).map((r: any) => r.datum));
+    const conflicts = targetDates.filter(d => existingSet.has(d));
+    if (conflicts.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Einträge bereits vorhanden",
+        description: `Für folgende Tage gibt es bereits Einträge: ${conflicts.join(", ")}`
       });
       setSubmittingAbsence(false);
       return;
@@ -605,33 +632,60 @@ const TimeTracking = () => {
       documentPath = fileName;
     }
 
-    const selectedDateObj = new Date(absenceData.date);
-    const automaticHours = getNormalWorkingHours(selectedDateObj, employeeSchedule);
-    const defaultTimes = getDefaultWorkTimes(selectedDateObj, employeeSchedule);
+    // Compute per-day hours + times (may differ per day, e.g. Fr in "kurz" = 0h)
+    type DayEntry = { date: string; hours: number; startTime: string; endTime: string; pauseMinutes: number };
+    const dayEntries: DayEntry[] = [];
 
-    let workingHours: number;
-    let entryStartTime: string;
-    let entryEndTime: string;
-    let entryPauseMinutes: number;
+    for (const d of targetDates) {
+      const dObj = new Date(d + "T00:00:00");
+      const autoHours = getNormalWorkingHours(dObj, employeeSchedule);
+      const times = getDefaultWorkTimes(dObj, employeeSchedule);
 
-    if (absenceData.isFullDay) {
-      workingHours = absenceData.customHours ? parseFloat(absenceData.customHours) : automaticHours;
-      entryStartTime = defaultTimes?.startTime || "07:00";
-      entryEndTime = defaultTimes?.endTime || "16:00";
-      entryPauseMinutes = defaultTimes?.pauseMinutes || 30;
-    } else {
-      // Calculate from Von/Bis
-      const [sH, sM] = absenceData.absenceStartTime.split(':').map(Number);
-      const [eH, eM] = absenceData.absenceEndTime.split(':').map(Number);
-      const pause = parseInt(absenceData.absencePauseMinutes) || 0;
-      const totalMinutes = (eH * 60 + eM) - (sH * 60 + sM) - pause;
-      workingHours = Math.max(0, totalMinutes / 60);
-      entryStartTime = absenceData.absenceStartTime;
-      entryEndTime = absenceData.absenceEndTime;
-      entryPauseMinutes = pause;
+      if (isMulti) {
+        // Skip Tage mit 0 Stunden (Sa/So oder arbeitsfreier Fr in kurzer Woche)
+        if (autoHours <= 0) continue;
+        dayEntries.push({
+          date: d,
+          hours: autoHours,
+          startTime: times?.startTime || "07:00",
+          endTime: times?.endTime || "16:00",
+          pauseMinutes: times?.pauseMinutes ?? 30,
+        });
+      } else {
+        // Einzel-Tag: respektiere isFullDay / customHours / Von-Bis
+        if (absenceData.isFullDay) {
+          dayEntries.push({
+            date: d,
+            hours: absenceData.customHours ? parseFloat(absenceData.customHours) : autoHours,
+            startTime: times?.startTime || "07:00",
+            endTime: times?.endTime || "16:00",
+            pauseMinutes: times?.pauseMinutes ?? 30,
+          });
+        } else {
+          const [sH, sM] = absenceData.absenceStartTime.split(':').map(Number);
+          const [eH, eM] = absenceData.absenceEndTime.split(':').map(Number);
+          const pause = parseInt(absenceData.absencePauseMinutes) || 0;
+          const total = Math.max(0, ((eH * 60 + eM) - (sH * 60 + sM) - pause) / 60);
+          dayEntries.push({
+            date: d,
+            hours: total,
+            startTime: absenceData.absenceStartTime,
+            endTime: absenceData.absenceEndTime,
+            pauseMinutes: pause,
+          });
+        }
+      }
     }
 
-    // ZA: Check and deduct from time account
+    if (dayEntries.length === 0) {
+      toast({ variant: "destructive", title: "Fehler", description: "Keine Arbeitstage im gewählten Zeitraum" });
+      setSubmittingAbsence(false);
+      return;
+    }
+
+    const totalWorkingHours = dayEntries.reduce((sum, e) => sum + e.hours, 0);
+
+    // ZA: Check and deduct from time account (Summe über alle Tage)
     if (absenceData.type === "za") {
       const { data: timeAccount, error: taError } = await supabase
         .from("time_accounts")
@@ -645,14 +699,14 @@ const TimeTracking = () => {
         return;
       }
 
-      if (Number(timeAccount.balance_hours) < workingHours) {
-        toast({ variant: "destructive", title: "Nicht genügend ZA-Stunden", description: `Verfügbar: ${timeAccount.balance_hours}h, benötigt: ${workingHours}h` });
+      if (Number(timeAccount.balance_hours) < totalWorkingHours) {
+        toast({ variant: "destructive", title: "Nicht genügend ZA-Stunden", description: `Verfügbar: ${timeAccount.balance_hours}h, benötigt: ${totalWorkingHours}h` });
         setSubmittingAbsence(false);
         return;
       }
 
       const balanceBefore = Number(timeAccount.balance_hours);
-      const balanceAfter = balanceBefore - workingHours;
+      const balanceAfter = balanceBefore - totalWorkingHours;
 
       const { error: updateErr } = await supabase
         .from("time_accounts")
@@ -665,14 +719,18 @@ const TimeTracking = () => {
         return;
       }
 
+      const reasonText = isMulti
+        ? `Zeitausgleich ${startDateStr} bis ${endDateStr}`
+        : `Zeitausgleich am ${absenceData.date}`;
+
       await supabase.from("time_account_transactions").insert({
         user_id: user.id,
         changed_by: user.id,
         change_type: "za_abzug",
-        hours: -workingHours,
+        hours: -totalWorkingHours,
         balance_before: balanceBefore,
         balance_after: balanceAfter,
-        reason: `Zeitausgleich am ${absenceData.date}`,
+        reason: reasonText,
       });
     }
 
@@ -693,28 +751,36 @@ const TimeTracking = () => {
       absenceDetail = { grund: absenceData.sonstigerGrund };
     }
 
-    const absenceEntry: Record<string, any> = {
-      user_id: user.id,
-      datum: absenceData.date,
-      project_id: null,
-      taetigkeit: absenceLabel,
-      stunden: workingHours,
-      start_time: entryStartTime,
-      end_time: entryEndTime,
-      pause_minutes: entryPauseMinutes,
-      location_type: "baustelle",
-      notizen: documentPath ? `Krankmeldung: ${documentPath}` : null,
-      week_type: activeWeekType,
-    };
-    if (absenceDetail) absenceEntry.absence_detail = absenceDetail;
+    const rowsToInsert = dayEntries.map(de => {
+      const row: Record<string, any> = {
+        user_id: user.id,
+        datum: de.date,
+        project_id: null,
+        taetigkeit: absenceLabel,
+        stunden: de.hours,
+        start_time: de.startTime,
+        end_time: de.endTime,
+        pause_minutes: de.pauseMinutes,
+        location_type: "baustelle",
+        notizen: documentPath ? `Krankmeldung: ${documentPath}` : null,
+        week_type: activeWeekType,
+      };
+      if (absenceDetail) row.absence_detail = absenceDetail;
+      return row;
+    });
 
-    const { error } = await supabase.from("time_entries").insert(absenceEntry);
+    const { error } = await supabase.from("time_entries").insert(rowsToInsert);
 
     if (!error) {
-      toast({ title: "Erfolg", description: `${absenceLabel} erfasst` });
+      const successDesc = isMulti
+        ? `${absenceLabel}: ${dayEntries.length} Tage erfasst (${totalWorkingHours.toFixed(2)} h gesamt)`
+        : `${absenceLabel} erfasst`;
+      toast({ title: "Erfolg", description: successDesc });
       setShowAbsenceDialog(false);
       setAbsenceData({
         date: new Date().toISOString().split('T')[0],
+        dateEnd: "",
+        isMultiDay: false,
         type: "urlaub",
         document: null,
         customHours: "",
@@ -1637,16 +1703,45 @@ const TimeTracking = () => {
               <DialogDescription>Erfassen Sie Urlaub, Krankenstand, ZA, Weiterbildung oder Feiertag</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="absence-date">Datum</Label>
-                <Input 
-                  id="absence-date" 
-                  type="date" 
-                  value={absenceData.date} 
-                  onChange={(e) => setAbsenceData({ ...absenceData, date: e.target.value })} 
+              {/* Mehrere Tage toggle */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="multi-day-toggle">Mehrere Tage</Label>
+                <Switch
+                  id="multi-day-toggle"
+                  checked={absenceData.isMultiDay}
+                  onCheckedChange={(checked) => setAbsenceData({
+                    ...absenceData,
+                    isMultiDay: checked,
+                    dateEnd: checked ? (absenceData.dateEnd || absenceData.date) : "",
+                    isFullDay: checked ? true : absenceData.isFullDay,
+                  })}
                 />
               </div>
-              
+
+              <div className={absenceData.isMultiDay ? "grid grid-cols-2 gap-3" : ""}>
+                <div>
+                  <Label htmlFor="absence-date">{absenceData.isMultiDay ? "Von" : "Datum"}</Label>
+                  <Input
+                    id="absence-date"
+                    type="date"
+                    value={absenceData.date}
+                    onChange={(e) => setAbsenceData({ ...absenceData, date: e.target.value })}
+                  />
+                </div>
+                {absenceData.isMultiDay && (
+                  <div>
+                    <Label htmlFor="absence-date-end">Bis</Label>
+                    <Input
+                      id="absence-date-end"
+                      type="date"
+                      min={absenceData.date}
+                      value={absenceData.dateEnd}
+                      onChange={(e) => setAbsenceData({ ...absenceData, dateEnd: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <Label>Art</Label>
                 <RadioGroup
@@ -1703,27 +1798,62 @@ const TimeTracking = () => {
                 </div>
               )}
 
-              {/* Ganzer Tag toggle */}
-              <div className="flex items-center justify-between">
-                <Label htmlFor="full-day-toggle">Ganzer Tag</Label>
-                <Switch
-                  id="full-day-toggle"
-                  checked={absenceData.isFullDay}
-                  onCheckedChange={(checked) => {
-                    const dateObj = new Date(absenceData.date);
-                    const defaults = getDefaultWorkTimes(dateObj, employeeSchedule);
-                    setAbsenceData({
-                      ...absenceData,
-                      isFullDay: checked,
-                      absenceStartTime: defaults?.startTime || "07:00",
-                      absenceEndTime: defaults?.endTime || "16:00",
-                      absencePauseMinutes: String(defaults?.pauseMinutes ?? 30),
-                    });
-                  }}
-                />
-              </div>
+              {/* Ganzer Tag toggle (nur bei Einzeltag) */}
+              {!absenceData.isMultiDay && (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="full-day-toggle">Ganzer Tag</Label>
+                  <Switch
+                    id="full-day-toggle"
+                    checked={absenceData.isFullDay}
+                    onCheckedChange={(checked) => {
+                      const dateObj = new Date(absenceData.date);
+                      const defaults = getDefaultWorkTimes(dateObj, employeeSchedule);
+                      setAbsenceData({
+                        ...absenceData,
+                        isFullDay: checked,
+                        absenceStartTime: defaults?.startTime || "07:00",
+                        absenceEndTime: defaults?.endTime || "16:00",
+                        absencePauseMinutes: String(defaults?.pauseMinutes ?? 30),
+                      });
+                    }}
+                  />
+                </div>
+              )}
 
-              {absenceData.isFullDay ? (
+              {absenceData.isMultiDay ? (
+                /* Multi-day: summary over date range (nur ganzer Tag) */
+                <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                  {(() => {
+                    if (!absenceData.dateEnd || absenceData.dateEnd < absenceData.date) {
+                      return <div className="text-sm text-muted-foreground">Bitte "Bis"-Datum wählen.</div>;
+                    }
+                    const days: { date: string; hours: number }[] = [];
+                    const cur = new Date(absenceData.date + "T00:00:00");
+                    const end = new Date(absenceData.dateEnd + "T00:00:00");
+                    while (cur <= end) {
+                      const h = getNormalWorkingHours(cur, employeeSchedule);
+                      if (h > 0) days.push({ date: cur.toISOString().split('T')[0], hours: h });
+                      cur.setDate(cur.getDate() + 1);
+                    }
+                    const total = days.reduce((s, d) => s + d.hours, 0);
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Arbeitstage im Zeitraum:</span>
+                          <Badge variant="secondary" className="font-bold">{days.length}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Summe Stunden:</span>
+                          <Badge variant="secondary" className="text-lg font-bold px-3 py-1">{total.toFixed(2)} h</Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Stunden je Tag werden automatisch aus der Regelarbeitszeit übernommen. Sa/So und arbeitsfreie Tage werden übersprungen.
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : absenceData.isFullDay ? (
                 /* Full day: show calculated hours with optional override */
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1735,9 +1865,12 @@ const TimeTracking = () => {
                   <div className="text-xs text-muted-foreground">
                     {(() => {
                       const absenceDateObj = new Date(absenceData.date);
-                      const dayOfWeek = absenceDateObj.getDay();
-                      if (dayOfWeek === 0 || dayOfWeek === 6) return "Wochenende: 0 Stunden";
-                      return "Mo-Fr: 8 Stunden (08:00 - 17:00, 1h Pause)";
+                      const hours = getNormalWorkingHours(absenceDateObj, employeeSchedule);
+                      if (hours === 0) return "Arbeitsfreier Tag: 0 Stunden";
+                      const times = getDefaultWorkTimes(absenceDateObj, employeeSchedule);
+                      if (!times) return `${hours} Stunden laut Regelarbeitszeit`;
+                      const pauseText = times.pauseMinutes > 0 ? `, ${times.pauseMinutes} min Pause` : "";
+                      return `${hours} h laut Regelarbeitszeit (${times.startTime} – ${times.endTime}${pauseText})`;
                     })()}
                   </div>
                   <div className="pt-2 border-t">
@@ -1832,7 +1965,20 @@ const TimeTracking = () => {
                   variant="outline" 
                   onClick={() => {
                     setShowAbsenceDialog(false);
-                    setAbsenceData({ date: new Date().toISOString().split('T')[0], type: "urlaub", document: null, customHours: "", isFullDay: true, absenceStartTime: "07:00", absenceEndTime: "16:00", absencePauseMinutes: "30" });
+                    setAbsenceData({
+                      date: new Date().toISOString().split('T')[0],
+                      dateEnd: "",
+                      isMultiDay: false,
+                      type: "urlaub",
+                      document: null,
+                      customHours: "",
+                      isFullDay: true,
+                      absenceStartTime: "07:00",
+                      absenceEndTime: "16:00",
+                      absencePauseMinutes: "30",
+                      verwandtschaftsgrad: "",
+                      sonstigerGrund: "",
+                    });
                   }}
                   disabled={submittingAbsence}
                 >

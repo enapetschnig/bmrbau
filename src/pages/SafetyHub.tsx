@@ -30,18 +30,25 @@ type AdminStats = {
 
 type ModulType = "jahresunterweisung" | "baustellenunterweisung" | "geraeteunterweisung";
 
-type OpenTask = {
-  id: string;
-  titel: string;
-  modul: ModulType;
-  projectName?: string | null;
-};
+type OpenTask =
+  | {
+      kind: "unterweisung";
+      id: string;
+      titel: string;
+      modul: ModulType;
+      projectName?: string | null;
+    }
+  | {
+      kind: "schulung";
+      id: string;
+      titel: string;
+    };
 
 type ExpiringCert = {
   id: string;
   schulungName: string;
   gueltig_bis: string;
-  tage: number;
+  tage: number; // negativ = abgelaufen
 };
 
 const MODUL_LABEL: Record<ModulType, string> = {
@@ -146,22 +153,37 @@ export default function SafetyHub() {
   };
 
   const loadMitarbeiterSicht = async (uid: string) => {
-    // 1) Offene Unterweisungen: MA ist zugewiesen UND hat noch nicht unterschrieben
-    const [{ data: assignedRaw }, { data: signedRaw }] = await Promise.all([
+    // 1) Offene Unterweisungen (MA zugewiesen + noch nicht unterschrieben)
+    //    PLUS 2) Fehlende Pflicht-Schulungen (MA hat kein Zertifikat)
+    //    PLUS 3) Ablaufende / abgelaufene Zertifikate (konsistent zu Nachweise).
+    const [
+      { data: assignedRaw },
+      { data: signedRaw },
+      { data: certs },
+      { data: pflichtSchulungen },
+    ] = await Promise.all([
       supabase.from("safety_evaluation_employees").select("evaluation_id").eq("user_id", uid),
       supabase.from("safety_evaluation_signatures").select("evaluation_id").eq("user_id", uid),
+      supabase
+        .from("schulung_zertifikate")
+        .select("id, schulung_id, gueltig_ab, gueltig_bis")
+        .eq("user_id", uid),
+      supabase.from("schulungen").select("id, name, ist_pflicht").eq("ist_pflicht", true),
     ]);
+
     const assigned = new Set((assignedRaw || []).map((r: any) => r.evaluation_id));
     const signed = new Set((signedRaw || []).map((r: any) => r.evaluation_id));
     setSignedCount(signed.size);
 
-    const openIds = Array.from(assigned).filter((id) => !signed.has(id));
-    let openList: OpenTask[] = [];
-    if (openIds.length > 0) {
+    const openList: OpenTask[] = [];
+
+    // (1) Unterweisungen zur Unterschrift
+    const openEvalIds = Array.from(assigned).filter((id) => !signed.has(id));
+    if (openEvalIds.length > 0) {
       const { data: evs } = await supabase
         .from("safety_evaluations")
         .select("id, titel, modul, project_id")
-        .in("id", openIds);
+        .in("id", openEvalIds);
       const projectIds = Array.from(
         new Set((evs || []).map((e: any) => e.project_id).filter(Boolean)),
       );
@@ -169,38 +191,48 @@ export default function SafetyHub() {
         ? await supabase.from("projects").select("id, name").in("id", projectIds)
         : { data: [] };
       const projectMap = new Map((projs || []).map((p: any) => [p.id, p.name as string]));
-      openList = (evs || []).map((e: any) => ({
-        id: e.id,
-        titel: e.titel,
-        modul: e.modul as ModulType,
-        projectName: e.project_id ? projectMap.get(e.project_id) ?? null : null,
-      }));
+      for (const e of evs || []) {
+        openList.push({
+          kind: "unterweisung",
+          id: e.id,
+          titel: e.titel,
+          modul: e.modul as ModulType,
+          projectName: e.project_id ? projectMap.get(e.project_id) ?? null : null,
+        });
+      }
     }
+
+    // (2) Fehlende Pflicht-Schulungen: Schulung hat ist_pflicht=true, aber es
+    //     existiert kein Zertifikat fuer den MA.
+    const schulungIdsWithCert = new Set(
+      (certs || []).map((c: any) => c.schulung_id).filter(Boolean),
+    );
+    for (const s of pflichtSchulungen || []) {
+      if (!schulungIdsWithCert.has(s.id)) {
+        openList.push({ kind: "schulung", id: s.id, titel: s.name });
+      }
+    }
+
     setOpenTasks(openList);
 
-    // 2) Ablaufende Zertifikate des MA
-    const { data: certs } = await supabase
-      .from("schulung_zertifikate")
-      .select("id, schulung_id, gueltig_bis")
-      .eq("user_id", uid)
-      .not("gueltig_bis", "is", null);
-    const schulungIds = Array.from(
-      new Set((certs || []).map((c: any) => c.schulung_id).filter(Boolean)),
-    );
-    const { data: schulungen } = schulungIds.length
-      ? await supabase.from("schulungen").select("id, name").in("id", schulungIds)
-      : { data: [] };
-    const sMap = new Map((schulungen || []).map((s: any) => [s.id, s.name as string]));
-    const heute = new Date(); heute.setHours(0, 0, 0, 0);
-
-    // Pro Schulung nur das juengste Zertifikat nehmen
+    // (3) Ablaufende/abgelaufene Zertifikate: pro Schulung juengstes Zertifikat
     const latestPerSchulung = new Map<string, any>();
     for (const c of certs || []) {
+      if (!c.gueltig_bis) continue;
       const prev = latestPerSchulung.get(c.schulung_id);
       if (!prev || parseISO(c.gueltig_bis) > parseISO(prev.gueltig_bis)) {
         latestPerSchulung.set(c.schulung_id, c);
       }
     }
+
+    const schulungIdsFromCerts = Array.from(latestPerSchulung.keys());
+    const { data: schulungen } = schulungIdsFromCerts.length
+      ? await supabase.from("schulungen").select("id, name").in("id", schulungIdsFromCerts)
+      : { data: [] };
+    const sMap = new Map((schulungen || []).map((s: any) => [s.id, s.name as string]));
+
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
     const expList: ExpiringCert[] = [];
     for (const c of latestPerSchulung.values()) {
       const tage = differenceInDays(parseISO(c.gueltig_bis + "T00:00:00"), heute);
@@ -345,7 +377,12 @@ export default function SafetyHub() {
               openTasks={openTasks}
               expiringCerts={expiringCerts}
               signedCount={signedCount}
-              onOpenTask={(id) => navigate(`/safety/bestaetigen/${id}`)}
+              onOpenTask={(task) => {
+                // Unterweisung -> Bestaetigungs-Seite. Fehlende Pflicht-
+                // Schulung -> Nachweise-Seite, damit der MA sieht woran es liegt.
+                if (task.kind === "unterweisung") navigate(`/safety/bestaetigen/${task.id}`);
+                else navigate("/safety/nachweise");
+              }}
               onOpenNachweise={() => navigate("/safety/nachweise")}
             />
           </>
@@ -381,7 +418,7 @@ function MitarbeiterHub({
   openTasks: OpenTask[];
   expiringCerts: ExpiringCert[];
   signedCount: number;
-  onOpenTask: (id: string) => void;
+  onOpenTask: (task: OpenTask) => void;
   onOpenNachweise: () => void;
 }) {
   if (loading) return <p className="text-sm text-muted-foreground">Lade…</p>;
@@ -403,24 +440,34 @@ function MitarbeiterHub({
         </CardHeader>
         {openTasks.length > 0 && (
           <CardContent className="space-y-2">
-            {openTasks.map((t) => (
-              <button
-                key={t.id}
-                className="w-full text-left flex items-center gap-3 p-3 rounded-lg border bg-background hover:bg-muted transition-colors"
-                onClick={() => onOpenTask(t.id)}
-              >
-                <Badge className={`text-[10px] uppercase tracking-wide ${MODUL_COLOR[t.modul]}`}>
-                  {MODUL_LABEL[t.modul]}
-                </Badge>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{t.titel}</p>
-                  {t.projectName && (
-                    <p className="text-xs text-muted-foreground truncate">Projekt: {t.projectName}</p>
-                  )}
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
-            ))}
+            {openTasks.map((t) => {
+              const badgeClass =
+                t.kind === "schulung"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                  : MODUL_COLOR[t.modul];
+              const badgeLabel = t.kind === "schulung" ? "Fehlt" : MODUL_LABEL[t.modul];
+              return (
+                <button
+                  key={`${t.kind}-${t.id}`}
+                  className="w-full text-left flex items-center gap-3 p-3 rounded-lg border bg-background hover:bg-muted transition-colors"
+                  onClick={() => onOpenTask(t)}
+                >
+                  <Badge className={`text-[10px] uppercase tracking-wide ${badgeClass}`}>
+                    {badgeLabel}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{t.titel}</p>
+                    {t.kind === "unterweisung" && t.projectName && (
+                      <p className="text-xs text-muted-foreground truncate">Projekt: {t.projectName}</p>
+                    )}
+                    {t.kind === "schulung" && (
+                      <p className="text-xs text-muted-foreground truncate">Pflicht-Schulung – noch kein gültiges Zertifikat</p>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              );
+            })}
           </CardContent>
         )}
       </Card>

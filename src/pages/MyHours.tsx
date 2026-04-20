@@ -402,7 +402,64 @@ const MyHours = () => {
                 Keine Einträge für {new Date(selectedMonth + '-01').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
               </p>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <>
+              {/* Mobile Card-Ansicht */}
+              <div className="md:hidden space-y-2">
+                {entries.map((entry) => (
+                  <div key={entry.id} className="border rounded-lg p-3 bg-card">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <span>{new Date(entry.datum).toLocaleDateString("de-DE")}</span>
+                          {!isExternal && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              {entry.location_type === 'werkstatt' ? (
+                                <><Warehouse className="w-3 h-3" /> Lager</>
+                              ) : (
+                                <><Building2 className="w-3 h-3" /> Baustelle</>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        {entry.projects?.name && (
+                          <div className="text-xs text-muted-foreground truncate">{entry.projects.name}</div>
+                        )}
+                        {entry.taetigkeit && (
+                          <div className="text-xs text-muted-foreground mt-0.5 break-words">{entry.taetigkeit}</div>
+                        )}
+                        {!isExternal && entry.start_time && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {entry.start_time?.substring(0, 5)}–{entry.end_time?.substring(0, 5)}
+                            {entry.pause_minutes ? ` · Pause ${entry.pause_minutes}min` : ''}
+                          </div>
+                        )}
+                        {entry.kilometer ? (
+                          <div className="text-xs text-muted-foreground mt-0.5">{entry.kilometer} km</div>
+                        ) : null}
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <span className="font-bold">{entry.stunden.toFixed(2)} h</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => navigate(`/time-tracking?date=${entry.datum}`)}
+                          disabled={!isEditable(entry.datum)}
+                          className="h-7 px-2"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between border-t pt-2 px-3 font-semibold">
+                  <span>Gesamt:</span>
+                  <span className="text-lg">{totalHours.toFixed(2)} h</span>
+                </div>
+              </div>
+
+              {/* Desktop Tabellen-Ansicht */}
+              <div className="hidden md:block rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     {isExternal ? (
@@ -537,6 +594,7 @@ const MyHours = () => {
                   </TableFooter>
                 </Table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
