@@ -1156,18 +1156,19 @@ const TimeTracking = () => {
                 </Button>
               </div>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 <CardTitle>Zeiterfassung</CardTitle>
               </div>
               {!targetUserId && !isExternalUser && (
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowBadWeatherDialog(true)}
-                    className="gap-1"
+                    className="gap-1 h-9"
+                    aria-label="Schlechtwetter"
                   >
                     <CloudRain className="h-4 w-4" />
                     <span className="hidden sm:inline">Schlechtwetter</span>
@@ -1176,7 +1177,8 @@ const TimeTracking = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowAbsenceDialog(true)}
-                    className="gap-1"
+                    className="gap-1 h-9"
+                    aria-label="Abwesenheit"
                   >
                     <Calendar className="h-4 w-4" />
                     <span className="hidden sm:inline">Abwesenheit</span>
@@ -1185,7 +1187,8 @@ const TimeTracking = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowFahrtenDialog(true)}
-                    className="gap-1"
+                    className="gap-1 h-9"
+                    aria-label="Fahrtengeld"
                   >
                     <Car className="h-4 w-4" />
                     <span className="hidden sm:inline">Fahrtengeld</span>
@@ -1306,16 +1309,16 @@ const TimeTracking = () => {
                   {!isDayBlocked && (
                     <div className="space-y-1.5">
                       {existingDayEntries.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between text-sm bg-background/60 rounded px-2 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {entry.start_time.substring(0, 5)} - {entry.end_time.substring(0, 5)}
+                        <div key={entry.id} className="flex items-center justify-between gap-2 text-sm bg-background/60 rounded px-2 py-1.5">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <Badge variant="outline" className="font-mono text-xs whitespace-nowrap shrink-0">
+                              {entry.start_time.substring(0, 5)}–{entry.end_time.substring(0, 5)}
                             </Badge>
-                            <span className="truncate max-w-[150px]">
+                            <span className="truncate">
                               {entry.project_name ? `${entry.project_name}` : entry.taetigkeit}
                             </span>
                           </div>
-                          <span className="font-medium">{Number(entry.stunden).toFixed(2)}h</span>
+                          <span className="font-medium whitespace-nowrap">{Number(entry.stunden).toFixed(2)}h</span>
                         </div>
                       ))}
                     </div>
@@ -1490,6 +1493,7 @@ const TimeTracking = () => {
                             <Label className="text-xs">Beginn</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.startTime}
                               onChange={(e) => updateBlock(block.id, { startTime: e.target.value })}
                               required
@@ -1500,6 +1504,7 @@ const TimeTracking = () => {
                             <Label className="text-xs">Ende</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.endTime}
                               onChange={(e) => updateBlock(block.id, { endTime: e.target.value })}
                               required
@@ -1512,6 +1517,7 @@ const TimeTracking = () => {
                             <Label className="text-xs">Pause von</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.pauseStart}
                               onChange={(e) => updateBlock(block.id, { pauseStart: e.target.value })}
                               className="h-10"
@@ -1521,6 +1527,7 @@ const TimeTracking = () => {
                             <Label className="text-xs">Pause bis</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.pauseEnd}
                               onChange={(e) => updateBlock(block.id, { pauseEnd: e.target.value })}
                               className="h-10"
@@ -1641,13 +1648,13 @@ const TimeTracking = () => {
                     <span className="text-2xl font-bold">{calculateTotalHours()} h</span>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 sticky bottom-4 z-10">
                     {editMode && (
-                      <Button type="button" variant="outline" className="flex-1" onClick={cancelEditMode} disabled={saving}>
+                      <Button type="button" variant="outline" className="flex-1 h-12 text-base" onClick={cancelEditMode} disabled={saving}>
                         Abbrechen
                       </Button>
                     )}
-                    <Button type="submit" className="flex-1" disabled={saving}>
+                    <Button type="submit" className="flex-1 h-12 text-base shadow-lg" disabled={saving}>
                       {saving
                         ? "Wird gespeichert..."
                         : editMode
@@ -1908,6 +1915,7 @@ const TimeTracking = () => {
                       <Label>Von</Label>
                       <Input
                         type="time"
+                        step={900}
                         value={absenceData.absenceStartTime}
                         onChange={(e) => setAbsenceData({ ...absenceData, absenceStartTime: e.target.value })}
                       />
@@ -1916,6 +1924,7 @@ const TimeTracking = () => {
                       <Label>Bis</Label>
                       <Input
                         type="time"
+                        step={900}
                         value={absenceData.absenceEndTime}
                         onChange={(e) => setAbsenceData({ ...absenceData, absenceEndTime: e.target.value })}
                       />
@@ -2080,6 +2089,7 @@ const TimeTracking = () => {
                   <Label>Beginn Schlechtwetter *</Label>
                   <Input
                     type="time"
+                    step={900}
                     value={badWeatherData.beginn}
                     onChange={(e) => setBadWeatherData({ ...badWeatherData, beginn: e.target.value })}
                   />
@@ -2088,6 +2098,7 @@ const TimeTracking = () => {
                   <Label>Ende Schlechtwetter *</Label>
                   <Input
                     type="time"
+                    step={900}
                     value={badWeatherData.ende}
                     onChange={(e) => setBadWeatherData({ ...badWeatherData, ende: e.target.value })}
                   />

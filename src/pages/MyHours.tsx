@@ -743,6 +743,7 @@ const MyHours = () => {
                     <Input
                       id="edit-morning-start"
                       type="time"
+                      step={900}
                       value={editingEntry.start_time || '07:30'}
                       onChange={(e) => setEditingEntry({...editingEntry, start_time: e.target.value})}
                     />
@@ -752,6 +753,7 @@ const MyHours = () => {
                     <Input
                       id="edit-morning-end"
                       type="time"
+                      step={900}
                       value="12:00"
                       disabled
                       className="bg-muted"
@@ -784,6 +786,7 @@ const MyHours = () => {
                     <Input
                       id="edit-afternoon-start"
                       type="time"
+                      step={900}
                       value="13:00"
                       disabled
                       className="bg-muted"
@@ -794,6 +797,7 @@ const MyHours = () => {
                     <Input
                       id="edit-afternoon-end"
                       type="time"
+                      step={900}
                       value={editingEntry.end_time || ''}
                       onChange={(e) => setEditingEntry({...editingEntry, end_time: e.target.value})}
                     />
