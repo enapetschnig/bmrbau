@@ -576,8 +576,11 @@ const ProjectDetail = () => {
                     </Button>
                   )}
 
-                  {/* Upload - nur im aktiven Tab, nicht im Archiv */}
-                  {!isArchivTab && (isAdmin || type === "photos") && (
+                  {/* Upload - nur im aktiven Tab, nicht im Archiv.
+                      Chef-Ordner bleibt Admin-only, alle anderen Kategorien
+                      duerfen auch Mitarbeiter hochladen (Fotos, Plaene,
+                      Regieberichte, Material-Lieferscheine usw.). */}
+                  {!isArchivTab && (isAdmin || type !== "chef") && (
                     <div className="mb-4">
                       <label htmlFor={`file-upload-${tab.key}`} className="cursor-pointer">
                         <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
