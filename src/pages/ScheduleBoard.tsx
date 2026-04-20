@@ -155,13 +155,18 @@ export default function ScheduleBoard() {
     });
   };
 
-  const handleRemove = async (uid: string, date: Date) => {
-    // Alle Zuweisungen dieses Users an diesem Tag entfernen (nicht nur die erste
-    // – der alte Code hat bei Mehrfach-Zuweisungen nur eine geloescht, der Rest
-    // blieb im UI haengen).
-    const existingToday = getAssignmentsForDay(assignments, uid, date);
-    if (existingToday.length === 0) return;
-    const ids = existingToday.map((a) => a.id);
+  const handleRemove = async (uid: string, date: Date, assignmentId?: string) => {
+    // Wenn eine spezifische assignment-ID uebergeben wird (Popover-Trash):
+    // nur diese eine loeschen. Wenn nicht: alle Zuweisungen dieses Users am
+    // Tag entfernen (z. B. Bulk-Clear-Zelle).
+    let ids: string[];
+    if (assignmentId) {
+      ids = [assignmentId];
+    } else {
+      const existingToday = getAssignmentsForDay(assignments, uid, date);
+      if (existingToday.length === 0) return;
+      ids = existingToday.map((a) => a.id);
+    }
 
     const { error } = await supabase
       .from("worker_assignments")
@@ -469,7 +474,13 @@ export default function ScheduleBoard() {
         date={popoverDate}
         days={popoverDays.length > 1 ? popoverDays : undefined}
         assignment={popoverAssignment || null}
+        existingAssignments={
+          popoverUserId && popoverDate
+            ? getAssignmentsForDay(assignments, popoverUserId, popoverDate)
+            : []
+        }
         projects={projects}
+        holidays={companyHolidays}
         onAssign={async (uid, date, projectId, notizen) => {
           const daysToAssign = popoverDays.length > 1 ? popoverDays : [date];
           for (const d of daysToAssign) {
