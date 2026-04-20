@@ -1352,46 +1352,25 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Evaluierungen */}
-          {menuVisible("evaluierungen") && (
+          {/* Sicherheit – fasst "Evaluierungen" + "Arbeitsschutz" zusammen.
+              Menu-Keys evaluierungen/arbeitsschutz bleiben aus Kompatibilitaet
+              erhalten: sichtbar wenn mindestens einer aktiv ist. */}
+          {(menuVisible("evaluierungen") || menuVisible("arbeitsschutz") || menuVisible("sicherheit")) && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/safety-evaluations")}
+              onClick={() => navigate("/safety")}
             >
               <CardHeader className="space-y-2 pb-3 relative">
-                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Admin</span>}
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <ShieldCheck className="h-6 w-6 text-primary" />
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Evaluierungen</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Sicherheit</CardTitle>
                 <CardDescription className="text-sm">
-                  Evaluierungen erstellen & verwalten
+                  Unterweisungen, Schulungen, Nachweise & Erinnerungen
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Evaluierungen öffnen</Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Arbeitsschutz */}
-          {menuVisible("arbeitsschutz") && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/my-safety")}
-            >
-              <CardHeader className="space-y-2 pb-3 relative">
-                {isAdmin && <span className="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">Alle</span>}
-                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <ShieldCheck className="h-6 w-6 text-green-500" />
-                </div>
-                <CardTitle className="text-lg sm:text-xl">Arbeitsschutz</CardTitle>
-                <CardDescription className="text-sm">
-                  Meine Unterweisungen & Evaluierungen
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Arbeitsschutz öffnen</Button>
+                <Button className="w-full" size="sm" variant="outline">Öffnen</Button>
               </CardContent>
             </Card>
           )}
