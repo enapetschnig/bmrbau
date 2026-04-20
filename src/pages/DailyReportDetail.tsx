@@ -95,33 +95,22 @@ export default function DailyReportDetail() {
     navigate("/daily-reports");
   };
 
-  const openSignDialog = async () => {
-    // Bauherr 1 oder 2 als Standard-Unterzeichner vorauswählen
-    if (report?.project_id) {
-      const { data: proj } = await supabase
-        .from("projects")
-        .select("bauherr, bauherr2")
-        .eq("id", report.project_id)
-        .maybeSingle();
-      if (proj?.bauherr) {
-        setSignatureName(proj.bauherr);
-      } else if (proj?.bauherr2) {
-        setSignatureName(proj.bauherr2);
-      }
+  // BMR-Wunsch: Abschicken soll direkt passieren - kein Sicherheits-
+  // checklisten-Dialog, keine Unterschrift. Einfach status = "gesendet"
+  // setzen und fertig. Wer trotzdem unterschreiben/editieren will,
+  // nutzt den Bearbeiten-Button.
+  const handleAbschicken = async () => {
+    if (!report || !id) return;
+    const { error } = await supabase
+      .from("daily_reports")
+      .update({ status: "gesendet" })
+      .eq("id", id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
     }
-    // Fallback: eingeloggter Mitarbeiter
-    if (!signatureName) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: emp } = await supabase
-          .from("employees")
-          .select("vorname, nachname")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (emp) setSignatureName(`${emp.vorname} ${emp.nachname}`.trim());
-      }
-    }
-    setShowSignDialog(true);
+    toast({ title: "Abgeschickt", description: "Bericht wurde als abgeschickt markiert." });
+    fetchReport();
   };
 
   const fetchReport = useCallback(async () => {
@@ -196,6 +185,20 @@ export default function DailyReportDetail() {
     });
   };
 
+  // Leichtgewichtige Foto-Liste nachladen (nur Fotos, nicht den
+  // ganzen Report). fetchReport() toggled setLoading(true) und die
+  // Seite springt beim Re-Render nach oben - das war der "scrollt
+  // automatisch wieder hoch"-Bug beim Foto-Hochladen.
+  const refreshPhotos = async () => {
+    if (!id) return;
+    const { data: pics } = await supabase
+      .from("daily_report_photos")
+      .select("*")
+      .eq("daily_report_id", id)
+      .order("created_at");
+    if (pics) setPhotos(pics);
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !id) return;
@@ -256,7 +259,7 @@ export default function DailyReportDetail() {
     }
 
     setUploading(false);
-    fetchReport();
+    await refreshPhotos();
     e.target.value = "";
 
     // Serienaufnahme: nach Upload automatisch Kamera wieder oeffnen
@@ -320,13 +323,13 @@ export default function DailyReportDetail() {
 
     setUploading(false);
     toast({ title: `${uploaded} Foto${uploaded === 1 ? "" : "s"} hochgeladen` });
-    fetchReport();
+    await refreshPhotos();
   };
 
   const deletePhoto = async (photo: Photo) => {
     await supabase.storage.from("daily-report-photos").remove([photo.file_path]);
     await supabase.from("daily_report_photos").delete().eq("id", photo.id);
-    fetchReport();
+    await refreshPhotos();
   };
 
   const getPhotoUrl = (filePath: string) => {
@@ -501,11 +504,6 @@ export default function DailyReportDetail() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">
                 Fotos ({photos.length})
-                {report.report_type === "tagesbericht" && photos.length < 4 && (
-                  <span className="text-sm text-destructive font-normal ml-2">
-                    (mind. 4 erforderlich)
-                  </span>
-                )}
               </CardTitle>
               {!isSigned && (
                 <div className="flex gap-2 flex-wrap">
@@ -600,7 +598,7 @@ export default function DailyReportDetail() {
             <Button variant="outline" onClick={() => setShowEditForm(true)}>
               <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
             </Button>
-            <Button onClick={openSignDialog}>
+            <Button onClick={handleAbschicken}>
               Absenden
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
