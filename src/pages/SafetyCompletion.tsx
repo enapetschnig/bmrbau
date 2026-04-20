@@ -152,11 +152,28 @@ export default function SafetyCompletion() {
       personal_answers,
       inhalte_bestaetigt: bestaetigt,
     });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ variant: "destructive", title: "Fehler", description: error.message });
       return;
     }
+
+    // Wenn jetzt alle zugewiesenen Mitarbeiter unterschrieben haben,
+    // Unterweisung auf "abgeschlossen" setzen - sonst bleibt der Admin-
+    // Status fuer immer auf "Zur Unterschrift" haengen.
+    try {
+      const [{ count: empCount }, { count: sigCount }] = await Promise.all([
+        supabase.from("safety_evaluation_employees").select("*", { count: "exact", head: true }).eq("evaluation_id", evaluation.id),
+        supabase.from("safety_evaluation_signatures").select("*", { count: "exact", head: true }).eq("evaluation_id", evaluation.id),
+      ]);
+      if (empCount !== null && sigCount !== null && empCount > 0 && sigCount >= empCount) {
+        await supabase.from("safety_evaluations").update({ status: "abgeschlossen" }).eq("id", evaluation.id);
+      }
+    } catch (e) {
+      console.warn("Status-Check fehlgeschlagen:", e);
+    }
+
+    setSaving(false);
     setStep("fertig");
     toast({ title: "Bestätigung gespeichert" });
   };

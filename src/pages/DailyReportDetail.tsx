@@ -204,6 +204,8 @@ export default function DailyReportDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUploading(false); return; }
 
+    const projectIdForMirror = report?.project_id || null;
+
     for (const file of Array.from(files)) {
       // Auto-Rotation anwenden
       const rotatedBlob = file.type.startsWith("image/") ? await autoRotateImage(file) : file;
@@ -225,6 +227,32 @@ export default function DailyReportDetail() {
         file_path: filePath,
         file_name: file.name,
       });
+
+      // Spiegelung ins Projekt-Foto-Archiv: Foto taucht dadurch auch in der
+      // Projekt-Galerie (/projects/:id/photos) auf und wird in documents
+      // erfasst. Fehler werden geswallowed - die Primaerkopie im Tagesbericht
+      // bleibt auf jeden Fall erhalten.
+      if (projectIdForMirror) {
+        try {
+          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${file.name}`;
+          const { error: mirrorErr } = await supabase.storage
+            .from("project-photos")
+            .upload(mirrorPath, rotatedBlob, { upsert: false });
+          if (!mirrorErr) {
+            const { data: urlData } = supabase.storage.from("project-photos").getPublicUrl(mirrorPath);
+            await supabase.from("documents").insert({
+              user_id: user.id,
+              project_id: projectIdForMirror,
+              typ: "photos",
+              name: file.name,
+              file_url: urlData.publicUrl,
+              beschreibung: "Aus Tagesbericht hochgeladen",
+            });
+          }
+        } catch (mirrorErr) {
+          console.warn("Project-Mirror fuer Tagesbericht-Foto fehlgeschlagen:", mirrorErr);
+        }
+      }
     }
 
     setUploading(false);
@@ -243,6 +271,7 @@ export default function DailyReportDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUploading(false); return; }
 
+    const projectIdForMirror = report?.project_id || null;
     let uploaded = 0;
     for (const file of files) {
       const rotatedBlob = file.type.startsWith("image/") ? await autoRotateImage(file) : file;
@@ -264,6 +293,28 @@ export default function DailyReportDetail() {
         file_path: filePath,
         file_name: file.name,
       });
+
+      if (projectIdForMirror) {
+        try {
+          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${file.name}`;
+          const { error: mirrorErr } = await supabase.storage
+            .from("project-photos")
+            .upload(mirrorPath, rotatedBlob, { upsert: false });
+          if (!mirrorErr) {
+            const { data: urlData } = supabase.storage.from("project-photos").getPublicUrl(mirrorPath);
+            await supabase.from("documents").insert({
+              user_id: user.id,
+              project_id: projectIdForMirror,
+              typ: "photos",
+              name: file.name,
+              file_url: urlData.publicUrl,
+              beschreibung: "Aus Tagesbericht hochgeladen",
+            });
+          }
+        } catch (mirrorErr) {
+          console.warn("Project-Mirror fuer Serien-Foto fehlgeschlagen:", mirrorErr);
+        }
+      }
       uploaded++;
     }
 
@@ -286,38 +337,36 @@ export default function DailyReportDetail() {
   const handleSign = async () => {
     if (!report || !id) return;
 
-    // Validate
-    if (report.report_type === "tagesbericht" && photos.length < 4) {
-      toast({ variant: "destructive", title: "Fotos fehlen", description: "Mindestens 4 Fotos sind für einen Tagesbericht erforderlich." });
-      return;
-    }
+    // BMR-Wunsch: Tagesbericht braucht weder eine Mindestzahl Fotos noch
+    // eine Unterschrift, um abgeschickt zu werden. Wenn doch unterschrieben
+    // wurde, nehmen wir die Daten mit - ansonsten reicht "Sicherheit
+    // bestaetigt" als Abschluss.
 
     if (!safetyItems.every((item) => item.checked)) {
       toast({ variant: "destructive", title: "Sicherheitscheckliste", description: "Alle Punkte der Sicherheitscheckliste müssen bestätigt werden." });
       return;
     }
 
-    if (!signatureData) {
-      toast({ variant: "destructive", title: "Unterschrift fehlt", description: "Bitte unterschreiben Sie den Bericht." });
-      return;
+    const payload: Record<string, unknown> = {
+      sicherheitscheckliste: safetyItems,
+      sicherheit_bestaetigt: true,
+      status: "gesendet",
+    };
+    if (signatureData) {
+      payload.unterschrift_kunde = signatureData;
+      payload.unterschrift_am = new Date().toISOString();
+      payload.unterschrift_name = signatureName.trim() || null;
     }
 
     const { error } = await supabase
       .from("daily_reports")
-      .update({
-        unterschrift_kunde: signatureData,
-        unterschrift_am: new Date().toISOString(),
-        unterschrift_name: signatureName.trim() || null,
-        sicherheitscheckliste: safetyItems,
-        sicherheit_bestaetigt: true,
-        status: "gesendet",
-      })
+      .update(payload)
       .eq("id", id);
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
     } else {
-      toast({ title: "Unterschrieben", description: "Bericht wurde erfolgreich unterschrieben." });
+      toast({ title: "Abgeschickt", description: "Bericht wurde gespeichert." });
       setShowSignDialog(false);
       fetchReport();
     }
@@ -580,38 +629,36 @@ export default function DailyReportDetail() {
         } : null}
       />
 
-      {/* Signature Dialog */}
+      {/* Abschluss / Signature Dialog */}
       <Dialog open={showSignDialog} onOpenChange={setShowSignDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Bericht unterschreiben</DialogTitle>
+            <DialogTitle>Bericht abschicken</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
             <SafetyChecklist items={safetyItems} onChange={setSafetyItems} />
 
-            {report.report_type === "tagesbericht" && photos.length < 4 && (
-              <p className="text-sm text-destructive font-medium">
-                Es fehlen noch {4 - photos.length} Foto(s). Mindestens 4 Fotos sind erforderlich.
+            <div className="rounded-md border border-dashed p-3 space-y-3 bg-muted/20">
+              <p className="text-xs text-muted-foreground">
+                Unterschrift und Name sind optional. Wenn nicht benoetigt, einfach leer lassen.
               </p>
-            )}
-
-            <div>
-              <Label>Name des Unterzeichners</Label>
-              <Input
-                value={signatureName}
-                onChange={(e) => setSignatureName(e.target.value)}
-                placeholder="Vor- und Nachname"
-              />
-            </div>
-
-            <div>
-              <Label>Unterschrift</Label>
-              <SignaturePad
-                onSignatureChange={(data) => setSignatureData(data)}
-                width={400}
-                height={200}
-              />
+              <div>
+                <Label>Name des Unterzeichners (optional)</Label>
+                <Input
+                  value={signatureName}
+                  onChange={(e) => setSignatureName(e.target.value)}
+                  placeholder="Vor- und Nachname"
+                />
+              </div>
+              <div>
+                <Label>Unterschrift (optional)</Label>
+                <SignaturePad
+                  onSignatureChange={(data) => setSignatureData(data)}
+                  width={400}
+                  height={200}
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">
@@ -619,7 +666,7 @@ export default function DailyReportDetail() {
                 Abbrechen
               </Button>
               <Button onClick={handleSign}>
-                Unterschreiben & Absenden
+                Abschicken
               </Button>
             </div>
           </div>

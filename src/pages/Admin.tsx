@@ -1225,6 +1225,42 @@ export default function Admin() {
           </Card>
         </section>
 
+        {/* ===== APP-EINSTELLUNGEN ===== */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Settings className="h-6 w-6" />
+            Einstellungen
+          </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Regiebericht-Empfaenger</CardTitle>
+              <CardDescription>
+                An diese E-Mail gehen alle abgeschickten Regieberichte.
+                Wird gleichzeitig als Reply-To gesetzt, damit Kunden-
+                Rueckfragen direkt ins richtige Postfach kommen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="regie-email">E-Mail-Adresse</Label>
+                  <Input
+                    id="regie-email"
+                    type="email"
+                    value={regiereportEmail}
+                    onChange={(e) => setRegiereportEmail(e.target.value)}
+                    placeholder="z.B. office@bmr-bau.at"
+                    disabled={loadingSettings}
+                  />
+                </div>
+                <Button onClick={saveRegiereportEmail} disabled={savingSettings || loadingSettings}>
+                  {savingSettings ? "Speichert..." : "Speichern"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* ===== MENÜ-EINSTELLUNGEN ===== */}
         <section>
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
