@@ -370,7 +370,7 @@ export default function SafetyEvaluations() {
               <Card
                 key={ev.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/safety-evaluations/${ev.id}`)}
+                onClick={() => navigate(`/safety/detail/${ev.id}`)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">

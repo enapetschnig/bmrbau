@@ -811,7 +811,7 @@ export default function Index() {
         {pendingSafetyCount > 0 && (
           <div
             className="mb-4 flex items-center gap-4 rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/20 p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors"
-            onClick={() => navigate("/my-safety")}
+            onClick={() => navigate("/safety")}
           >
             <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-6 w-6 text-orange-600" />
@@ -1352,10 +1352,10 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Sicherheit – fasst "Evaluierungen" + "Arbeitsschutz" zusammen.
-              Menu-Keys evaluierungen/arbeitsschutz bleiben aus Kompatibilitaet
-              erhalten: sichtbar wenn mindestens einer aktiv ist. */}
-          {(menuVisible("evaluierungen") || menuVisible("arbeitsschutz") || menuVisible("sicherheit")) && (
+          {/* Sicherheit – Einstiegspunkt fuer Unterweisungen, Nachweise,
+              Erinnerungen. Neuer Menu-Key "sicherheit" (konsolidiert aus
+              evaluierungen + arbeitsschutz via Migration). */}
+          {menuVisible("sicherheit") && (
             <Card
               className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
               onClick={() => navigate("/safety")}

@@ -3,7 +3,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+
+// Legacy-Redirect: /safety-evaluations/:id -> /safety/detail/:id
+function LegacySafetyEvaluationRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/safety/detail/${id}` : "/safety"} replace />;
+}
 import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { InstallPromptDialog } from "./components/InstallPromptDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -176,9 +182,12 @@ function AppContent() {
           <Route path="/safety/nachweise" element={<SafetyNachweise />} />
           <Route path="/safety/bestaetigen/:id" element={<SafetyCompletion />} />
           <Route path="/safety/erinnerungen" element={<ProtectedRoute minRole="admin"><SafetyErinnerungen /></ProtectedRoute>} />
-          {/* Detail-Route fuer einzelne Unterweisungen (alt + neu unter /safety/detail/:id) */}
+          {/* Detail-Route fuer einzelne Unterweisungen */}
           <Route path="/safety/detail/:id" element={<SafetyEvaluationDetail />} />
-          <Route path="/safety-evaluations/:id" element={<SafetyEvaluationDetail />} />
+          {/* Legacy-Redirects: alte Bookmarks/Links weiterleiten.
+              Die alte Detail-URL behaelt die ID bei. */}
+          <Route path="/safety-evaluations/:id" element={<LegacySafetyEvaluationRedirect />} />
+          <Route path="/my-safety" element={<Navigate to="/safety" replace />} />
           {/* Nur Admin */}
           <Route path="/admin" element={<ProtectedRoute minRole="admin"><Admin /></ProtectedRoute>} />
           <Route path="/hours-report" element={<ProtectedRoute minRole="admin"><HoursReport /></ProtectedRoute>} />
