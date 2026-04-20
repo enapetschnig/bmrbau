@@ -1029,7 +1029,7 @@ const TimeTracking = () => {
     // Multi-MA-Buchung entfernt – jeder Mitarbeiter buchet seine Stunden selbst.
 
     if (!hasError) {
-      setSelectedAdditionalEmployees([]);
+      // Multi-MA-Buchung wurde entfernt - kein setSelectedAdditionalEmployees mehr noetig.
       toast({ title: "Erfolg", description: editMode
         ? `${totalEntriesCreated} Eintrag/Einträge aktualisiert`
         : `${totalEntriesCreated} Eintrag/Einträge gespeichert`
