@@ -15,13 +15,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Kleiner Helper, damit wir immer einen passenden HTTP-Status mitgeben
+  // koennen statt alles als 200 mit success:false zu verpacken.
+  const fail = (status: number, errorMessage: string) =>
+    new Response(
+      JSON.stringify({ success: false, error: errorMessage }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
+    );
+
   try {
     console.log('Send invitation function called');
 
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error('No authorization header');
+      return fail(401, 'Kein Authorization-Header');
     }
 
     // Initialize Supabase client
@@ -32,10 +40,10 @@ Deno.serve(async (req) => {
     // Get the authenticated user
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
+
     if (userError || !user) {
       console.error('Authentication error:', userError);
-      throw new Error('Unauthorized');
+      return fail(401, 'Sitzung ungueltig oder abgelaufen - bitte neu anmelden');
     }
 
     // Check if user is admin
@@ -47,7 +55,7 @@ Deno.serve(async (req) => {
 
     if (roleError || !roleData || roleData.role !== 'administrator') {
       console.error('User is not an administrator');
-      throw new Error('Forbidden: Admin access required');
+      return fail(403, 'Nur Administratoren duerfen Einladungen senden');
     }
 
     // Parse request body
@@ -56,7 +64,7 @@ Deno.serve(async (req) => {
 
     // Validate phone number (E.164 format: +43...)
     if (!telefonnummer || !telefonnummer.match(/^\+43\d{9,13}$/)) {
-      throw new Error('Ungültige Telefonnummer. Bitte Format +43... verwenden');
+      return fail(400, 'Ungueltige Telefonnummer. Bitte Format +43... verwenden');
     }
 
     // Duplicate-Schutz: Wenn in den letzten 5 Minuten bereits an diese Nummer
@@ -72,13 +80,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (recentLog) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'An diese Nummer wurde soeben schon eine Einladung verschickt. Bitte warte einige Minuten bevor du sie erneut auslöst.',
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
-      );
+      return fail(429, 'An diese Nummer wurde soeben schon eine Einladung verschickt. Bitte warte einige Minuten bevor du sie erneut ausloest.');
     }
 
     // Get Twilio credentials
@@ -87,7 +89,7 @@ Deno.serve(async (req) => {
     const twilioPhoneNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
     if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
-      throw new Error('Twilio credentials not configured');
+      return fail(500, 'Twilio-Zugang auf Server nicht konfiguriert');
     }
 
     // Generate registration link (APP_URL overrideable via Edge-Function secret)
@@ -152,18 +154,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in send-invitation function:', error);
-    
     const errorMessage = error instanceof Error ? error.message : 'Ein Fehler ist aufgetreten';
-    
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: errorMessage,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
+    return fail(500, errorMessage);
   }
 });

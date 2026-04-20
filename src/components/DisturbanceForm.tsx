@@ -365,8 +365,19 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       if (split.lohnstunden > 0) timeEntryPayload.lohnstunden = split.lohnstunden;
       if (split.zeitausgleich > 0) timeEntryPayload.zeitausgleich_stunden = split.zeitausgleich;
 
+      // Rollback-Helfer: bei Folge-Fehlern den frisch angelegten
+      // Regiebericht wieder aufrauemen, sonst bleibt ein verwaister
+      // Eintrag ohne time_entry / worker in der DB liegen.
+      const rollback = async () => {
+        await supabase.from("disturbance_materials").delete().eq("disturbance_id", newDisturbance.id);
+        await supabase.from("disturbance_workers").delete().eq("disturbance_id", newDisturbance.id);
+        await supabase.from("time_entries").delete().eq("disturbance_id", newDisturbance.id);
+        await supabase.from("disturbances").delete().eq("id", newDisturbance.id);
+      };
+
       const { error: timeError } = await supabase.from("time_entries").insert(timeEntryPayload);
       if (timeError) {
+        await rollback();
         toast({ variant: "destructive", title: "Fehler", description: "Zeiteintrag konnte nicht erstellt werden" });
         setSaving(false);
         return;
@@ -379,6 +390,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         is_main: true,
       });
       if (workerError) {
+        await rollback();
         toast({ variant: "destructive", title: "Fehler", description: "Mitarbeiter-Eintrag konnte nicht erstellt werden" });
         setSaving(false);
         return;
@@ -396,6 +408,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
           }))
         );
         if (matError) {
+          await rollback();
           toast({ variant: "destructive", title: "Fehler", description: "Materialien konnten nicht gespeichert werden" });
           setSaving(false);
           return;

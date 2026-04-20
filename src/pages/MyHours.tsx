@@ -505,7 +505,7 @@ const MyHours = () => {
                         <TableCell className="font-medium whitespace-nowrap">
                           {new Date(entry.datum).toLocaleDateString("de-DE")}
                         </TableCell>
-                        <TableCell>{entry.projects?.name || '-'}</TableCell>
+                        <TableCell>{entry.projects?.name || (entry.location_type === 'werkstatt' ? 'Lager' : '-')}</TableCell>
                         <TableCell>{entry.taetigkeit}</TableCell>
                         <TableCell className="text-right font-semibold">
                           {entry.stunden.toFixed(2)} h
@@ -545,7 +545,7 @@ const MyHours = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{entry.projects?.name || '-'}</TableCell>
+                        <TableCell>{entry.projects?.name || (entry.location_type === 'werkstatt' ? 'Lager' : '-')}</TableCell>
                         <TableCell>{entry.taetigkeit}</TableCell>
                         <TableCell className="text-center">
                           {entry.start_time?.substring(0, 5) || '-'}

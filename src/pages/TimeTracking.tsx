@@ -575,8 +575,22 @@ const TimeTracking = () => {
       return;
     }
 
-    // Multi-day: iterate from date to dateEnd, one entry per working day
-    const isMulti = absenceData.isMultiDay && absenceData.dateEnd && absenceData.dateEnd > absenceData.date;
+    // Multi-day: iterate from date to dateEnd, one entry per working day.
+    // Wenn Mehrtages-Toggle an ist, MUSS das Bis-Datum gesetzt und nach
+    // dem Start-Datum sein - sonst wuerde still nur 1 Tag gebucht.
+    if (absenceData.isMultiDay) {
+      if (!absenceData.dateEnd) {
+        toast({ variant: "destructive", title: "Bis-Datum fehlt", description: "Bitte das Ende des Zeitraums auswaehlen." });
+        setSubmittingAbsence(false);
+        return;
+      }
+      if (absenceData.dateEnd < absenceData.date) {
+        toast({ variant: "destructive", title: "Datumsbereich ungueltig", description: "Das Bis-Datum muss nach dem Von-Datum liegen." });
+        setSubmittingAbsence(false);
+        return;
+      }
+    }
+    const isMulti = absenceData.isMultiDay && absenceData.dateEnd && absenceData.dateEnd >= absenceData.date;
     const startDateStr = absenceData.date;
     const endDateStr = isMulti ? absenceData.dateEnd : absenceData.date;
 

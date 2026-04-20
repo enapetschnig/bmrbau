@@ -114,6 +114,21 @@ export default function SafetyCompletion() {
       toast({ variant: "destructive", title: "Unterschrift erforderlich" });
       return;
     }
+    // Sicherheits-Compliance: Abschluss nur wenn alle Inhalte durchlaufen
+    // wurden. Sonst koennte ein MA direkt zur Signatur springen und
+    // Unterweisung "bestaetigen" ohne Inhalt gelesen zu haben.
+    if (!allChecklistDone) {
+      toast({ variant: "destructive", title: "Checkliste unvollstaendig", description: "Bitte alle Pruefpunkte abhaken." });
+      return;
+    }
+    if (!allQuestionsAnswered) {
+      toast({ variant: "destructive", title: "Fragen unvollstaendig", description: "Bitte alle Fragen beantworten." });
+      return;
+    }
+    if (!bestaetigt) {
+      toast({ variant: "destructive", title: "Bestaetigung fehlt", description: "Bitte Inhalte bestaetigen." });
+      return;
+    }
     setSaving(true);
     const fragen_antworten = fragen.map(f => ({
       frage_id: f.id,
