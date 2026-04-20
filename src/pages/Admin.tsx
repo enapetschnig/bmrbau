@@ -2,6 +2,7 @@ import { useEffect, useState, FormEvent, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
+import { filterHiddenProfiles, filterHiddenByUserId } from "@/lib/hiddenUsers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -244,7 +245,7 @@ export default function Admin() {
       .select("user_id, role");
 
     if (profilesData) {
-      setProfiles(profilesData);
+      setProfiles(filterHiddenProfiles(profilesData));
     }
 
     if (rolesData) {
@@ -500,7 +501,7 @@ export default function Admin() {
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setEmployees(data || []);
+      setEmployees(filterHiddenByUserId(data || []));
     }
   };
 

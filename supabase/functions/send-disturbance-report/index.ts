@@ -37,6 +37,7 @@ interface Disturbance {
   beschreibung: string;
   notizen: string | null;
   unterschrift_kunde: string;
+  project_id?: string | null;
 }
 
 interface ReportRequest {
@@ -482,8 +483,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     console.log("Email sent successfully:", resendData);
 
+    // PDF zusaetzlich im Projekt-Ordner (Storage-Bucket project-reports)
+    // ablegen, falls der Regiebericht einem Projekt zugeordnet ist.
+    let storedPath: string | null = null;
+    if (pdfBase64 && disturbance.project_id) {
+      try {
+        const binary = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+        storedPath = `${disturbance.project_id}/${pdfFilename}`;
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from("project-reports")
+          .upload(storedPath, binary, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+        if (uploadError) {
+          console.error("PDF upload to project-reports failed", uploadError);
+          storedPath = null;
+        } else {
+          // documents-Tabelle pflegen, damit das PDF auch in der
+          // Projekt-Dokumenten-Ansicht erscheint.
+          await supabaseAdmin.from("documents").insert({
+            project_id: disturbance.project_id,
+            type: "reports",
+            name: pdfFilename,
+            file_url: storedPath,
+            user_id: null,
+          });
+        }
+      } catch (storageErr) {
+        console.error("PDF storage error", storageErr);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, emailId: resendData?.id }),
+      JSON.stringify({ success: true, emailId: resendData?.id, storedPath }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: unknown) {

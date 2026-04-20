@@ -139,6 +139,12 @@ export function VoiceAIInput({
         },
       });
       if (error) throw error;
+      // Server gibt Status 200 mit { error: "..." } zurueck wenn Whisper abgelehnt
+      // hat – z. B. wegen Format- oder Groessen-Problem. Dann explizit anzeigen.
+      if ((data as any)?.error) {
+        toast({ variant: "destructive", title: "Transkription fehlgeschlagen", description: String((data as any).error) });
+        return;
+      }
       const newText = (data as any)?.text || "";
       if (!newText.trim()) {
         toast({ variant: "destructive", title: "Keine Sprache erkannt", description: "Bitte nochmal versuchen." });

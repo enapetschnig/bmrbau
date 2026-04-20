@@ -35,6 +35,7 @@ import {
 } from "@/lib/workingHours";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { HIDDEN_USER_IDS } from "@/lib/hiddenUsers";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface TimeEntry {
@@ -264,6 +265,7 @@ export default function HoursReport() {
     if (data) {
       const profileMap: Record<string, Profile> = {};
       data.forEach((p) => {
+        if (HIDDEN_USER_IDS.has(p.id)) return;
         profileMap[p.id] = { vorname: p.vorname, nachname: p.nachname, isExternal: externalIds.has(p.id) };
       });
       setProfiles(profileMap);

@@ -28,7 +28,6 @@ const MENU_ITEMS: MenuItem[] = [
   { key: "lagerverwaltung", label: "Lagerverwaltung", icon: <Package className="h-4 w-4" />, path: "/warehouse" },
   { key: "arbeitsschutz", label: "Sicherheit", icon: <Shield className="h-4 w-4" />, path: "/safety" },
   { key: "admin_bereich", label: "Administration", icon: <Settings className="h-4 w-4" />, path: "/admin", adminOnly: true },
-  { key: "cloud_data", label: "Cloud-Daten", icon: <BarChart3 className="h-4 w-4" />, path: "/cloud-data", adminOnly: true },
 ];
 
 interface Props {

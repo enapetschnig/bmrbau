@@ -18,6 +18,7 @@ import { ArrowLeft, Plus, User, FileText, Clock, Mail, Phone, MapPin, FileSpread
 import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
 import { DEFAULT_SCHEDULE, LEHRLING_SCHEDULE, LEHRLING_SCHEDULE_KURZ, BMR_BUAK_KURZ_SCHEDULE, type WeekSchedule } from "@/lib/workingHours";
+import { filterHiddenByUserId } from "@/lib/hiddenUsers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Employee {
@@ -105,9 +106,10 @@ export default function Employees() {
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setEmployees(data || []);
+      const filteredData = filterHiddenByUserId(data || []);
+      setEmployees(filteredData);
       // Fetch profile activation status for employees with user_id
-      const userIds = (data || []).filter(e => e.user_id).map(e => e.user_id!);
+      const userIds = filteredData.filter(e => e.user_id).map(e => e.user_id!);
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")

@@ -41,7 +41,6 @@ import LegalWorkTimeReport from "./pages/LegalWorkTimeReport";
 import EquipmentPage from "./pages/Equipment";
 import EquipmentDetail from "./pages/EquipmentDetail";
 import Bestellungen from "./pages/Bestellungen";
-import CloudData from "./pages/CloudData";
 import ScheduleBoard from "./pages/ScheduleBoard";
 import IncomingInvoices from "./pages/IncomingInvoices";
 import DocumentLibrary from "./pages/DocumentLibrary";
@@ -196,7 +195,6 @@ function AppContent() {
           <Route path="/equipment" element={<ProtectedRoute minRole="admin"><EquipmentPage /></ProtectedRoute>} />
           <Route path="/equipment/:id" element={<ProtectedRoute minRole="admin"><EquipmentDetail /></ProtectedRoute>} />
           <Route path="/bestellungen" element={<ProtectedRoute minRole="facharbeiter"><Bestellungen /></ProtectedRoute>} />
-          <Route path="/cloud-data" element={<ProtectedRoute minRole="admin"><CloudData /></ProtectedRoute>} />
           <Route path="/buak-kalender" element={<ProtectedRoute minRole="admin"><BuakCalendarAdmin /></ProtectedRoute>} />
           <Route path="/schedule" element={<ProtectedRoute minRole="vorarbeiter"><ScheduleBoard /></ProtectedRoute>} />
           <Route path="/incoming-invoices" element={<ProtectedRoute minRole="admin"><IncomingInvoices /></ProtectedRoute>} />

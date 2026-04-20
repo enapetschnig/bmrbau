@@ -11,6 +11,7 @@ import { format, getDaysInMonth } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
 import { generateLegalWorkTimePDF } from "@/lib/generateLegalWorkTimePDF";
+import { HIDDEN_USER_IDS } from "@/lib/hiddenUsers";
 
 type Profile = { id: string; vorname: string; nachname: string };
 
@@ -59,7 +60,11 @@ export default function LegalWorkTimeReport({ embedded = false }: LegalWorkTimeR
         .order("nachname");
 
       if (data) {
-        setEmployees(data.filter(e => !externalIds.includes(e.id)));
+        setEmployees(
+          data
+            .filter((e) => !externalIds.includes(e.id))
+            .filter((e) => !HIDDEN_USER_IDS.has(e.id)),
+        );
       }
     };
     fetchEmployees();

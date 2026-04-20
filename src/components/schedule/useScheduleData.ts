@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { format, startOfYear, endOfYear } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { filterHiddenProfiles } from "@/lib/hiddenUsers";
 import type {
   Profile,
   Project,
@@ -84,7 +85,7 @@ export function useScheduleData() {
         supabase.from("company_holidays").select("id, datum, bezeichnung"),
       ]);
 
-      if (profs) setProfiles(profs);
+      if (profs) setProfiles(filterHiddenProfiles(profs));
       if (projs) setProjects(projs);
       if (assigns) setAssignments(assigns as Assignment[]);
       if (res) setResources(res as Resource[]);

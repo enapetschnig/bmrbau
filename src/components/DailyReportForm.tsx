@@ -350,46 +350,13 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Berichtstyp als intuitive Button-Gruppe ganz oben */}
-          <div className="space-y-1">
-            <Label className="text-sm">Berichtstyp</Label>
-            <div className="grid grid-cols-3 gap-1 p-1 bg-muted/40 rounded-lg">
-              {[
-                { key: "tagesbericht", label: "Tagesbericht" },
-                { key: "regiebericht", label: "Regiebericht" },
-                { key: "zwischenbericht", label: "Zwischenbericht" },
-              ].map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setReportType(t.key as any)}
-                  className={`text-xs sm:text-sm py-2 px-2 rounded transition-colors ${
-                    reportType === t.key
-                      ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                      : "text-muted-foreground hover:bg-background"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Berichtstyp ist fest "Tagesbericht" - Regieberichte laufen
+              ueber ein eigenes Formular unter /disturbances. */}
 
           {/* Project */}
           <div>
             <Label>Projekt *</Label>
-            <Select value={projectId} onValueChange={(v) => {
-              setProjectId(v);
-              // Auto-select report type based on Baustellenart (nur bei neuen Berichten)
-              const proj = projects.find(p => p.id === v);
-              if (!editData) {
-                if (proj?.baustellenart === "regie") {
-                  setReportType("regiebericht");
-                } else if (proj?.baustellenart === "pauschale") {
-                  setReportType("tagesbericht");
-                }
-              }
-            }}>
+            <Select value={projectId} onValueChange={setProjectId}>
               <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
               <SelectContent>
                 {projects.map((p) => (

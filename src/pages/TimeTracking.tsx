@@ -33,7 +33,6 @@ import {
 } from "@/lib/workingHours";
 import { useBuakWeekType } from "@/hooks/useBuakWeekType";
 import { FillRemainingHoursDialog } from "@/components/FillRemainingHoursDialog";
-import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
 
 type Project = {
@@ -151,7 +150,6 @@ const TimeTracking = () => {
     sonstigerGrund: "",
   });
 
-  const [selectedAdditionalEmployees, setSelectedAdditionalEmployees] = useState<string[]>([]);
   const [editMode, setEditMode] = useState(false);
   const [editingEntryIds, setEditingEntryIds] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -930,46 +928,7 @@ const TimeTracking = () => {
       totalEntriesCreated += 1;
     }
 
-    // Duplicate entries for additional employees (Multi-MA)
-    if (!hasError && selectedAdditionalEmployees.length > 0 && !editMode) {
-      for (const empUserId of selectedAdditionalEmployees) {
-        let empRemainingLohn = daySplit.lohnstunden;
-        for (let bi = 0; bi < timeBlocks.length; bi++) {
-          const block = timeBlocks[bi];
-          const blockHours = allBlockHours[bi];
-          const pauseMinutes = isExternalUser ? 0 : calculateBlockPauseMinutes(block);
-          const blockLohn = Math.min(blockHours, empRemainingLohn);
-          const blockZA = Math.round((blockHours - blockLohn) * 100) / 100;
-          empRemainingLohn = Math.round((empRemainingLohn - blockLohn) * 100) / 100;
-          const km = block.kilometer ? parseFloat(block.kilometer) : null;
-
-          const empEntry: Record<string, any> = {
-            user_id: empUserId,
-            datum: selectedDate,
-            project_id: block.locationType === "werkstatt" ? null : (block.projectId || null),
-            taetigkeit: block.taetigkeit || null,
-            stunden: blockHours,
-            start_time: isExternalUser ? "00:00" : block.startTime,
-            end_time: isExternalUser ? "00:00" : block.endTime,
-            pause_minutes: pauseMinutes,
-            pause_start: isExternalUser ? null : (block.pauseStart || null),
-            pause_end: isExternalUser ? null : (block.pauseEnd || null),
-            location_type: block.locationType,
-            kilometer: km,
-            km_beschreibung: block.kmBeschreibung || null,
-            zeit_typ: isExternalUser ? "normal" : block.zeitTyp,
-            diaeten_typ: isExternalUser ? null : (bi === 0 ? diaetenForDay.typ : null),
-            diaeten_betrag: isExternalUser ? null : (bi === 0 ? diaetenForDay.betrag : null),
-            diaeten_anfahrt: isExternalUser ? null : (bi === 0 ? dayHasAnfahrt : false),
-            week_type: activeWeekType,
-          };
-          if (blockLohn > 0) empEntry.lohnstunden = blockLohn;
-          if (blockZA > 0) empEntry.zeitausgleich_stunden = blockZA;
-          await supabase.from("time_entries").insert(empEntry);
-        }
-      }
-      totalEntriesCreated += selectedAdditionalEmployees.length * timeBlocks.length;
-    }
+    // Multi-MA-Buchung entfernt – jeder Mitarbeiter buchet seine Stunden selbst.
 
     if (!hasError) {
       setSelectedAdditionalEmployees([]);
@@ -1199,18 +1158,6 @@ const TimeTracking = () => {
                     </p>
                   )}
                 </div>
-              )}
-
-              {/* Multi-Mitarbeiter Auswahl (nur fuer Admin/Vorarbeiter) */}
-              {isAdmin && !editMode && !targetUserId && !isExternalUser && timeBlocks.length > 0 && (
-                <MultiEmployeeSelect
-                  selectedEmployees={selectedAdditionalEmployees}
-                  onSelectionChange={setSelectedAdditionalEmployees}
-                  date={selectedDate}
-                  startTime={timeBlocks[0].startTime || "06:30"}
-                  endTime={timeBlocks[timeBlocks.length - 1].endTime || "17:00"}
-                  label="Stunden auch fuer weitere Mitarbeiter erfassen"
-                />
               )}
 
               {/* Weekly target info — not for external */}

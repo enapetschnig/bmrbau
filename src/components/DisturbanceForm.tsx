@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2 } from "lucide-react";
+import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2, FolderOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -42,7 +43,20 @@ type DisturbanceFormProps = {
     temperatur_min?: number | null;
     temperatur_max?: number | null;
     geschoss?: string[] | null;
+    project_id?: string | null;
   } | null;
+};
+
+type ProjectOption = {
+  id: string;
+  name: string;
+  plz: string | null;
+  adresse: string | null;
+  bauherr: string | null;
+  bauherr_kontakt: string | null;
+  kunde_email: string | null;
+  kunde_telefon: string | null;
+  status: string;
 };
 
 export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: DisturbanceFormProps) => {
@@ -69,6 +83,38 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   const [temperaturMin, setTemperaturMin] = useState<number | null>(null);
   const [temperaturMax, setTemperaturMax] = useState<number | null>(null);
   const [geschoss, setGeschoss] = useState<string[]>([]);
+  const [projectId, setProjectId] = useState<string>("");
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+
+  // Projekte laden (aktive + abgeschlossene, fuer Rueckwaerts-Erfassung)
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase
+        .from("projects")
+        .select("id, name, plz, adresse, bauherr, bauherr_kontakt, kunde_email, kunde_telefon, status")
+        .order("status", { ascending: true })
+        .order("name");
+      setProjects(data || []);
+    })();
+  }, [open]);
+
+  // Wenn ein Projekt gewaehlt wird: Kundendaten automatisch aus den
+  // Projekt-Stammdaten vorbefuellen (nur bei leeren Feldern und nicht im
+  // Edit-Modus, damit bestehende Werte nicht ueberschrieben werden).
+  const applyProjectContact = (pid: string) => {
+    const proj = projects.find((p) => p.id === pid);
+    if (!proj) return;
+    setFormData((prev) => ({
+      ...prev,
+      kundeName: prev.kundeName.trim() || proj.bauherr || "",
+      kundeEmail: prev.kundeEmail.trim() || proj.kunde_email || "",
+      kundeTelefon: prev.kundeTelefon.trim() || proj.kunde_telefon || "",
+      kundeAdresse:
+        prev.kundeAdresse.trim() ||
+        [proj.adresse, proj.plz].filter(Boolean).join(", "),
+    }));
+  };
 
   useEffect(() => {
     if (editData) {
@@ -91,6 +137,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       setTemperaturMin(editData.temperatur_min ?? null);
       setTemperaturMax(editData.temperatur_max ?? null);
       setGeschoss(editData.geschoss || []);
+      setProjectId(editData.project_id || "");
     } else {
       // Reset form for new entry
       setFormData({
@@ -111,6 +158,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       setTemperaturMin(null);
       setTemperaturMax(null);
       setGeschoss([]);
+      setProjectId("");
     }
   }, [editData, open]);
 
@@ -224,6 +272,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
     const disturbanceData = {
       user_id: user.id,
+      project_id: projectId || null,
       datum: formData.datum,
       start_time: formData.startTime,
       end_time: formData.endTime,
@@ -402,6 +451,37 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
         <div className="flex-1 overflow-y-auto pr-1">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Projekt-Auswahl (Kontaktdaten werden beim Auswaehlen vorbefuellt) */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 font-medium">
+              <FolderOpen className="h-4 w-4" />
+              Projekt
+            </Label>
+            <Select
+              value={projectId}
+              onValueChange={(v) => {
+                setProjectId(v);
+                applyProjectContact(v);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Projekt auswählen – Kundendaten werden automatisch übernommen" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                    {p.plz ? ` (${p.plz})` : ""}
+                    {p.status !== "aktiv" ? ` – ${p.status}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Bauherr, Kontaktdaten und Adresse werden aus dem Projekt übernommen und unten angezeigt – du kannst sie bei Bedarf überschreiben.
+            </p>
+          </div>
+
           {/* Date and Time Section */}
           <div className="space-y-4">
             <h3 className="font-medium flex items-center gap-2">

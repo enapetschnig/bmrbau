@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { de } from "date-fns/locale";
+import { filterHiddenByUserId } from "@/lib/hiddenUsers";
 
 type Employee = { user_id: string; name: string };
 type Row = {
@@ -49,7 +50,7 @@ export default function SafetyNachweise() {
           user_id: e.user_id,
           name: `${e.vorname || ""} ${e.nachname || ""}`.trim(),
         }));
-        setEmployees(mapped);
+        setEmployees(filterHiddenByUserId(mapped));
         setSelectedUserId(user.id);
       } else {
         setSelectedUserId(user.id);
