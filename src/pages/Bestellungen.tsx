@@ -640,11 +640,22 @@ export default function Bestellungen() {
                       updated[i].artikel = e.target.value;
                       setFormPositions(updated);
                     }} />
-                    <Input className="w-20" type="number" placeholder="Menge" value={pos.menge} onChange={e => {
-                      const updated = [...formPositions];
-                      updated[i].menge = e.target.value;
-                      setFormPositions(updated);
-                    }} />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="Menge"
+                      value={pos.menge}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v !== "" && Number(v) < 0) return;
+                        const updated = [...formPositions];
+                        updated[i].menge = v;
+                        setFormPositions(updated);
+                      }}
+                    />
                     <Input className="w-16" placeholder="Einheit" value={pos.einheit} onChange={e => {
                       const updated = [...formPositions];
                       updated[i].einheit = e.target.value;

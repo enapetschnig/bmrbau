@@ -74,7 +74,7 @@ interface TimeBlock {
   zeitTyp: "normal" | "lenkzeit" | "reisezeit" | "fahrt_100km";
 }
 
-const ALL_ABSENCE_LABELS = ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag", "Zeitausgleich", "Arzttermin", "Begraebnis", "Pflegeurlaub", "Sonstige"];
+const ALL_ABSENCE_LABELS = ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag", "Zeitausgleich", "Arzttermin", "Begräbnis", "Pflegeurlaub", "Sonstige"];
 
 const createDefaultBlock = (startTime = "", endTime = ""): TimeBlock => ({
   id: crypto.randomUUID(),
@@ -99,6 +99,7 @@ const TimeTracking = () => {
   // Admin editing another user's entries
   const targetUserId = searchParams.get("user_id");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canCreateProjects, setCanCreateProjects] = useState(false);
   const [targetUserName, setTargetUserName] = useState("");
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -348,7 +349,18 @@ const TimeTracking = () => {
         .eq("user_id", user.id)
         .eq("role", "administrator")
         .maybeSingle();
-      setIsAdmin(!!data);
+      const admin = !!data;
+      setIsAdmin(admin);
+      if (admin) {
+        setCanCreateProjects(true);
+      } else {
+        const { data: emp } = await supabase
+          .from("employees")
+          .select("kategorie")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setCanCreateProjects(emp?.kategorie === "vorarbeiter");
+      }
     };
     checkAdmin();
   }, []);
@@ -667,7 +679,7 @@ const TimeTracking = () => {
     const ABSENCE_LABELS: Record<string, string> = {
       urlaub: "Urlaub", krankenstand: "Krankenstand", weiterbildung: "Weiterbildung",
       feiertag: "Feiertag", za: "Zeitausgleich", arzttermin: "Arzttermin",
-      begraebnis: "Begraebnis", pflegeurlaub: "Pflegeurlaub", sonstige: "Sonstige",
+      begraebnis: "Begräbnis", pflegeurlaub: "Pflegeurlaub", sonstige: "Sonstige",
     };
     const absenceLabel = ABSENCE_LABELS[absenceData.type] || absenceData.type;
 
@@ -889,7 +901,8 @@ const TimeTracking = () => {
       const blockZA = Math.round((blockHours - blockLohn) * 100) / 100;
       remainingLohn = Math.round((remainingLohn - blockLohn) * 100) / 100;
 
-      const km = block.kilometer ? parseFloat(block.kilometer) : null;
+      const rawKm = block.kilometer ? parseFloat(block.kilometer) : NaN;
+      const km = isFinite(rawKm) && rawKm > 0 ? rawKm : null;
 
       const entryData: Record<string, any> = {
         user_id: targetUserId || user.id,
@@ -1124,6 +1137,13 @@ const TimeTracking = () => {
                   id="date"
                   type="date"
                   value={selectedDate}
+                  // Admins duerfen bis zu 7 Tage in die Zukunft buchen
+                  // (z. B. Abwesenheit/Urlaub vorplanen). Normaler MA nur bis heute.
+                  max={(() => {
+                    const d = new Date();
+                    if (isAdmin) d.setDate(d.getDate() + 7);
+                    return d.toISOString().slice(0, 10);
+                  })()}
                   onChange={(e) => { if (!editMode && !targetUserId) setSelectedDate(e.target.value); }}
                   disabled={editMode || !!targetUserId}
                   required
@@ -1357,11 +1377,15 @@ const TimeTracking = () => {
                               <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
                               <SelectContent>
                                 {projects.map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.plz})</SelectItem>
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}{p.plz ? ` (${p.plz})` : ""}
+                                  </SelectItem>
                                 ))}
-                                <SelectItem value="new" className="text-primary font-semibold">
-                                  <div className="flex items-center gap-2"><Plus className="w-4 h-4" />Neues Projekt erstellen</div>
-                                </SelectItem>
+                                {canCreateProjects && (
+                                  <SelectItem value="new" className="text-primary font-semibold">
+                                    <div className="flex items-center gap-2"><Plus className="w-4 h-4" />Neues Projekt erstellen</div>
+                                  </SelectItem>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
@@ -1470,8 +1494,13 @@ const TimeTracking = () => {
                               type="number"
                               min="0"
                               step="1"
+                              inputMode="numeric"
                               value={block.kilometer}
-                              onChange={(e) => updateBlock(block.id, { kilometer: e.target.value })}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                // Negative Werte verhindern
+                                if (v === "" || Number(v) >= 0) updateBlock(block.id, { kilometer: v });
+                              }}
                               placeholder="0"
                               className="h-10"
                             />
@@ -1632,7 +1661,7 @@ const TimeTracking = () => {
                     { value: "weiterbildung", label: "Weiterbild.", short: "WB" },
                     { value: "feiertag", label: "Feiertag", short: "F" },
                     { value: "arzttermin", label: "Arzttermin", short: "A" },
-                    { value: "begraebnis", label: "Begraebnis", short: "BEG" },
+                    { value: "begraebnis", label: "Begräbnis", short: "BEG" },
                     { value: "pflegeurlaub", label: "Pflegeurlaub", short: "PF" },
                     { value: "sonstige", label: "Sonstige", short: "SO" },
                   ].map(({ value, label, short }) => (
@@ -1894,7 +1923,7 @@ const TimeTracking = () => {
                   <SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger>
                   <SelectContent>
                     {projects.filter(p => p.status === "aktiv" || p.status === "in_planung").map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name} ({p.plz})</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>{p.name}{p.plz ? ` (${p.plz})` : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1981,7 +2010,7 @@ const TimeTracking = () => {
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-lg border">
-                <Label>Wurde waehrend Schlechtwetter gearbeitet?</Label>
+                <Label>Wurde während Schlechtwetter gearbeitet?</Label>
                 <Switch
                   checked={badWeatherData.gearbeitetWaehrendSW}
                   onCheckedChange={(checked) => setBadWeatherData({ ...badWeatherData, gearbeitetWaehrendSW: checked })}
@@ -1990,7 +2019,7 @@ const TimeTracking = () => {
 
               {badWeatherData.gearbeitetWaehrendSW && (
                 <div>
-                  <Label>Arbeitsstunden waehrend Schlechtwetter (zaehlen als Zeitausgleich)</Label>
+                  <Label>Arbeitsstunden während Schlechtwetter (zählen als Zeitausgleich)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -2038,7 +2067,7 @@ const TimeTracking = () => {
                 Fahrtengeld erfassen
               </DialogTitle>
               <DialogDescription>
-                Fahrtengeld fuer {selectedDate ? format(new Date(selectedDate), "dd.MM.yyyy") : "heute"}
+                Fahrtengeld für {selectedDate ? format(new Date(selectedDate), "dd.MM.yyyy") : "heute"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -2048,8 +2077,12 @@ const TimeTracking = () => {
                   type="number"
                   min="0"
                   step="1"
+                  inputMode="numeric"
                   value={fahrtenData.kilometer}
-                  onChange={(e) => setFahrtenData({ ...fahrtenData, kilometer: e.target.value })}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || Number(v) >= 0) setFahrtenData({ ...fahrtenData, kilometer: v });
+                  }}
                   placeholder="z.B. 45"
                 />
                 {fahrtenData.kilometer && parseFloat(fahrtenData.kilometer) > 0 && (

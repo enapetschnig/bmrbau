@@ -192,8 +192,8 @@ function AppContent() {
           <Route path="/hours-report" element={<ProtectedRoute minRole="admin"><HoursReport /></ProtectedRoute>} />
           <Route path="/employees" element={<ProtectedRoute minRole="admin"><Employees /></ProtectedRoute>} />
           <Route path="/legal-work-time" element={<ProtectedRoute minRole="admin"><LegalWorkTimeReport /></ProtectedRoute>} />
-          <Route path="/equipment" element={<ProtectedRoute minRole="admin"><EquipmentPage /></ProtectedRoute>} />
-          <Route path="/equipment/:id" element={<ProtectedRoute minRole="admin"><EquipmentDetail /></ProtectedRoute>} />
+          <Route path="/equipment" element={<ProtectedRoute minRole="facharbeiter"><EquipmentPage /></ProtectedRoute>} />
+          <Route path="/equipment/:id" element={<ProtectedRoute minRole="facharbeiter"><EquipmentDetail /></ProtectedRoute>} />
           <Route path="/bestellungen" element={<ProtectedRoute minRole="facharbeiter"><Bestellungen /></ProtectedRoute>} />
           <Route path="/buak-kalender" element={<ProtectedRoute minRole="admin"><BuakCalendarAdmin /></ProtectedRoute>} />
           <Route path="/schedule" element={<ProtectedRoute minRole="vorarbeiter"><ScheduleBoard /></ProtectedRoute>} />

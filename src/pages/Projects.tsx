@@ -49,6 +49,7 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canCreateProjects, setCanCreateProjects] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newProject, setNewProject] = useState({
     name: "",
@@ -119,7 +120,20 @@ const Projects = () => {
       .eq("user_id", user.id)
       .single();
 
-    setIsAdmin(data?.role === "administrator");
+    const admin = data?.role === "administrator";
+    setIsAdmin(admin);
+
+    // Projekte anlegen duerfen Admins + Vorarbeiter
+    if (admin) {
+      setCanCreateProjects(true);
+    } else {
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("kategorie")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setCanCreateProjects(emp?.kategorie === "vorarbeiter");
+    }
   };
 
   const fetchFavorites = async () => {
@@ -148,39 +162,14 @@ const Projects = () => {
   };
 
   const fetchProjects = async () => {
-    let projectData: any[] = [];
-
-    if (isAdmin) {
-      // Admins see all projects
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) { setLoading(false); return; }
-      projectData = data || [];
-    } else {
-      // Non-admins: only projects they have access to
-      const { data: accessData } = await supabase
-        .from("project_access")
-        .select("project_id")
-        .eq("user_id", currentUserId!);
-      const accessIds = (accessData || []).map(a => (a as any).project_id);
-      if (accessIds.length === 0) {
-        setProjects([]);
-        setLoading(false);
-        return;
-      }
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .in("id", accessIds)
-        .order("created_at", { ascending: false });
-      if (error) { setLoading(false); return; }
-      projectData = data || [];
-    }
-
-    const data = projectData;
-    const error = null;
+    // Alle eingeloggten User sehen alle Projekte - Zuweisungs-Konzept
+    // wurde 2026-04-20 auf BMR-Wunsch entfernt.
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) { setLoading(false); return; }
+    const projectData = data || [];
 
     // Fetch file counts for each project
     const projectsWithCounts = await Promise.all(
@@ -249,16 +238,7 @@ const Projects = () => {
         );
       }
 
-      // Save project access for selected employees
-      if (accessEmployeeIds.length > 0) {
-        await supabase.from("project_access").insert(
-          accessEmployeeIds.map(uid => ({
-            project_id: inserted.id,
-            user_id: uid,
-            granted_by: currentUserId,
-          }))
-        );
-      }
+      // Mitarbeiter-Zugriff wurde entfernt - alle sehen alle Projekte.
 
       toast({
         title: "Erfolg",
@@ -501,7 +481,7 @@ const Projects = () => {
                 </Button>
               )}
             <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-              {isAdmin && (
+              {canCreateProjects && (
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-1 sm:gap-2">
                   <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -687,15 +667,8 @@ const Projects = () => {
                     </div>
                   </div>
 
-                  {/* Mitarbeiterzugriff */}
-                  <div className="space-y-2">
-                    <Label className="text-base font-semibold">Mitarbeiterzugriff</Label>
-                    <p className="text-xs text-muted-foreground">Welche Mitarbeiter sollen Zugriff auf dieses Projekt haben?</p>
-                    <SafetyEmployeeSelector
-                      selectedIds={accessEmployeeIds}
-                      onChange={setAccessEmployeeIds}
-                    />
-                  </div>
+                  {/* Mitarbeiter-Zugriff wurde auf BMR-Wunsch entfernt -
+                      alle Mitarbeiter sehen jetzt standardmaessig alle Projekte. */}
 
                   <Button onClick={handleCreateProject} className="w-full">
                     Projekt erstellen
@@ -927,7 +900,7 @@ const Projects = () => {
                 <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-lg font-semibold mb-2">Keine aktiven Projekte</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {isAdmin ? "Erstelle dein erstes Projekt" : "Du hast noch keinen Zugriff auf Projekte"}
+                  {canCreateProjects ? "Erstelle dein erstes Projekt" : "Noch keine Projekte angelegt"}
                 </p>
                 {isAdmin && (
                   <Button onClick={() => setShowNewDialog(true)}>

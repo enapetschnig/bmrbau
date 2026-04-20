@@ -247,7 +247,7 @@ export const FillRemainingHoursDialog = ({
                       <SelectContent>
                         {projects.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.name} ({p.plz})
+                            {p.name}{p.plz ? ` (${p.plz})` : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
