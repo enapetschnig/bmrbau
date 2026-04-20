@@ -120,6 +120,19 @@ export function VoiceAIInput({
   const transcribe = async (blob: Blob, mimeType: string) => {
     setTranscribing(true);
     try {
+      // Browser-seitige Groessen-Pruefung: OpenAI Whisper limit 25MB,
+      // Supabase Edge Function body limit ~6MB. Wir lassen Puffer fuer
+      // Base64-Overhead (+33%) und verwerfen grosse Blobs fruehzeitig.
+      const MAX_BLOB_BYTES = 4 * 1024 * 1024; // 4MB roh -> ~5.3MB base64
+      if (blob.size > MAX_BLOB_BYTES) {
+        toast({
+          variant: "destructive",
+          title: "Aufnahme zu lang",
+          description: `Bitte kürzer aufnehmen (max. ca. ${Math.round(MAX_BLOB_BYTES / 1024 / 1024)} MB, aktuell ${Math.round(blob.size / 1024 / 1024 * 10) / 10} MB).`,
+        });
+        return;
+      }
+
       // Blob -> base64
       const reader = new FileReader();
       const base64: string = await new Promise((resolve, reject) => {
@@ -131,21 +144,42 @@ export function VoiceAIInput({
         reader.readAsDataURL(blob);
       });
 
-      const { data, error } = await supabase.functions.invoke("transcribe-audio", {
-        body: {
+      // Direkter fetch statt supabase.functions.invoke, damit wir auch bei
+      // non-2xx den Response-Body lesen koennen und eine sinnvolle Fehlermeldung
+      // zeigen koennen statt dem nichtssagenden "edge function returned non 2xx".
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || supabaseKey;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+          "apikey": supabaseKey,
+        },
+        body: JSON.stringify({
           audio: base64,
           mimeType,
           context: value.slice(-200),
-        },
+        }),
       });
-      if (error) throw error;
-      // Server gibt Status 200 mit { error: "..." } zurueck wenn Whisper abgelehnt
-      // hat – z. B. wegen Format- oder Groessen-Problem. Dann explizit anzeigen.
-      if ((data as any)?.error) {
-        toast({ variant: "destructive", title: "Transkription fehlgeschlagen", description: String((data as any).error) });
+
+      let parsed: { text?: string; error?: string } = {};
+      try {
+        parsed = await response.json();
+      } catch {
+        parsed = { error: `HTTP ${response.status}: ${response.statusText || "unbekannter Fehler"}` };
+      }
+
+      if (!response.ok || parsed.error) {
+        const msg = parsed.error || `HTTP ${response.status}: ${response.statusText}`;
+        toast({ variant: "destructive", title: "Transkription fehlgeschlagen", description: msg });
         return;
       }
-      const newText = (data as any)?.text || "";
+
+      const newText = parsed.text || "";
       if (!newText.trim()) {
         toast({ variant: "destructive", title: "Keine Sprache erkannt", description: "Bitte nochmal versuchen." });
         return;
