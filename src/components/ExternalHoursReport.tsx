@@ -277,7 +277,7 @@ export default function ExternalHoursReport({ onBack }: ExternalHoursReportProps
             <div className="space-y-6">
               {/* Summary per employee */}
               <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
+                <div className="grid gap-4 grid-cols-3">
                   <div>
                     <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                     <p className="text-2xl font-bold">{grandTotalHours.toFixed(2)} h</p>

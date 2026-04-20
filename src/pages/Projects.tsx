@@ -763,9 +763,9 @@ const Projects = () => {
                         </CardDescription>
                       )}
                       {(project.bauherr || project.bauleiter) && (
-                        <div className="text-xs text-muted-foreground mt-0.5 flex gap-3">
-                          {project.bauherr && <span>Bauherr: {project.bauherr}</span>}
-                          {project.bauleiter && <span>Bauleiter: {project.bauleiter}</span>}
+                        <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {project.bauherr && <span className="truncate max-w-full">Bauherr: {project.bauherr}</span>}
+                          {project.bauleiter && <span className="truncate max-w-full">Bauleiter: {project.bauleiter}</span>}
                         </div>
                       )}
                     </div>
@@ -794,7 +794,7 @@ const Projects = () => {
                   </p>
                 )}
                 
-                <div className={`grid ${isAdmin ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
+                <div className={`grid ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'} gap-2 sm:gap-3 mb-4`}>
                   <div className="flex flex-col items-center gap-1 p-2">
                     <FileText className="w-5 h-5 text-primary" />
                     <span className="text-xs font-medium">Pläne</span>
@@ -966,7 +966,7 @@ const Projects = () => {
                         </p>
                       )}
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
                         <div className="flex flex-col items-center gap-1 p-2">
                           <FileText className="w-5 h-5 text-primary" />
                           <span className="text-xs font-medium">Pläne</span>
