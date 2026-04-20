@@ -15,12 +15,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Kleiner Helper, damit wir immer einen passenden HTTP-Status mitgeben
-  // koennen statt alles als 200 mit success:false zu verpacken.
-  const fail = (status: number, errorMessage: string) =>
+  // Supabase-JS "functions.invoke" swallowt den Response-Body bei non-2xx
+  // und liefert stattdessen nur "Failed to send a request to the edge
+  // function" zurueck - dadurch sieht der User sprechende Fehler nicht.
+  // Deshalb: fachliche Fehler als 200 + success:false verpacken, der
+  // Client liest data.error. Nur fuer echte Server-Crashes 500.
+  const fail = (_status: number, errorMessage: string) =>
     new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     );
 
   try {

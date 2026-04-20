@@ -458,7 +458,7 @@ const Projects = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <header className="border-b bg-card sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-3">
@@ -681,7 +681,7 @@ const Projects = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl">
+      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl overflow-x-hidden">
         <div className="mb-4 sm:mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Projekte</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
@@ -732,11 +732,10 @@ const Projects = () => {
               .map((project) => (
             <Card
               key={project.id}
-              className={`border-2 hover:shadow-lg transition-all cursor-pointer ${favoriteIds.has(project.id) ? "border-red-500 bg-red-50 dark:bg-red-950/20" : ""}`}
+              className={`border-2 hover:shadow-lg transition-all cursor-pointer overflow-hidden ${favoriteIds.has(project.id) ? "border-red-500 bg-red-50 dark:bg-red-950/20" : ""}`}
               onClick={() => navigate(`/projects/${project.id}`)}
-
             >
-              <CardHeader className={`pb-3 sm:pb-4 ${favoriteIds.has(project.id) ? "bg-red-100/50 dark:bg-red-950/30" : "bg-primary/5"}`}>
+              <CardHeader className={`p-3 sm:p-6 pb-3 sm:pb-4 ${favoriteIds.has(project.id) ? "bg-red-100/50 dark:bg-red-950/30" : "bg-primary/5"}`}>
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
                   <div className="flex gap-2 sm:gap-3">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -749,16 +748,16 @@ const Projects = () => {
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
                       {project.adresse && (
-                        <CardDescription className="text-xs sm:text-sm">
+                        <CardDescription className="text-xs sm:text-sm break-words">
                           <a
                             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.adresse)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+                            className="inline-flex items-start gap-1 hover:text-primary hover:underline break-words"
                           >
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            {project.adresse}
+                            <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
+                            <span className="break-words min-w-0">{project.adresse}</span>
                           </a>
                         </CardDescription>
                       )}
@@ -787,40 +786,40 @@ const Projects = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-4 sm:pt-6">
+              <CardContent className="p-3 sm:p-6 pt-4 sm:pt-6">
                 {project.beschreibung && (
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2 break-words">
                     {project.beschreibung}
                   </p>
                 )}
-                
-                <div className={`grid ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'} gap-2 sm:gap-3 mb-4`}>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Pläne</span>
-                    <span className="text-xs text-muted-foreground">
+
+                <div className={`grid ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5 sm:gap-3 mb-4`}>
+                  <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span className="text-[10px] sm:text-xs font-medium">Pläne</span>
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
                       {project.fileCount?.plans || 0}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Berichte</span>
-                    <span className="text-xs text-muted-foreground">
+                  <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span className="text-[10px] sm:text-xs font-medium">Berichte</span>
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
                       {project.fileCount?.reports || 0}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <Image className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-medium">Fotos</span>
-                    <span className="text-xs text-muted-foreground">
+                  <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                    <Image className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span className="text-[10px] sm:text-xs font-medium">Fotos</span>
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
                       {project.fileCount?.photos || 0}
                     </span>
                   </div>
                   {isAdmin && (
-                    <div className="flex flex-col items-center gap-1 p-2">
-                      <Lock className="w-5 h-5 text-primary" />
-                      <span className="text-xs font-medium">Chef</span>
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                      <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                      <span className="text-[10px] sm:text-xs font-medium">Chef</span>
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">
                         {project.fileCount?.chef || 0}
                       </span>
                     </div>
@@ -941,7 +940,7 @@ const Projects = () => {
                     className="border-2 hover:shadow-lg transition-all cursor-pointer"
                     onClick={() => navigate(`/projects/${project.id}`)}
                   >
-                    <CardHeader className="bg-primary/5 pb-3 sm:pb-4">
+                    <CardHeader className="p-3 sm:p-6 bg-primary/5 pb-3 sm:pb-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
                         <div className="flex gap-2 sm:gap-3">
                           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -959,32 +958,32 @@ const Projects = () => {
                         </Badge>
                       </div>
                     </CardHeader>
-                    <CardContent className="pt-4 sm:pt-6">
+                    <CardContent className="p-3 sm:p-6 pt-4 sm:pt-6">
                       {project.beschreibung && (
-                        <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
+                        <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2 break-words">
                           {project.beschreibung}
                         </p>
                       )}
-                      
-                      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <FileText className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Pläne</span>
-                          <span className="text-xs text-muted-foreground">
+
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-4">
+                        <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                          <span className="text-[10px] sm:text-xs font-medium">Pläne</span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">
                             {project.fileCount?.plans || 0}
                           </span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <FileText className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Berichte</span>
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                          <span className="text-[10px] sm:text-xs font-medium">Berichte</span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">
                             {project.fileCount?.reports || 0}
                           </span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <Image className="w-5 h-5 text-primary" />
-                          <span className="text-xs font-medium">Fotos</span>
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex flex-col items-center gap-0.5 p-1 sm:p-2 min-w-0">
+                          <Image className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                          <span className="text-[10px] sm:text-xs font-medium">Fotos</span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">
                             {project.fileCount?.photos || 0}
                           </span>
                         </div>

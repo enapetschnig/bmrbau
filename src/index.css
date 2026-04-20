@@ -113,5 +113,13 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Safety-Net gegen horizontales Scroll-Verhalten auf Mobile:
+       nichts soll die viewport-Breite ueberschreiten. Kinder-Elemente
+       die das trotzdem tun wollen, bekommen ihren eigenen overflow. */
+    overflow-x: hidden;
+  }
+
+  html, body {
+    max-width: 100vw;
   }
 }
