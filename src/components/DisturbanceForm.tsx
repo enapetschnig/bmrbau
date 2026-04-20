@@ -14,6 +14,7 @@ import { WeatherSelector } from "@/components/WeatherSelector";
 import { TemperatureInput } from "@/components/TemperatureInput";
 import { GeschossSelector } from "@/components/GeschossSelector";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
+import { splitHours, type WeekSchedule } from "@/lib/workingHours";
 
 type MaterialEntry = {
   id: string;
@@ -326,19 +327,45 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         return;
       }
 
-      // Create time entry for current user
-      const { error: timeError } = await supabase.from("time_entries").insert({
+      // Create time entry for current user - wird automatisch mit dem
+      // Regiebericht synchronisiert (ueber disturbance_id). Dadurch erscheint
+      // der Regie-Einsatz direkt in der Monats-Stundenauswertung & Lohn-
+      // abrechnung, ohne dass der Mitarbeiter die Stunden doppelt erfassen
+      // muss.
+      const { data: empData } = await supabase
+        .from("employees")
+        .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const langSchedule = (empData?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
+      const kurzSchedule = (empData?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
+      // Grob: lang-Plan fuer die Berechnung verwenden – Wochentyp-Trigger
+      // setzt week_type in der Zeile automatisch.
+      const split = splitHours(
+        stunden,
+        new Date(formData.datum),
+        langSchedule || kurzSchedule,
+        empData?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
+      );
+
+      const timeEntryPayload: Record<string, any> = {
         user_id: user.id,
         datum: formData.datum,
         start_time: formData.startTime,
         end_time: formData.endTime,
         pause_minutes: calculatePauseMinutes(),
+        pause_start: formData.pauseStart || null,
+        pause_end: formData.pauseEnd || null,
         stunden,
-        project_id: null,
+        project_id: projectId || null,
         disturbance_id: newDisturbance.id,
-        taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
+        taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
         location_type: "baustelle",
-      });
+      };
+      if (split.lohnstunden > 0) timeEntryPayload.lohnstunden = split.lohnstunden;
+      if (split.zeitausgleich > 0) timeEntryPayload.zeitausgleich_stunden = split.zeitausgleich;
+
+      const { error: timeError } = await supabase.from("time_entries").insert(timeEntryPayload);
       if (timeError) {
         toast({ variant: "destructive", title: "Fehler", description: "Zeiteintrag konnte nicht erstellt werden" });
         setSaving(false);
@@ -390,16 +417,40 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   };
 
   const updateTimeEntriesForAllWorkers = async (disturbanceId: string, mainUserId: string, stunden: number): Promise<boolean> => {
+    // Fuer Lohnverrechnung: aktuellen Stand splitten, aber Schwellenwert wird
+    // pro-User ermittelt. Bei der Bulk-Update-Variante nehmen wir mainUserId
+    // als Referenz (fuer Worker sind Overwrites meist die gleichen Stunden).
+    const { data: empData } = await supabase
+      .from("employees")
+      .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
+      .eq("user_id", mainUserId)
+      .maybeSingle();
+    const langSchedule = (empData?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
+    const kurzSchedule = (empData?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
+    const split = splitHours(
+      stunden,
+      new Date(formData.datum),
+      langSchedule || kurzSchedule,
+      empData?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
+    );
+
+    const payload: Record<string, any> = {
+      datum: formData.datum,
+      start_time: formData.startTime,
+      end_time: formData.endTime,
+      pause_minutes: calculatePauseMinutes(),
+      pause_start: formData.pauseStart || null,
+      pause_end: formData.pauseEnd || null,
+      stunden,
+      project_id: projectId || null,
+      taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
+      lohnstunden: split.lohnstunden,
+      zeitausgleich_stunden: split.zeitausgleich,
+    };
+
     const { error } = await supabase
       .from("time_entries")
-      .update({
-        datum: formData.datum,
-        start_time: formData.startTime,
-        end_time: formData.endTime,
-        pause_minutes: calculatePauseMinutes(),
-        stunden,
-        taetigkeit: `Regiebericht: ${formData.kundeName.trim()}`,
-      })
+      .update(payload)
       .eq("disturbance_id", disturbanceId);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Zeiteinträge konnten nicht aktualisiert werden" });
