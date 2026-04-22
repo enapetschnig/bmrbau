@@ -115,20 +115,29 @@ const DisturbanceDetail = () => {
         profile_nachname: profile?.nachname || "",
       });
 
-      // Fetch workers
+      // Workers: Ersteller immer als Hauptmitarbeiter zeigen, auch
+      // bei alten Berichten wo er evtl. nicht in disturbance_workers
+      // drin steht (Form-Logik "creator as is_main" kam erst spaeter).
       const { data: workersData } = await supabase
         .from("disturbance_workers")
         .select("user_id, is_main")
         .eq("disturbance_id", id);
 
-      if (workersData && workersData.length > 0) {
-        const workerIds = workersData.map(w => w.user_id);
+      const rows = (workersData || []).slice();
+      const creatorId = data.user_id as string | undefined;
+      if (creatorId && !rows.some((r) => r.user_id === creatorId)) {
+        rows.unshift({ user_id: creatorId, is_main: true });
+      }
+
+      if (rows.length > 0) {
+        const workerIds = Array.from(new Set(rows.map((w) => w.user_id)));
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, vorname, nachname")
           .in("id", workerIds);
 
-        const workersWithNames: Worker[] = workersData.map(w => {
+        // Sortierung: is_main zuerst, dann alphabetisch
+        const workersWithNames: Worker[] = rows.map(w => {
           const profile = profiles?.find(p => p.id === w.user_id);
           return {
             user_id: w.user_id,
@@ -136,6 +145,9 @@ const DisturbanceDetail = () => {
             vorname: profile?.vorname || "",
             nachname: profile?.nachname || "",
           };
+        }).sort((a, b) => {
+          if (a.is_main !== b.is_main) return a.is_main ? -1 : 1;
+          return (a.nachname + a.vorname).localeCompare(b.nachname + b.vorname);
         });
         setWorkers(workersWithNames);
       } else {

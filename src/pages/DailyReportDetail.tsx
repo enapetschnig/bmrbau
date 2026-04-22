@@ -627,7 +627,9 @@ export default function DailyReportDetail() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {workers.map((w) => (
-                  <Badge key={w.user_id} variant="secondary">{w.name}</Badge>
+                  <Badge key={w.user_id} variant={w.is_main ? "default" : "secondary"}>
+                    {w.name}{w.is_main ? " (Ersteller)" : ""}
+                  </Badge>
                 ))}
               </div>
             </CardContent>
