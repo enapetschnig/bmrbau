@@ -12,7 +12,7 @@ type DocFile = { name: string; id: string; created_at: string };
 const CATEGORIES = [
   { key: "baugesetz", label: "Baugesetz" },
   { key: "oib", label: "OIB-Richtlinien" },
-  { key: "stmk", label: "Stmk. Baugesetz" },
+  { key: "stmk", label: "Kärnt. Baugesetz" },
   { key: "diverse", label: "Diverse" },
 ] as const;
 
