@@ -69,6 +69,7 @@ export default function DailyReportDetail() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [absending, setAbsending] = useState(false);
 
   // Signature state
   const [safetyItems, setSafetyItems] = useState<SafetyItem[]>(DEFAULT_SAFETY_ITEMS);
@@ -100,6 +101,11 @@ export default function DailyReportDetail() {
   // setzen, ein PDF generieren und ins Projekt-Archiv schieben.
   const handleAbschicken = async () => {
     if (!report || !id) return;
+    // Doppelklick-Schutz: bereits laufender Submit blockt weitere Klicks.
+    // Sonst wuerden bei flotten Doppelklicks zwei PDFs ins Projekt
+    // hochgeladen und zwei documents-Eintraege angelegt.
+    if (absending) return;
+    setAbsending(true);
 
     // PDF im selben Layout wie der Download generieren und automatisch
     // ins Projekt hochladen, sodass es ueber den Projekt-Bereich UND
@@ -182,6 +188,7 @@ export default function DailyReportDetail() {
     const { error } = await supabase.from("daily_reports").update(update).eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
+      setAbsending(false);
       return;
     }
     toast({
@@ -190,7 +197,8 @@ export default function DailyReportDetail() {
         ? "Bericht abgeschlossen, PDF ins Projekt gespeichert."
         : "Bericht abgeschlossen.",
     });
-    fetchReport();
+    await fetchReport();
+    setAbsending(false);
   };
 
   const fetchReport = useCallback(async () => {
@@ -677,8 +685,8 @@ export default function DailyReportDetail() {
               <Button variant="outline" onClick={() => setShowEditForm(true)}>
                 <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
               </Button>
-              <Button onClick={handleAbschicken}>
-                Absenden
+              <Button onClick={handleAbschicken} disabled={absending}>
+                {absending ? "Wird abgeschickt…" : "Absenden"}
               </Button>
             </>
           )}
