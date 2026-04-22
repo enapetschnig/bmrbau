@@ -326,22 +326,26 @@ const ProjectOverview = () => {
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
-    // Counter aus documents-Tabelle: das ist die einzige Quelle die
-    // synchron mit Loeschungen bleibt (verwaiste Storage-Files
-    // werden ignoriert, Auto-PDFs vom Tagesbericht-Loeschen werden
-    // sauber abgezogen).
+    // Counter = tatsaechliche Files im Storage-Bucket (gleiche Zahl
+    // die der User in der Detail-Ansicht sieht). Wenn ein Tagesbericht
+    // / Aufmass / sonst was geloescht wird, wird das PDF auch aus
+    // dem Storage entfernt → Counter stimmt automatisch wieder.
+    const bucketMap: Record<string, string> = {
+      plans: "project-plans",
+      reports: "project-reports",
+      photos: "project-photos",
+      chef: "project-chef",
+    };
+
     const updatedCategories = await Promise.all(
       categories.map(async (category) => {
         if (category.type === "chef" && !isAdmin) {
           return { ...category, count: 0 };
         }
-        const { count } = await supabase
-          .from("documents")
-          .select("id", { count: "exact", head: true })
-          .eq("project_id", projectId)
-          .eq("typ", category.type)
-          .eq("archived", false);
-        return { ...category, count: count ?? 0 };
+        const bucket = bucketMap[category.type];
+        if (!bucket) return { ...category, count: 0 };
+        const { data } = await supabase.storage.from(bucket).list(projectId);
+        return { ...category, count: data?.length ?? 0 };
       }),
     );
 
