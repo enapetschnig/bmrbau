@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
-import { SketchRow } from "@/components/SketchRow";
+import { SketchRow, type SketchStroke } from "@/components/SketchRow";
 import { AufmassPhotoStrip, type AufmassPhoto } from "@/components/AufmassPhotoStrip";
 import {
   generateAufmassPDF,
@@ -30,6 +30,7 @@ type Position = {
   menge: number | null;
   einheit: string | null;
   sketch_data_url: string | null;
+  sketch_strokes: SketchStroke[] | null;
 };
 
 type Sheet = {
@@ -495,7 +496,11 @@ export default function AufmassEditor() {
                     ) : (
                       <SketchRow
                         value={pos.sketch_data_url}
-                        onChange={(val) => updatePosition(pos.id, { sketch_data_url: val })}
+                        strokes={pos.sketch_strokes}
+                        onChange={(png, strokes) => updatePosition(pos.id, {
+                          sketch_data_url: png,
+                          sketch_strokes: strokes as unknown as Position["sketch_strokes"],
+                        })}
                         disabled={isReadOnly}
                       />
                     )}

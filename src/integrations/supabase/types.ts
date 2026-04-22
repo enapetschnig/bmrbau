@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -80,147 +80,171 @@ export type Database = {
           },
         ]
       }
-      broadcast_messages: {
+      aufmass_photos: {
         Row: {
           created_at: string | null
+          file_name: string | null
+          file_path: string
           id: string
-          image_url: string | null
-          message: string | null
-          target_roles: string[]
+          position_id: string | null
+          sheet_id: string
+          sort_order: number
           user_id: string
         }
         Insert: {
           created_at?: string | null
+          file_name?: string | null
+          file_path: string
           id?: string
-          image_url?: string | null
-          message?: string | null
-          target_roles?: string[]
+          position_id?: string | null
+          sheet_id: string
+          sort_order?: number
           user_id: string
         }
         Update: {
           created_at?: string | null
+          file_name?: string | null
+          file_path?: string
           id?: string
-          image_url?: string | null
-          message?: string | null
-          target_roles?: string[]
+          position_id?: string | null
+          sheet_id?: string
+          sort_order?: number
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "broadcast_messages_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "aufmass_photos_position_id_fkey"
+            columns: ["position_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "aufmass_positions"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      push_subscriptions: {
-        Row: {
-          created_at: string | null
-          id: string
-          subscription: Json
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          subscription: Json
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          subscription?: Json
-          user_id?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "push_subscriptions_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "aufmass_photos_sheet_id_fkey"
+            columns: ["sheet_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "aufmass_sheets"
             referencedColumns: ["id"]
           },
         ]
       }
-      bestellungen: {
+      aufmass_positions: {
         Row: {
-          id: string
-          project_id: string | null
-          erstellt_von: string
-          zugewiesen_an: string | null
-          typ: string
-          titel: string
-          beschreibung: string | null
-          status: string
-          lieferant: string | null
-          produktgruppe: string | null
-          dokument_url: string | null
-          notizen: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          project_id?: string | null
-          erstellt_von: string
-          zugewiesen_an?: string | null
-          typ?: string
-          titel: string
-          beschreibung?: string | null
-          status?: string
-          lieferant?: string | null
-          produktgruppe?: string | null
-          dokument_url?: string | null
-          notizen?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          project_id?: string | null
-          erstellt_von?: string
-          zugewiesen_an?: string | null
-          typ?: string
-          titel?: string
-          beschreibung?: string | null
-          status?: string
-          lieferant?: string | null
-          produktgruppe?: string | null
-          dokument_url?: string | null
-          notizen?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      bestellpositionen: {
-        Row: {
-          id: string
-          bestellung_id: string
-          artikel: string
-          menge: number | null
+          berechnung: string | null
+          bezeichnung: string | null
+          created_at: string | null
           einheit: string | null
-          created_at: string
+          id: string
+          input_mode: string
+          menge: number | null
+          notiz: string | null
+          pos_nr: string | null
+          raum: string | null
+          sheet_id: string
+          sketch_data_url: string | null
+          sketch_strokes: Json | null
+          sort_order: number
         }
         Insert: {
-          id?: string
-          bestellung_id: string
-          artikel: string
-          menge?: number | null
+          berechnung?: string | null
+          bezeichnung?: string | null
+          created_at?: string | null
           einheit?: string | null
-          created_at?: string
+          id?: string
+          input_mode?: string
+          menge?: number | null
+          notiz?: string | null
+          pos_nr?: string | null
+          raum?: string | null
+          sheet_id: string
+          sketch_data_url?: string | null
+          sketch_strokes?: Json | null
+          sort_order?: number
         }
         Update: {
-          id?: string
-          bestellung_id?: string
-          artikel?: string
-          menge?: number | null
+          berechnung?: string | null
+          bezeichnung?: string | null
+          created_at?: string | null
           einheit?: string | null
-          created_at?: string
+          id?: string
+          input_mode?: string
+          menge?: number | null
+          notiz?: string | null
+          pos_nr?: string | null
+          raum?: string | null
+          sheet_id?: string
+          sketch_data_url?: string | null
+          sketch_strokes?: Json | null
+          sort_order?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "aufmass_positions_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "aufmass_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      aufmass_sheets: {
+        Row: {
+          aufmass_nr: string | null
+          bauleiter: string | null
+          created_at: string | null
+          datum: string
+          gewerk: string | null
+          id: string
+          notizen: string | null
+          pdf_generated_at: string | null
+          pdf_url: string | null
+          project_id: string
+          status: string
+          titel: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          aufmass_nr?: string | null
+          bauleiter?: string | null
+          created_at?: string | null
+          datum?: string
+          gewerk?: string | null
+          id?: string
+          notizen?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
+          project_id: string
+          status?: string
+          titel?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          aufmass_nr?: string | null
+          bauleiter?: string | null
+          created_at?: string | null
+          datum?: string
+          gewerk?: string | null
+          id?: string
+          notizen?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
+          project_id?: string
+          status?: string
+          titel?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aufmass_sheets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bad_weather_records: {
         Row: {
@@ -284,30 +308,297 @@ export type Database = {
           },
         ]
       }
-      company_holidays: {
+      bestellpositionen: {
         Row: {
+          artikel: string
+          bestellung_id: string
+          created_at: string | null
+          einheit: string | null
           id: string
-          datum: string
-          bezeichnung: string | null
-          typ: string | null
-          created_by: string
-          created_at: string
+          menge: number | null
         }
         Insert: {
+          artikel: string
+          bestellung_id: string
+          created_at?: string | null
+          einheit?: string | null
           id?: string
-          datum: string
-          bezeichnung?: string | null
-          typ?: string | null
-          created_by: string
-          created_at?: string
+          menge?: number | null
         }
         Update: {
+          artikel?: string
+          bestellung_id?: string
+          created_at?: string | null
+          einheit?: string | null
           id?: string
-          datum?: string
-          bezeichnung?: string | null
-          typ?: string | null
+          menge?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bestellpositionen_bestellung_id_fkey"
+            columns: ["bestellung_id"]
+            isOneToOne: false
+            referencedRelation: "bestellungen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bestellungen: {
+        Row: {
+          beschreibung: string | null
+          created_at: string | null
+          dokument_url: string | null
+          erstellt_von: string
+          id: string
+          lieferant: string | null
+          notizen: string | null
+          produktgruppe: string | null
+          project_id: string | null
+          status: string
+          titel: string
+          typ: string
+          updated_at: string | null
+          zugewiesen_an: string | null
+        }
+        Insert: {
+          beschreibung?: string | null
+          created_at?: string | null
+          dokument_url?: string | null
+          erstellt_von: string
+          id?: string
+          lieferant?: string | null
+          notizen?: string | null
+          produktgruppe?: string | null
+          project_id?: string | null
+          status?: string
+          titel: string
+          typ?: string
+          updated_at?: string | null
+          zugewiesen_an?: string | null
+        }
+        Update: {
+          beschreibung?: string | null
+          created_at?: string | null
+          dokument_url?: string | null
+          erstellt_von?: string
+          id?: string
+          lieferant?: string | null
+          notizen?: string | null
+          produktgruppe?: string | null
+          project_id?: string | null
+          status?: string
+          titel?: string
+          typ?: string
+          updated_at?: string | null
+          zugewiesen_an?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bestellungen_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcast_messages: {
+        Row: {
+          channel_id: string | null
+          created_at: string | null
+          id: string
+          image_url: string | null
+          message: string | null
+          target_roles: string[]
+          user_id: string
+        }
+        Insert: {
+          channel_id?: string | null
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          target_roles?: string[]
+          user_id: string
+        }
+        Update: {
+          channel_id?: string | null
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          target_roles?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      buak_week_calendar: {
+        Row: {
+          is_manual: boolean
+          kw: number
+          notiz: string | null
+          updated_at: string
+          updated_by: string | null
+          week_type: Database["public"]["Enums"]["buak_week_type"]
+          year: number
+        }
+        Insert: {
+          is_manual?: boolean
+          kw: number
+          notiz?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          week_type: Database["public"]["Enums"]["buak_week_type"]
+          year: number
+        }
+        Update: {
+          is_manual?: boolean
+          kw?: number
+          notiz?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          week_type?: Database["public"]["Enums"]["buak_week_type"]
+          year?: number
+        }
+        Relationships: []
+      }
+      chat_channels: {
+        Row: {
+          archived_at: string | null
+          channel_type: string
+          created_at: string | null
+          created_by: string
+          id: string
+          is_archived: boolean
+          name: string
+          target_roles: string[] | null
+          target_user_id: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          channel_type?: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          target_roles?: string[] | null
+          target_user_id?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          channel_type?: string
+          created_at?: string | null
           created_by?: string
-          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          target_roles?: string[] | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channels_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_holidays: {
+        Row: {
+          bezeichnung: string | null
+          created_at: string | null
+          created_by: string
+          datum: string
+          id: string
+          typ: string | null
+        }
+        Insert: {
+          bezeichnung?: string | null
+          created_at?: string | null
+          created_by: string
+          datum: string
+          id?: string
+          typ?: string | null
+        }
+        Update: {
+          bezeichnung?: string | null
+          created_at?: string | null
+          created_by?: string
+          datum?: string
+          id?: string
+          typ?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_holidays_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          firma: string | null
+          id: string
+          name: string
+          notizen: string | null
+          rolle: string | null
+          telefon: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          firma?: string | null
+          id?: string
+          name: string
+          notizen?: string | null
+          rolle?: string | null
+          telefon?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          firma?: string | null
+          id?: string
+          name?: string
+          notizen?: string | null
+          rolle?: string | null
+          telefon?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -420,8 +711,12 @@ export type Database = {
           datum: string
           geschoss: string[] | null
           id: string
+          interne_anmerkungen: string | null
+          ist_zettel_upload: boolean | null
           notizen: string | null
+          pdf_generated_at: string | null
           pdf_gesendet_am: string | null
+          pdf_url: string | null
           project_id: string
           report_type: string
           sicherheit_bestaetigt: boolean | null
@@ -435,6 +730,7 @@ export type Database = {
           updated_at: string | null
           user_id: string
           wetter: string[] | null
+          zettel_scan_url: string | null
         }
         Insert: {
           beschreibung?: string
@@ -442,8 +738,12 @@ export type Database = {
           datum: string
           geschoss?: string[] | null
           id?: string
+          interne_anmerkungen?: string | null
+          ist_zettel_upload?: boolean | null
           notizen?: string | null
+          pdf_generated_at?: string | null
           pdf_gesendet_am?: string | null
+          pdf_url?: string | null
           project_id: string
           report_type?: string
           sicherheit_bestaetigt?: boolean | null
@@ -457,6 +757,7 @@ export type Database = {
           updated_at?: string | null
           user_id: string
           wetter?: string[] | null
+          zettel_scan_url?: string | null
         }
         Update: {
           beschreibung?: string
@@ -464,8 +765,12 @@ export type Database = {
           datum?: string
           geschoss?: string[] | null
           id?: string
+          interne_anmerkungen?: string | null
+          ist_zettel_upload?: boolean | null
           notizen?: string | null
+          pdf_generated_at?: string | null
           pdf_gesendet_am?: string | null
+          pdf_url?: string | null
           project_id?: string
           report_type?: string
           sicherheit_bestaetigt?: boolean | null
@@ -479,10 +784,56 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
           wetter?: string[] | null
+          zettel_scan_url?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "daily_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_notes: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          order_id: string
+          photo_url: string
+          project_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          photo_url: string
+          project_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          photo_url?: string
+          project_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_notes_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_notes_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -614,6 +965,7 @@ export type Database = {
           notizen: string | null
           pause_minutes: number
           pdf_gesendet_am: string | null
+          project_id: string | null
           start_time: string
           status: string
           stunden: number
@@ -640,6 +992,7 @@ export type Database = {
           notizen?: string | null
           pause_minutes?: number
           pdf_gesendet_am?: string | null
+          project_id?: string | null
           start_time: string
           status?: string
           stunden: number
@@ -666,6 +1019,7 @@ export type Database = {
           notizen?: string | null
           pause_minutes?: number
           pdf_gesendet_am?: string | null
+          project_id?: string | null
           start_time?: string
           status?: string
           stunden?: number
@@ -677,59 +1031,67 @@ export type Database = {
           user_id?: string
           wetter?: string[] | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "disturbances_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       document_library_categories: {
         Row: {
+          created_at: string | null
           id: string
           key: string
           label: string
           sort_order: number | null
-          created_at: string
         }
         Insert: {
+          created_at?: string | null
           id?: string
           key: string
           label: string
           sort_order?: number | null
-          created_at?: string
         }
         Update: {
+          created_at?: string | null
           id?: string
           key?: string
           label?: string
           sort_order?: number | null
-          created_at?: string
         }
         Relationships: []
       }
       document_library_links: {
         Row: {
-          id: string
           category_key: string
+          created_at: string | null
+          created_by: string
+          id: string
+          sort_order: number | null
           title: string
           url: string
-          sort_order: number | null
-          created_by: string
-          created_at: string
         }
         Insert: {
-          id?: string
           category_key: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          sort_order?: number | null
           title: string
           url: string
-          sort_order?: number | null
-          created_by: string
-          created_at?: string
         }
         Update: {
-          id?: string
           category_key?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          sort_order?: number | null
           title?: string
           url?: string
-          sort_order?: number | null
-          created_by?: string
-          created_at?: string
         }
         Relationships: []
       }
@@ -783,145 +1145,6 @@ export type Database = {
           },
         ]
       }
-      delivery_notes: {
-        Row: {
-          id: string
-          order_id: string
-          project_id: string
-          photo_url: string
-          notes: string | null
-          uploaded_by: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          project_id: string
-          photo_url: string
-          notes?: string | null
-          uploaded_by: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          project_id?: string
-          photo_url?: string
-          notes?: string | null
-          uploaded_by?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_notes_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_notes_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_items: {
-        Row: {
-          id: string
-          order_id: string
-          material: string
-          menge: string | null
-          einheit: string | null
-          status: string
-          checked_by: string | null
-          checked_at: string | null
-          comment: string | null
-          sort_order: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          material: string
-          menge?: string | null
-          einheit?: string | null
-          status?: string
-          checked_by?: string | null
-          checked_at?: string | null
-          comment?: string | null
-          sort_order?: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          material?: string
-          menge?: string | null
-          einheit?: string | null
-          status?: string
-          checked_by?: string | null
-          checked_at?: string | null
-          comment?: string | null
-          sort_order?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      orders: {
-        Row: {
-          id: string
-          project_id: string
-          user_id: string
-          screenshot_url: string | null
-          title: string | null
-          status: string
-          notes: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          user_id: string
-          screenshot_url?: string | null
-          title?: string | null
-          status?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          user_id?: string
-          screenshot_url?: string | null
-          title?: string | null
-          status?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "orders_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       employees: {
         Row: {
           adresse: string | null
@@ -945,6 +1168,7 @@ export type Database = {
           plz: string | null
           position: string | null
           regelarbeitszeit: Json | null
+          regelarbeitszeit_kurz: Json | null
           schuhgroesse: string | null
           schwellenwert: Json | null
           sichtbarkeit: Json | null
@@ -978,6 +1202,7 @@ export type Database = {
           plz?: string | null
           position?: string | null
           regelarbeitszeit?: Json | null
+          regelarbeitszeit_kurz?: Json | null
           schuhgroesse?: string | null
           schwellenwert?: Json | null
           sichtbarkeit?: Json | null
@@ -1011,6 +1236,7 @@ export type Database = {
           plz?: string | null
           position?: string | null
           regelarbeitszeit?: Json | null
+          regelarbeitszeit_kurz?: Json | null
           schuhgroesse?: string | null
           schwellenwert?: Json | null
           sichtbarkeit?: Json | null
@@ -1154,96 +1380,75 @@ export type Database = {
           },
         ]
       }
-      invoice_delivery_matches: {
-        Row: {
-          id: string
-          rechnung_id: string
-          lieferschein_id: string
-          created_by: string | null
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          rechnung_id: string
-          lieferschein_id: string
-          created_by?: string | null
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          rechnung_id?: string
-          lieferschein_id?: string
-          created_by?: string | null
-          created_at?: string | null
-        }
-        Relationships: []
-      }
       incoming_documents: {
         Row: {
-          id: string
-          project_id: string
-          user_id: string
-          typ: string
-          status: string
-          photo_url: string
-          lieferant: string | null
+          betrag: number | null
+          betrag_netto: number | null
+          bezahlt_am: string | null
+          created_at: string | null
           dokument_datum: string | null
           dokument_nummer: string | null
-          betrag: number | null
-          positionen: Json
+          id: string
+          ist_retour: boolean | null
+          lieferant: string | null
+          notizen: string | null
+          photo_url: string
+          positionen: Json | null
+          project_id: string
+          status: string
+          typ: string
           unterschrift: string | null
           unterschrift_name: string | null
-          notizen: string | null
-          bezahlt_am: string | null
-          zusatz_seiten_urls: string[] | null
+          updated_at: string | null
+          user_id: string
           waren_fotos_urls: string[] | null
-          ist_retour: boolean | null
-          created_at: string
-          updated_at: string
+          zusatz_seiten_urls: string[] | null
         }
         Insert: {
-          id?: string
-          project_id: string
-          user_id: string
-          typ: string
-          status?: string
-          photo_url: string
-          lieferant?: string | null
+          betrag?: number | null
+          betrag_netto?: number | null
+          bezahlt_am?: string | null
+          created_at?: string | null
           dokument_datum?: string | null
           dokument_nummer?: string | null
-          betrag?: number | null
-          positionen?: Json
+          id?: string
+          ist_retour?: boolean | null
+          lieferant?: string | null
+          notizen?: string | null
+          photo_url: string
+          positionen?: Json | null
+          project_id: string
+          status?: string
+          typ: string
           unterschrift?: string | null
           unterschrift_name?: string | null
-          notizen?: string | null
-          bezahlt_am?: string | null
-          zusatz_seiten_urls?: string[] | null
+          updated_at?: string | null
+          user_id: string
           waren_fotos_urls?: string[] | null
-          ist_retour?: boolean | null
-          created_at?: string
-          updated_at?: string
+          zusatz_seiten_urls?: string[] | null
         }
         Update: {
-          id?: string
-          project_id?: string
-          user_id?: string
-          typ?: string
-          status?: string
-          photo_url?: string
-          lieferant?: string | null
+          betrag?: number | null
+          betrag_netto?: number | null
+          bezahlt_am?: string | null
+          created_at?: string | null
           dokument_datum?: string | null
           dokument_nummer?: string | null
-          betrag?: number | null
-          positionen?: Json
+          id?: string
+          ist_retour?: boolean | null
+          lieferant?: string | null
+          notizen?: string | null
+          photo_url?: string
+          positionen?: Json | null
+          project_id?: string
+          status?: string
+          typ?: string
           unterschrift?: string | null
           unterschrift_name?: string | null
-          notizen?: string | null
-          bezahlt_am?: string | null
-          zusatz_seiten_urls?: string[] | null
+          updated_at?: string | null
+          user_id?: string
           waren_fotos_urls?: string[] | null
-          ist_retour?: boolean | null
-          created_at?: string
-          updated_at?: string
+          zusatz_seiten_urls?: string[] | null
         }
         Relationships: [
           {
@@ -1278,6 +1483,45 @@ export type Database = {
           telefonnummer?: string
         }
         Relationships: []
+      }
+      invoice_delivery_matches: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          lieferschein_id: string
+          rechnung_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          lieferschein_id: string
+          rechnung_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          lieferschein_id?: string
+          rechnung_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_delivery_matches_lieferschein_id_fkey"
+            columns: ["lieferschein_id"]
+            isOneToOne: false
+            referencedRelation: "incoming_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_delivery_matches_rechnung_id_fkey"
+            columns: ["rechnung_id"]
+            isOneToOne: false
+            referencedRelation: "incoming_documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoice_items: {
         Row: {
@@ -1558,9 +1802,41 @@ export type Database = {
         }
         Relationships: []
       }
+      message_reactions: {
+        Row: {
+          created_at: string | null
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "project_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_signoffs: {
         Row: {
-          created_at: string
+          created_at: string | null
           id: string
           invalidated_at: string | null
           invalidated_reason: string | null
@@ -1571,7 +1847,7 @@ export type Database = {
           year: number
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           id?: string
           invalidated_at?: string | null
           invalidated_reason?: string | null
@@ -1582,7 +1858,7 @@ export type Database = {
           year: number
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           id?: string
           invalidated_at?: string | null
           invalidated_reason?: string | null
@@ -1593,6 +1869,53 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      nachkalkulation_positionen: {
+        Row: {
+          beschreibung: string
+          created_at: string | null
+          geplante_stunden: number | null
+          id: string
+          ist_stunden: number | null
+          notizen: string | null
+          position_nr: string | null
+          project_id: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          beschreibung: string
+          created_at?: string | null
+          geplante_stunden?: number | null
+          id?: string
+          ist_stunden?: number | null
+          notizen?: string | null
+          position_nr?: string | null
+          project_id: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          beschreibung?: string
+          created_at?: string | null
+          geplante_stunden?: number | null
+          id?: string
+          ist_stunden?: number | null
+          notizen?: string | null
+          position_nr?: string | null
+          project_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nachkalkulation_positionen_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -1645,128 +1968,159 @@ export type Database = {
           },
         ]
       }
-      safety_evaluation_employees: {
+      order_items: {
         Row: {
-          created_at: string
-          evaluation_id: string
+          checked_at: string | null
+          checked_by: string | null
+          comment: string | null
+          created_at: string | null
+          einheit: string | null
           id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          evaluation_id: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          evaluation_id?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "safety_evaluation_employees_evaluation_id_fkey"
-            columns: ["evaluation_id"]
-            isOneToOne: false
-            referencedRelation: "safety_evaluations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      safety_evaluation_signatures: {
-        Row: {
-          created_at: string
-          evaluation_id: string
-          id: string
-          unterschrieben_am: string
-          unterschrift: string
-          unterschrift_name: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          evaluation_id: string
-          id?: string
-          unterschrieben_am?: string
-          unterschrift: string
-          unterschrift_name: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          evaluation_id?: string
-          id?: string
-          unterschrieben_am?: string
-          unterschrift?: string
-          unterschrift_name?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "safety_evaluation_signatures_evaluation_id_fkey"
-            columns: ["evaluation_id"]
-            isOneToOne: false
-            referencedRelation: "safety_evaluations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      safety_evaluations: {
-        Row: {
-          checklist_items: unknown
-          created_at: string
-          created_by: string
-          diskussion_notizen: string | null
-          excel_file_url: string | null
-          filled_answers: unknown
-          id: string
-          kategorie: string | null
-          project_id: string
+          material: string
+          menge: string | null
+          order_id: string
+          sort_order: number | null
           status: string
-          titel: string
-          typ: string
-          updated_at: string
         }
         Insert: {
-          checklist_items?: unknown
-          created_at?: string
-          created_by: string
-          diskussion_notizen?: string | null
-          excel_file_url?: string | null
-          filled_answers?: unknown
+          checked_at?: string | null
+          checked_by?: string | null
+          comment?: string | null
+          created_at?: string | null
+          einheit?: string | null
           id?: string
-          kategorie?: string | null
-          project_id: string
+          material: string
+          menge?: string | null
+          order_id: string
+          sort_order?: number | null
           status?: string
-          titel: string
-          typ: string
-          updated_at?: string
         }
         Update: {
-          checklist_items?: unknown
-          created_at?: string
-          created_by?: string
-          diskussion_notizen?: string | null
-          excel_file_url?: string | null
-          filled_answers?: unknown
+          checked_at?: string | null
+          checked_by?: string | null
+          comment?: string | null
+          created_at?: string | null
+          einheit?: string | null
           id?: string
-          kategorie?: string | null
-          project_id?: string
+          material?: string
+          menge?: string | null
+          order_id?: string
+          sort_order?: number | null
           status?: string
-          titel?: string
-          typ?: string
-          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "safety_evaluations_project_id_fkey"
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          project_id: string
+          screenshot_url: string | null
+          status: string
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          project_id: string
+          screenshot_url?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          project_id?: string
+          screenshot_url?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
+      }
+      payslip_metadata: {
+        Row: {
+          created_at: string | null
+          file_path: string
+          id: string
+          release_date: string
+          uploaded_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_path: string
+          id?: string
+          release_date: string
+          uploaded_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_path?: string
+          id?: string
+          release_date?: string
+          uploaded_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payslip_settings: {
+        Row: {
+          created_at: string | null
+          file_path: string
+          freigabe_tag: number | null
+          id: string
+          upload_month: number
+          upload_year: number
+          uploaded_by: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_path: string
+          freigabe_tag?: number | null
+          id?: string
+          upload_month: number
+          upload_year: number
+          uploaded_by: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_path?: string
+          freigabe_tag?: number | null
+          id?: string
+          upload_month?: number
+          upload_year?: number
+          uploaded_by?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1843,45 +2197,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      contact_templates: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          email: string | null
-          firma: string | null
-          id: string
-          name: string
-          notizen: string | null
-          rolle: string | null
-          telefon: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          email?: string | null
-          firma?: string | null
-          id?: string
-          name: string
-          notizen?: string | null
-          rolle?: string | null
-          telefon?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          email?: string | null
-          firma?: string | null
-          id?: string
-          name?: string
-          notizen?: string | null
-          rolle?: string | null
-          telefon?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
       }
       project_contacts: {
         Row: {
@@ -1984,6 +2299,44 @@ export type Database = {
           },
         ]
       }
+      project_day_transport: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          datum: string
+          erforderlich: boolean | null
+          id: string
+          notiz: string | null
+          project_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          datum: string
+          erforderlich?: boolean | null
+          id?: string
+          notiz?: string | null
+          project_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          datum?: string
+          erforderlich?: boolean | null
+          id?: string
+          notiz?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_day_transport_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_favorites: {
         Row: {
           created_at: string | null
@@ -2062,33 +2415,6 @@ export type Database = {
           },
         ]
       }
-      payslip_metadata: {
-        Row: {
-          id: string
-          user_id: string
-          file_path: string
-          release_date: string
-          uploaded_by: string | null
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          file_path: string
-          release_date: string
-          uploaded_by?: string | null
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          file_path?: string
-          release_date?: string
-          uploaded_by?: string | null
-          created_at?: string | null
-        }
-        Relationships: []
-      }
       projects: {
         Row: {
           adresse: string | null
@@ -2166,6 +2492,35 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          created_at: string | null
+          id: string
+          subscription: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          subscription: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          subscription?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       report_extras: {
         Row: {
@@ -2259,6 +2614,315 @@ export type Database = {
           },
         ]
       }
+      resources: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          einheit: string | null
+          farbe: string | null
+          flaeche_m2: number | null
+          id: string
+          is_active: boolean | null
+          kategorie: string
+          name: string
+          notizen: string | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          einheit?: string | null
+          farbe?: string | null
+          flaeche_m2?: number | null
+          id?: string
+          is_active?: boolean | null
+          kategorie?: string
+          name: string
+          notizen?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          einheit?: string | null
+          farbe?: string | null
+          flaeche_m2?: number | null
+          id?: string
+          is_active?: boolean | null
+          kategorie?: string
+          name?: string
+          notizen?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      role_menu_settings: {
+        Row: {
+          menu_key: string
+          role: string
+          visible: boolean
+        }
+        Insert: {
+          menu_key: string
+          role: string
+          visible?: boolean
+        }
+        Update: {
+          menu_key?: string
+          role?: string
+          visible?: boolean
+        }
+        Relationships: []
+      }
+      safety_evaluation_employees: {
+        Row: {
+          created_at: string | null
+          evaluation_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          evaluation_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          evaluation_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluation_employees_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "safety_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_evaluation_signatures: {
+        Row: {
+          created_at: string | null
+          evaluation_id: string
+          fragen_antworten: Json | null
+          id: string
+          inhalte_bestaetigt: boolean | null
+          personal_answers: Json | null
+          unterschrieben_am: string
+          unterschrift: string
+          unterschrift_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          evaluation_id: string
+          fragen_antworten?: Json | null
+          id?: string
+          inhalte_bestaetigt?: boolean | null
+          personal_answers?: Json | null
+          unterschrieben_am?: string
+          unterschrift: string
+          unterschrift_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          evaluation_id?: string
+          fragen_antworten?: Json | null
+          id?: string
+          inhalte_bestaetigt?: boolean | null
+          personal_answers?: Json | null
+          unterschrieben_am?: string
+          unterschrift?: string
+          unterschrift_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluation_signatures_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "safety_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_evaluations: {
+        Row: {
+          checklist_items: Json
+          created_at: string | null
+          created_by: string
+          diskussion_notizen: string | null
+          equipment_id: string | null
+          excel_file_url: string | null
+          filled_answers: Json | null
+          fragen: Json | null
+          id: string
+          inhalt_text: string | null
+          ist_vorlage: boolean | null
+          jahr: number | null
+          kategorie: string | null
+          kategorien: string[] | null
+          modul: string | null
+          pdf_urls: string[] | null
+          project_id: string | null
+          status: string
+          titel: string
+          typ: string
+          updated_at: string | null
+          video_urls: string[] | null
+        }
+        Insert: {
+          checklist_items?: Json
+          created_at?: string | null
+          created_by: string
+          diskussion_notizen?: string | null
+          equipment_id?: string | null
+          excel_file_url?: string | null
+          filled_answers?: Json | null
+          fragen?: Json | null
+          id?: string
+          inhalt_text?: string | null
+          ist_vorlage?: boolean | null
+          jahr?: number | null
+          kategorie?: string | null
+          kategorien?: string[] | null
+          modul?: string | null
+          pdf_urls?: string[] | null
+          project_id?: string | null
+          status?: string
+          titel: string
+          typ: string
+          updated_at?: string | null
+          video_urls?: string[] | null
+        }
+        Update: {
+          checklist_items?: Json
+          created_at?: string | null
+          created_by?: string
+          diskussion_notizen?: string | null
+          equipment_id?: string | null
+          excel_file_url?: string | null
+          filled_answers?: Json | null
+          fragen?: Json | null
+          id?: string
+          inhalt_text?: string | null
+          ist_vorlage?: boolean | null
+          jahr?: number | null
+          kategorie?: string | null
+          kategorien?: string[] | null
+          modul?: string | null
+          pdf_urls?: string[] | null
+          project_id?: string | null
+          status?: string
+          titel?: string
+          typ?: string
+          updated_at?: string | null
+          video_urls?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_evaluations_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_evaluations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schulung_zertifikate: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          gueltig_ab: string
+          gueltig_bis: string | null
+          id: string
+          notizen: string | null
+          schulung_id: string | null
+          user_id: string
+          zertifikat_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          gueltig_ab?: string
+          gueltig_bis?: string | null
+          id?: string
+          notizen?: string | null
+          schulung_id?: string | null
+          user_id: string
+          zertifikat_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          gueltig_ab?: string
+          gueltig_bis?: string | null
+          id?: string
+          notizen?: string | null
+          schulung_id?: string | null
+          user_id?: string
+          zertifikat_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schulung_zertifikate_schulung_id_fkey"
+            columns: ["schulung_id"]
+            isOneToOne: false
+            referencedRelation: "schulungen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schulungen: {
+        Row: {
+          beschreibung: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          ist_pflicht: boolean | null
+          kategorie: string | null
+          name: string
+          updated_at: string | null
+          wiederholung_monate: number | null
+        }
+        Insert: {
+          beschreibung?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ist_pflicht?: boolean | null
+          kategorie?: string | null
+          name: string
+          updated_at?: string | null
+          wiederholung_monate?: number | null
+        }
+        Update: {
+          beschreibung?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ist_pflicht?: boolean | null
+          kategorie?: string | null
+          name?: string
+          updated_at?: string | null
+          wiederholung_monate?: number | null
+        }
+        Relationships: []
+      }
       time_account_transactions: {
         Row: {
           balance_after: number
@@ -2327,6 +2991,7 @@ export type Database = {
           absence_detail: Json | null
           created_at: string
           datum: string
+          diaeten_anfahrt: boolean | null
           diaeten_betrag: number | null
           diaeten_typ: string | null
           disturbance_id: string | null
@@ -2354,6 +3019,7 @@ export type Database = {
           absence_detail?: Json | null
           created_at?: string
           datum: string
+          diaeten_anfahrt?: boolean | null
           diaeten_betrag?: number | null
           diaeten_typ?: string | null
           disturbance_id?: string | null
@@ -2381,6 +3047,7 @@ export type Database = {
           absence_detail?: Json | null
           created_at?: string
           datum?: string
+          diaeten_anfahrt?: boolean | null
           diaeten_betrag?: number | null
           diaeten_typ?: string | null
           disturbance_id?: string | null
@@ -2504,6 +3171,249 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_categories: {
+        Row: {
+          created_at: string | null
+          id: string
+          label: string
+          slug: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label: string
+          slug: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label?: string
+          slug?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      warehouse_delivery_note_items: {
+        Row: {
+          created_at: string | null
+          delivery_note_id: string
+          id: string
+          menge: number
+          product_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          delivery_note_id: string
+          id?: string
+          menge: number
+          product_id: string
+        }
+        Update: {
+          created_at?: string | null
+          delivery_note_id?: string
+          id?: string
+          menge?: number
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_delivery_note_items_delivery_note_id_fkey"
+            columns: ["delivery_note_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_delivery_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_note_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_delivery_notes: {
+        Row: {
+          created_at: string | null
+          datum: string
+          id: string
+          incoming_document_id: string | null
+          kunde_verrechnet: boolean | null
+          notizen: string | null
+          parent_note_id: string | null
+          photo_urls: string[]
+          source_project_id: string | null
+          target_project_id: string | null
+          transfer_type: string
+          unterschrift: string
+          unterschrift_name: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          datum?: string
+          id?: string
+          incoming_document_id?: string | null
+          kunde_verrechnet?: boolean | null
+          notizen?: string | null
+          parent_note_id?: string | null
+          photo_urls?: string[]
+          source_project_id?: string | null
+          target_project_id?: string | null
+          transfer_type: string
+          unterschrift: string
+          unterschrift_name?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          datum?: string
+          id?: string
+          incoming_document_id?: string | null
+          kunde_verrechnet?: boolean | null
+          notizen?: string | null
+          parent_note_id?: string | null
+          photo_urls?: string[]
+          source_project_id?: string | null
+          target_project_id?: string | null
+          transfer_type?: string
+          unterschrift?: string
+          unterschrift_name?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_delivery_notes_incoming_document_id_fkey"
+            columns: ["incoming_document_id"]
+            isOneToOne: false
+            referencedRelation: "incoming_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_notes_parent_note_id_fkey"
+            columns: ["parent_note_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_delivery_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_notes_source_project_id_fkey"
+            columns: ["source_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_delivery_notes_target_project_id_fkey"
+            columns: ["target_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_products: {
+        Row: {
+          aufschlag_prozent: number | null
+          category: string
+          created_at: string | null
+          current_stock: number
+          einheit: string
+          ek_preis: number | null
+          id: string
+          is_active: boolean
+          lieferant: string | null
+          lieferdatum: string | null
+          name: string
+          rechnungsdatum: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          aufschlag_prozent?: number | null
+          category: string
+          created_at?: string | null
+          current_stock?: number
+          einheit?: string
+          ek_preis?: number | null
+          id?: string
+          is_active?: boolean
+          lieferant?: string | null
+          lieferdatum?: string | null
+          name: string
+          rechnungsdatum?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          aufschlag_prozent?: number | null
+          category?: string
+          created_at?: string | null
+          current_stock?: number
+          einheit?: string
+          ek_preis?: number | null
+          id?: string
+          is_active?: boolean
+          lieferant?: string | null
+          lieferdatum?: string | null
+          name?: string
+          rechnungsdatum?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      warehouse_stock_transactions: {
+        Row: {
+          created_at: string | null
+          delivery_note_id: string
+          id: string
+          menge: number
+          product_id: string
+          project_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          delivery_note_id: string
+          id?: string
+          menge: number
+          product_id: string
+          project_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          delivery_note_id?: string
+          id?: string
+          menge?: number
+          product_id?: string
+          project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stock_transactions_delivery_note_id_fkey"
+            columns: ["delivery_note_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_delivery_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stock_transactions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stock_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       week_settings: {
         Row: {
           created_at: string
@@ -2528,171 +3438,6 @@ export type Database = {
           user_id?: string
           week_start?: string
           week_type?: string
-        }
-        Relationships: []
-      }
-      yearly_plan_blocks: {
-        Row: {
-          color: string | null
-          created_at: string
-          created_by: string
-          end_week: number
-          id: string
-          individual_name: string | null
-          partie: string | null
-          project_id: string | null
-          sort_order: number | null
-          start_week: number
-          title: string
-          updated_at: string
-          year: number
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string
-          created_by: string
-          end_week: number
-          id?: string
-          individual_name?: string | null
-          partie?: string | null
-          project_id?: string | null
-          sort_order?: number | null
-          start_week: number
-          title: string
-          updated_at?: string
-          year: number
-        }
-        Update: {
-          color?: string | null
-          created_at?: string
-          created_by?: string
-          end_week?: number
-          id?: string
-          individual_name?: string | null
-          partie?: string | null
-          project_id?: string | null
-          sort_order?: number | null
-          start_week?: number
-          title?: string
-          updated_at?: string
-          year?: number
-        }
-        Relationships: []
-      }
-      yearly_resource_blocks: {
-        Row: {
-          color: string | null
-          created_at: string | null
-          created_by: string | null
-          end_week: number
-          id: string
-          label: string | null
-          project_id: string | null
-          resource_id: string
-          sort_order: number | null
-          start_week: number
-          year: number
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          end_week: number
-          id?: string
-          label?: string | null
-          project_id?: string | null
-          resource_id: string
-          sort_order?: number | null
-          start_week: number
-          year: number
-        }
-        Update: {
-          color?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          end_week?: number
-          id?: string
-          label?: string | null
-          project_id?: string | null
-          resource_id?: string
-          sort_order?: number | null
-          start_week?: number
-          year?: number
-        }
-        Relationships: []
-      }
-      resources: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          einheit: string | null
-          farbe: string | null
-          flaeche_m2: number | null
-          id: string
-          is_active: boolean | null
-          kategorie: string
-          name: string
-          notizen: string | null
-          sort_order: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          einheit?: string | null
-          farbe?: string | null
-          flaeche_m2?: number | null
-          id?: string
-          is_active?: boolean | null
-          kategorie?: string
-          name: string
-          notizen?: string | null
-          sort_order?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          einheit?: string | null
-          farbe?: string | null
-          flaeche_m2?: number | null
-          id?: string
-          is_active?: boolean | null
-          kategorie?: string
-          name?: string
-          notizen?: string | null
-          sort_order?: number | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      project_day_transport: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          datum: string
-          erforderlich: boolean | null
-          id: string
-          notiz: string | null
-          project_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          datum: string
-          erforderlich?: boolean | null
-          id?: string
-          notiz?: string | null
-          project_id: string
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          datum?: string
-          erforderlich?: boolean | null
-          id?: string
-          notiz?: string | null
-          project_id?: string
         }
         Relationships: []
       }
@@ -2751,179 +3496,115 @@ export type Database = {
           },
         ]
       }
-      warehouse_products: {
+      yearly_plan_blocks: {
         Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string
+          end_week: number
           id: string
-          name: string
-          category: string
-          einheit: string
-          ek_preis: number | null
-          current_stock: number
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          category: string
-          einheit?: string
-          ek_preis?: number | null
-          current_stock?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          category?: string
-          einheit?: string
-          ek_preis?: number | null
-          current_stock?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      warehouse_delivery_notes: {
-        Row: {
-          id: string
-          transfer_type: string
-          source_project_id: string | null
-          target_project_id: string | null
-          user_id: string
-          datum: string
-          photo_urls: string[]
-          unterschrift: string
-          unterschrift_name: string | null
-          notizen: string | null
-          parent_note_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          transfer_type: string
-          source_project_id?: string | null
-          target_project_id?: string | null
-          user_id: string
-          datum?: string
-          photo_urls?: string[]
-          unterschrift: string
-          unterschrift_name?: string | null
-          notizen?: string | null
-          parent_note_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          transfer_type?: string
-          source_project_id?: string | null
-          target_project_id?: string | null
-          user_id?: string
-          datum?: string
-          photo_urls?: string[]
-          unterschrift?: string
-          unterschrift_name?: string | null
-          notizen?: string | null
-          parent_note_id?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "warehouse_delivery_notes_source_project_id_fkey"
-            columns: ["source_project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "warehouse_delivery_notes_target_project_id_fkey"
-            columns: ["target_project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      warehouse_delivery_note_items: {
-        Row: {
-          id: string
-          delivery_note_id: string
-          product_id: string
-          menge: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          delivery_note_id: string
-          product_id: string
-          menge: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          delivery_note_id?: string
-          product_id?: string
-          menge?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "warehouse_delivery_note_items_delivery_note_id_fkey"
-            columns: ["delivery_note_id"]
-            isOneToOne: false
-            referencedRelation: "warehouse_delivery_notes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "warehouse_delivery_note_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "warehouse_products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      warehouse_stock_transactions: {
-        Row: {
-          id: string
-          product_id: string
-          delivery_note_id: string
-          menge: number
+          individual_name: string | null
+          partie: string | null
           project_id: string | null
-          created_at: string
+          sort_order: number | null
+          start_week: number
+          title: string
+          updated_at: string | null
+          year: number
         }
         Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by: string
+          end_week: number
           id?: string
-          product_id: string
-          delivery_note_id: string
-          menge: number
+          individual_name?: string | null
+          partie?: string | null
           project_id?: string | null
-          created_at?: string
+          sort_order?: number | null
+          start_week: number
+          title: string
+          updated_at?: string | null
+          year: number
         }
         Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string
+          end_week?: number
           id?: string
-          product_id?: string
-          delivery_note_id?: string
-          menge?: number
+          individual_name?: string | null
+          partie?: string | null
           project_id?: string | null
-          created_at?: string
+          sort_order?: number | null
+          start_week?: number
+          title?: string
+          updated_at?: string | null
+          year?: number
         }
         Relationships: [
           {
-            foreignKeyName: "warehouse_stock_transactions_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "yearly_plan_blocks_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "warehouse_products"
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      yearly_resource_blocks: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          end_week: number
+          id: string
+          label: string | null
+          project_id: string | null
+          resource_id: string
+          sort_order: number | null
+          start_week: number
+          year: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_week: number
+          id?: string
+          label?: string | null
+          project_id?: string | null
+          resource_id: string
+          sort_order?: number | null
+          start_week: number
+          year: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_week?: number
+          id?: string
+          label?: string | null
+          project_id?: string | null
+          resource_id?: string
+          sort_order?: number | null
+          start_week?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yearly_resource_blocks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "warehouse_stock_transactions_delivery_note_id_fkey"
-            columns: ["delivery_note_id"]
+            foreignKeyName: "yearly_resource_blocks_resource_id_fkey"
+            columns: ["resource_id"]
             isOneToOne: false
-            referencedRelation: "warehouse_delivery_notes"
+            referencedRelation: "resources"
             referencedColumns: ["id"]
           },
         ]
@@ -2933,7 +3614,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      buak_week_type_for_date: {
+        Args: { p_datum: string }
+        Returns: Database["public"]["Enums"]["buak_week_type"]
+      }
       ensure_user_profile: { Args: never; Returns: Json }
+      fn_user_created_evaluation: {
+        Args: { eval_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2965,6 +3654,7 @@ export type Database = {
     }
     Enums: {
       app_role: "administrator" | "mitarbeiter"
+      buak_week_type: "lang" | "kurz"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3093,6 +3783,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["administrator", "mitarbeiter"],
+      buak_week_type: ["lang", "kurz"],
     },
   },
 } as const
