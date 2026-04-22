@@ -10,6 +10,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Firmen-Identitaet fuer PDF-Header/Footer und E-Mail-Footer.
+// In der App-UI bleibt die Marke BMR Bau; auf gedruckten/versendeten
+// Dokumenten wird die Legal-Entity verwendet.
+const APP_URL = Deno.env.get("APP_URL") ?? "https://bmr.handwerkapp.at";
+const COMPANY_NAME = "JR Baumeisterbüro Rutter & Jäger GmbH";
+const COMPANY_ADDRESS_LINES = ["Wirtschaftspark 15", "9130 Poggersdorf"];
+const COMPANY_ADDRESS_ONE_LINE = COMPANY_ADDRESS_LINES.join(" · ");
+
 interface Material {
   id: string;
   material: string;
@@ -85,6 +93,11 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   // Dynamic import avoids module-level crash in Deno (no top-level import needed)
   const { jsPDF } = await import("https://esm.sh/jspdf@2.5.2");
 
+  // Firmen-Logo fuer den Header. Laeuft ueber APP_URL (public asset des
+  // Vite-Builds) und wird nur einmal geladen. Schlaegt's fehl, wird der
+  // Header schlicht ohne Logo ausgegeben.
+  const logoBase64 = await fetchImageAsBase64(`${APP_URL}/bmr-logo.png`);
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -156,47 +169,45 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   setFill(D2);
   doc.rect(0, 0, pageW, 2, "F");
 
-  // Logo: two overlapping diamonds + company name
-  const lx = margin; // logo left edge
-  const ly = 10;     // logo top area
+  // Logo links, Firmenblock rechts daneben
+  const ly = 10;
+  const logoSize = 20;
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, "PNG", margin, ly, logoSize, logoSize);
+    } catch {
+      /* Logo konnte nicht geladen werden - Header wird ohne gesetzt */
+    }
+  }
 
-  // Upper diamond (lighter gray) – positioned slightly right & up
-  drawDiamond(lx + 8, ly + 6, 5.5, 5.5, D1);
-  // Lower diamond (darker gray) – offset down-left for overlap effect
-  drawDiamond(lx + 5, ly + 11, 5.5, 5.5, D2);
-
-  // Company name to the right of the diamonds
-  const txtX = lx + 17;
+  const txtX = margin + logoSize + 5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   setTxt(DGRAY);
-  doc.text("BMR BAU GMBH", txtX, ly + 8);
-  // Separator line under company name (BMR-Gruen)
-  setDraw({ r: 124, g: 163, b: 115 });
-  doc.setLineWidth(0.3);
-  doc.line(txtX, ly + 10, txtX + 58, ly + 10);
-  // Subtitle
+  doc.text(COMPANY_NAME, txtX, ly + 6);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   setTxt(MGRAY);
-  doc.text("Ausführung · Beratung · Sanierung", txtX, ly + 16);
+  COMPANY_ADDRESS_LINES.forEach((line, i) => {
+    doc.text(line, txtX, ly + 11 + i * 4);
+  });
 
-  // Document title on the right
+  // Titel + Datum rechts
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   setTxt(BLACK);
-  doc.text("REGIEBERICHT", pageW - margin, 14, { align: "right" });
+  doc.text("REGIEBERICHT", pageW - margin, ly + 6, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   setTxt(GRAY);
-  doc.text(formatDate(disturbance.datum), pageW - margin, 21, { align: "right" });
+  doc.text(formatDate(disturbance.datum), pageW - margin, ly + 12, { align: "right" });
 
-  // Separator
-  setDraw({ r: 180, g: 180, b: 180 });
-  doc.setLineWidth(0.3);
-  doc.line(margin, 33, margin + cW, 33);
+  // BMR-Gruen Trennlinie unter dem Header
+  setDraw(ACCENT);
+  doc.setLineWidth(0.8);
+  doc.line(margin, ly + logoSize + 2, margin + cW, ly + logoSize + 2);
 
-  y = 42;
+  y = ly + logoSize + 10;
 
   const col2x = margin + cW / 2 + 3;
   const colW  = cW / 2 - 5;
@@ -342,12 +353,20 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
 
   // ── Footer on every page ──────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
+  const createdAt = new Date().toLocaleDateString("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    setDraw({ r: 180, g: 180, b: 180 }); doc.setLineWidth(0.3);
+    setDraw({ r: 220, g: 220, b: 220 });
+    doc.setLineWidth(0.3);
     doc.line(margin, pageH - 12, margin + cW, pageH - 12);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(7); setTxt(GRAY);
-    doc.text(`BMR Bau GmbH  |  Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, margin, pageH - 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    setTxt(GRAY);
+    doc.text(`${COMPANY_NAME} · ${COMPANY_ADDRESS_ONE_LINE}`, margin, pageH - 7);
+    doc.text(`Erstellt: ${createdAt}`, pageW / 2, pageH - 7, { align: "center" });
     doc.text(`Seite ${p} / ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
   }
 
@@ -365,7 +384,7 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
       .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
     </style></head>
     <body><div class="container">
-      <div class="header">BMR BAU GMBH</div>
+      <div class="header">${COMPANY_NAME}</div>
       <h2>Regiebericht</h2>
       <p>Sehr geehrte Damen und Herren,</p>
       <p>im Anhang finden Sie den Regiebericht für den Einsatz bei <strong>${disturbance.kunde_name}</strong> vom <strong>${formatDate(disturbance.datum)}</strong>.</p>
@@ -376,7 +395,10 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         Gesamtstunden: ${disturbance.stunden.toFixed(2)} h
       </div>
       <p>Der vollständige Bericht mit Kundenunterschrift befindet sich im angehängten PDF-Dokument.</p>
-      <p>Mit freundlichen Grüßen,<br>BMR Bau GmbH</p>
+      <p style="margin-top: 20px; color: #666;">Mit freundlichen Grüßen<br>
+        <strong>${COMPANY_NAME}</strong><br>
+        ${COMPANY_ADDRESS_LINES.join("<br>")}
+      </p>
     </div></body></html>`;
 }
 

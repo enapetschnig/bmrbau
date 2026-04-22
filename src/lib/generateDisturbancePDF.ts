@@ -1,4 +1,11 @@
 import { jsPDF } from "jspdf";
+import {
+  COMPANY_NAME,
+  COMPANY_ADDRESS_LINES,
+  COMPANY_ADDRESS_ONE_LINE,
+  BMR_ACCENT_RGB,
+  BMR_DARK_RGB,
+} from "./companyInfo";
 
 export interface Material {
   id: string;
@@ -80,26 +87,53 @@ export async function generateDisturbancePDF(
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
   const contentWidth = pageWidth - 2 * margin;
+
+  // Logo fuer Header laden
+  const logoBase64 = await fetchImageAsBase64("/bmr-logo.png");
+
+  // Accent-Bar oben
+  doc.setFillColor(...BMR_DARK_RGB);
+  doc.rect(0, 0, pageWidth, 3, "F");
+
   let yPos = margin;
+  const logoSize = 20;
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, "PNG", margin, yPos, logoSize, logoSize);
+    } catch { /* Logo defekt - weiter ohne */ }
+  }
 
-  // Header
-  doc.setFontSize(24);
+  const textX = margin + logoSize + 5;
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(61, 63, 71);
-  doc.text("HOLZKNECHT NATURSTEINE", margin, yPos);
-  yPos += 8;
-
-  doc.setDrawColor(61, 63, 71);
-  doc.setLineWidth(0.5);
-  doc.line(margin, yPos, margin + contentWidth, yPos);
-  yPos += 5;
-
-  doc.setFontSize(16);
+  doc.setTextColor(40, 40, 40);
+  doc.text(COMPANY_NAME, textX, yPos + 6);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
   doc.setTextColor(100, 100, 100);
-  doc.text("Regiebericht", margin, yPos);
-  yPos += 12;
+  COMPANY_ADDRESS_LINES.forEach((line, i) => {
+    doc.text(line, textX, yPos + 11 + i * 4);
+  });
+
+  // Rechts oben: Titel + Datum
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...BMR_DARK_RGB);
+  doc.text("REGIEBERICHT", pageWidth - margin, yPos + 6, { align: "right" });
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  doc.text(formatDateShort(disturbance.datum), pageWidth - margin, yPos + 11, { align: "right" });
+
+  yPos += logoSize + 2;
+
+  doc.setDrawColor(...BMR_ACCENT_RGB);
+  doc.setLineWidth(0.8);
+  doc.line(margin, yPos, margin + contentWidth, yPos);
+  yPos += 8;
 
   doc.setTextColor(0, 0, 0);
 
@@ -231,10 +265,26 @@ export async function generateDisturbancePDF(
   const confirmLines = doc.splitTextToSize(confirmText, contentWidth);
   doc.text(confirmLines, margin, yPos);
 
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  const footerY = doc.internal.pageSize.getHeight() - 15;
-  doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")} | BMR Bau GmbH`, margin, footerY);
+  // Footer auf jeder Seite
+  const totalPages = doc.getNumberOfPages();
+  const createdAt = new Date().toLocaleDateString("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const footerY = pageHeight - 10;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${COMPANY_NAME} · ${COMPANY_ADDRESS_ONE_LINE}`, margin, footerY);
+    doc.text(`Erstellt: ${createdAt}`, pageWidth / 2, footerY, { align: "center" });
+    doc.text(`Seite ${p} / ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+  }
 
   const pdfBase64 = doc.output("datauristring").split(",")[1];
   const dateForFilename = formatDateShort(disturbance.datum).replace(/\./g, "-");

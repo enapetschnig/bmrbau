@@ -466,12 +466,14 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
                 </Select>
                 <VoiceAIInput
                   multiline
-                  rows={2}
+                  rows={4}
                   context="tagesbericht"
+                  buttonsPosition="above"
                   value={act.beschreibung}
                   onChange={(v) => updateActivity(act.id, "beschreibung", v)}
                   placeholder="Beschreibung der Tätigkeit..."
                   className="flex-1"
+                  inputClassName="text-base sm:text-sm min-h-[96px]"
                 />
                 <Button type="button" variant="ghost" size="sm" onClick={() => removeActivity(act.id)} className="h-9 px-2">
                   <Trash2 className="w-3.5 h-3.5" />
@@ -485,11 +487,13 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
             <Label>Beschreibung</Label>
             <VoiceAIInput
               multiline
-              rows={3}
+              rows={6}
               context="tagesbericht"
+              buttonsPosition="above"
               value={beschreibung}
               onChange={setBeschreibung}
               placeholder="Allgemeine Beschreibung des Tages..."
+              inputClassName="text-base sm:text-sm min-h-[140px]"
             />
           </div>
 
@@ -498,11 +502,13 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
             <Label>Notizen (optional)</Label>
             <VoiceAIInput
               multiline
-              rows={2}
+              rows={4}
               context="notiz"
+              buttonsPosition="above"
               value={notizen}
               onChange={setNotizen}
               placeholder="Zusätzliche Bemerkungen..."
+              inputClassName="text-base sm:text-sm min-h-[96px]"
             />
           </div>
 
@@ -511,11 +517,13 @@ export function DailyReportForm({ open, onOpenChange, onSuccess, defaultProjectI
             <Label>Interne Anmerkungen (optional, wahlweise mitdruckbar)</Label>
             <VoiceAIInput
               multiline
-              rows={2}
+              rows={4}
               context="anmerkung"
+              buttonsPosition="above"
               value={interneAnmerkungen}
               onChange={setInterneAnmerkungen}
               placeholder="Interne Notizen (nur für Team sichtbar)..."
+              inputClassName="text-base sm:text-sm min-h-[96px]"
             />
           </div>
 
