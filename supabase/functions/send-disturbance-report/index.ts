@@ -336,15 +336,22 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   doc.rect(margin, y - 2, cW, 40, "FD");
 
   if (disturbance.unterschrift_kunde) {
+    // Signature einbetten - volle Data-URL uebergeben.
+    // Deno-jsPDF 2.5 erkennt PNG/JPEG aus dem data:-Prefix selbststaendig.
+    // Der vorherige "nur-base64"-Workaround hat zu "konnte nicht geladen
+    // werden" gefuehrt, weil Format-Detection fehlgeschlagen ist.
     try {
-      // Strip the data URL prefix – pass raw base64 to avoid Deno rendering issues
-      const sig = disturbance.unterschrift_kunde;
-      const b64 = sig.startsWith("data:") ? sig.split(",")[1] : sig;
-      doc.addImage(b64, "PNG", margin + 4, y, cW - 8, 35);
+      doc.addImage(disturbance.unterschrift_kunde, "PNG", margin + 4, y, cW - 8, 35);
     } catch (imgErr) {
-      console.error("Signature image error:", imgErr instanceof Error ? imgErr.message : String(imgErr));
-      doc.setFont("helvetica", "italic"); doc.setFontSize(9); setTxt(GRAY);
-      doc.text("[Unterschrift vorhanden]", margin + 5, y + 18);
+      // Fallback: evtl. base64-only, dann explizit PNG mit raw base64.
+      try {
+        const b64 = disturbance.unterschrift_kunde.split(",").pop() || "";
+        doc.addImage(b64, "PNG", margin + 4, y, cW - 8, 35);
+      } catch (imgErr2) {
+        console.error("Signature image error:", imgErr2 instanceof Error ? imgErr2.message : String(imgErr2), "| first try:", imgErr instanceof Error ? imgErr.message : String(imgErr));
+        doc.setFont("helvetica", "italic"); doc.setFontSize(9); setTxt(GRAY);
+        doc.text("[Unterschrift konnte nicht geladen werden]", margin + 5, y + 18);
+      }
     }
   }
   y += 45;
