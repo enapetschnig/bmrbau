@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
 import { SketchRow, type SketchStroke } from "@/components/SketchRow";
+import { SimpleSignatureDialog } from "@/components/SimpleSignatureDialog";
 import { AufmassPhotoStrip, type AufmassPhoto } from "@/components/AufmassPhotoStrip";
 import {
   generateAufmassPDF,
@@ -45,6 +46,9 @@ type Sheet = {
   notizen: string | null;
   status: "offen" | "abgeschlossen";
   pdf_url: string | null;
+  unterschrift_kunde: string | null;
+  unterschrift_name: string | null;
+  unterschrift_am: string | null;
 };
 
 const COMMON_UNITS = ["m", "m²", "m³", "Stk", "kg", "t", "lfm", "h"];
@@ -61,6 +65,7 @@ export default function AufmassEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showSignDialog, setShowSignDialog] = useState(false);
 
   // Auto-save Debouncing pro Sheet/Position.
   const sheetDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -161,7 +166,7 @@ export default function AufmassEditor() {
     }
   };
 
-  const handleAbschluss = async () => {
+  const handleAbschluss = async (withSignature?: { signature: string; name: string }) => {
     if (!sheet || submitting) return;
     if (positions.length === 0) {
       toast({ variant: "destructive", title: "Keine Positionen", description: "Bitte mindestens eine Position erfassen." });
@@ -169,6 +174,18 @@ export default function AufmassEditor() {
     }
     setSubmitting(true);
     try {
+      const now = new Date().toISOString();
+      const unterschrift_kunde = withSignature?.signature ?? sheet.unterschrift_kunde;
+      const unterschrift_name = withSignature ? (withSignature.name || null) : sheet.unterschrift_name;
+      const unterschrift_am = withSignature ? now : sheet.unterschrift_am;
+
+      // Bei nachträglicher Unterschrift: altes PDF entfernen, damit wir mit
+      // Signatur frisch erzeugen koennen.
+      if (sheet.pdf_url) {
+        await supabase.storage.from("project-aufmass").remove([sheet.pdf_url]);
+        await supabase.from("documents").delete().eq("file_url", sheet.pdf_url);
+      }
+
       const sheetForPdf: AufmassSheetForPDF = {
         titel: sheet.titel,
         aufmass_nr: sheet.aufmass_nr,
@@ -177,6 +194,9 @@ export default function AufmassEditor() {
         gewerk: sheet.gewerk,
         notizen: sheet.notizen,
         project: project,
+        unterschrift_kunde,
+        unterschrift_name,
+        unterschrift_am,
       };
       const positionsForPdf: AufmassPositionForPDF[] = positions.map((p) => ({
         id: p.id,
@@ -234,13 +254,22 @@ export default function AufmassEditor() {
         });
       }
 
-      await supabase.from("aufmass_sheets").update({
+      const updatePayload: Record<string, unknown> = {
         status: "abgeschlossen",
         pdf_url: filePath,
-        pdf_generated_at: new Date().toISOString(),
-      }).eq("id", sheet.id);
+        pdf_generated_at: now,
+      };
+      if (withSignature) {
+        updatePayload.unterschrift_kunde = unterschrift_kunde;
+        updatePayload.unterschrift_name = unterschrift_name;
+        updatePayload.unterschrift_am = unterschrift_am;
+      }
+      await supabase.from("aufmass_sheets").update(updatePayload).eq("id", sheet.id);
 
-      toast({ title: "Aufmaß abgeschlossen", description: "PDF wurde im Projekt gespeichert." });
+      toast({
+        title: withSignature ? "Aufmaß unterzeichnet" : "Aufmaß abgeschlossen",
+        description: "PDF wurde im Projekt gespeichert.",
+      });
       navigate(`/projects/${sheet.project_id}/aufmass`);
     } catch (err) {
       toast({ variant: "destructive", title: "Fehler beim Abschluss", description: (err as Error).message });
@@ -286,8 +315,8 @@ export default function AufmassEditor() {
             Aufmaßblatt{sheet.aufmass_nr ? ` Nr. ${sheet.aufmass_nr}` : ""}
           </h1>
           {saving && <span className="text-xs text-muted-foreground hidden sm:inline">Speichert…</span>}
-          <Badge variant={isReadOnly ? "default" : "outline"}>
-            {isReadOnly ? "Abgeschlossen" : "Offen"}
+          <Badge variant={sheet.unterschrift_kunde ? "default" : isReadOnly ? "secondary" : "outline"}>
+            {sheet.unterschrift_kunde ? "Unterzeichnet" : isReadOnly ? "Abgeschlossen" : "Offen"}
           </Badge>
         </div>
       </header>
@@ -567,22 +596,63 @@ export default function AufmassEditor() {
         )}
 
         {/* Aktionen */}
-        <div className="flex flex-wrap gap-2 sticky bottom-3 z-20">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 sticky bottom-3 z-20">
           {!isReadOnly && (
+            <>
+              <Button
+                variant="outline"
+                className="h-12 text-base shadow-lg bg-background"
+                onClick={() => navigate(`/projects/${sheet.project_id}/aufmass`)}
+                disabled={submitting}
+              >
+                Speichern & Zurück
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1 h-12 text-base shadow-lg"
+                onClick={() => handleAbschluss()}
+                disabled={submitting}
+              >
+                {submitting ? "Erstellt PDF…" : "Ohne Unterschrift abschließen"}
+              </Button>
+              <Button
+                className="flex-1 h-12 text-base shadow-lg"
+                onClick={() => setShowSignDialog(true)}
+                disabled={submitting}
+              >
+                <PenTool className="w-4 h-4 mr-2" />
+                Unterschreiben & abschließen
+              </Button>
+            </>
+          )}
+          {isReadOnly && !sheet.unterschrift_kunde && (
             <Button
               className="flex-1 h-12 text-base shadow-lg"
-              onClick={handleAbschluss}
+              onClick={() => setShowSignDialog(true)}
               disabled={submitting}
             >
-              {submitting ? "Erstellt PDF…" : "PDF erstellen & abschließen"}
+              <PenTool className="w-4 h-4 mr-2" />
+              {submitting ? "Erstellt PDF…" : "Nachträglich unterschreiben"}
             </Button>
           )}
           {isReadOnly && sheet.pdf_url && (
-            <Button className="flex-1 h-12 text-base shadow-lg" onClick={downloadPdf}>
+            <Button variant={sheet.unterschrift_kunde ? "default" : "outline"} className="flex-1 h-12 text-base shadow-lg" onClick={downloadPdf}>
               PDF herunterladen
             </Button>
           )}
         </div>
+
+        <SimpleSignatureDialog
+          open={showSignDialog}
+          onOpenChange={setShowSignDialog}
+          title="Aufmaßblatt unterschreiben"
+          description="Lassen Sie den Kunden bzw. Bauleiter direkt auf dem Gerät unterschreiben. Das PDF wird mit der Unterschrift neu erzeugt."
+          defaultName={sheet.bauleiter || ""}
+          submitLabel="Unterschrift speichern & abschließen"
+          onSubmit={async ({ signature, name }) => {
+            await handleAbschluss({ signature, name });
+          }}
+        />
       </main>
     </div>
   );

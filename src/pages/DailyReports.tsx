@@ -141,6 +141,34 @@ export default function DailyReports() {
             .select("file_path, file_name")
             .eq("daily_report_id", id);
 
+          // Anwesende Mitarbeiter laden (Ersteller + daily_report_workers).
+          const creatorId = (report as any)?.user_id as string | undefined;
+          const { data: workerRows } = await supabase
+            .from("daily_report_workers")
+            .select("user_id")
+            .eq("daily_report_id", id);
+          const workerIds = Array.from(new Set([
+            ...(creatorId ? [creatorId] : []),
+            ...((workerRows || []).map((w: any) => w.user_id)),
+          ]));
+          let workersForPdf: { name: string; is_main?: boolean }[] = [];
+          if (workerIds.length > 0) {
+            const { data: emps } = await supabase
+              .from("employees")
+              .select("user_id, vorname, nachname")
+              .in("user_id", workerIds);
+            const byId = new Map<string, string>();
+            (emps || []).forEach((e: any) => byId.set(e.user_id, `${e.vorname} ${e.nachname}`.trim()));
+            if (creatorId && byId.has(creatorId)) {
+              workersForPdf.push({ name: byId.get(creatorId)!, is_main: true });
+            }
+            for (const wid of (workerRows || []).map((w: any) => w.user_id)) {
+              if (wid === creatorId) continue;
+              const n = byId.get(wid);
+              if (n) workersForPdf.push({ name: n, is_main: false });
+            }
+          }
+
           // Optional: interne Anmerkungen raus wenn nicht gewollt
           const reportForPdf = { ...report, project: report.projects } as any;
           if (!bulkIncludeIntern) {
@@ -151,7 +179,9 @@ export default function DailyReports() {
             reportForPdf,
             (activities || []) as any,
             (photos || []) as any,
-            supabaseUrl
+            supabaseUrl,
+            {},
+            workersForPdf,
           );
           ok++;
         } catch (err: any) {
@@ -332,12 +362,17 @@ export default function DailyReports() {
                       <Badge variant="outline" className="text-xs">
                         {report.report_type === "regiebericht" ? "Regiebericht" : report.report_type === "tagesbericht" ? "Tagesbericht" : "Zwischenbericht"}
                       </Badge>
-                      <Badge className={`text-xs ${STATUS_COLORS[report.status] || ""}`}>
-                        {report.status === "offen" ? "Offen" : "Abgeschlossen"}
+                      <Badge className={`text-xs ${
+                        report.unterschrift_kunde
+                          ? "bg-green-600 text-white"
+                          : STATUS_COLORS[report.status] || ""
+                      }`}>
+                        {report.unterschrift_kunde
+                          ? "Unterzeichnet"
+                          : report.status === "offen"
+                            ? "Offen"
+                            : "Abgeschlossen"}
                       </Badge>
-                      {report.unterschrift_kunde && (
-                        <Badge className="text-xs bg-green-100 text-green-800">Kunde unterschrieben</Badge>
-                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {(report.projects as any)?.name || "Unbekanntes Projekt"}

@@ -201,6 +201,9 @@ export type Database = {
           project_id: string
           status: string
           titel: string | null
+          unterschrift_am: string | null
+          unterschrift_kunde: string | null
+          unterschrift_name: string | null
           updated_at: string | null
           user_id: string
         }
@@ -217,6 +220,9 @@ export type Database = {
           project_id: string
           status?: string
           titel?: string | null
+          unterschrift_am?: string | null
+          unterschrift_kunde?: string | null
+          unterschrift_name?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -233,6 +239,9 @@ export type Database = {
           project_id?: string
           status?: string
           titel?: string | null
+          unterschrift_am?: string | null
+          unterschrift_kunde?: string | null
+          unterschrift_name?: string | null
           updated_at?: string | null
           user_id?: string
         }

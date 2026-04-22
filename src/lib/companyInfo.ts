@@ -1,6 +1,7 @@
-// Zentrale Firmendaten fuer PDF-Exports (Tagesbericht, Regiebericht, ...).
-// In der App-UI bleibt die Marke "BMR Bau"; in gedruckten / versendeten
-// Unterlagen verwendet der Kunde die Legal-Entity "JR Baumeisterbüro".
+// Zentrale Firmendaten fuer PDF-Exports (Tagesbericht, Regiebericht,
+// Aufmaßblatt, ...). Aenderung hier wirkt in allen Client-PDFs; die
+// Edge-Function `send-disturbance-report` hat eine eigene Kopie der
+// Konstante und muss bei Umbenennung nachgezogen + neu deployed werden.
 
 export const COMPANY_NAME = "BMR Bau GmbH";
 export const COMPANY_ADDRESS_LINES = ["Wirtschaftspark 15", "9130 Poggersdorf"];

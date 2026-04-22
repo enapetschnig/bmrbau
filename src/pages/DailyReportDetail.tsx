@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SafetyChecklist, DEFAULT_SAFETY_ITEMS, type SafetyItem } from "@/components/SafetyChecklist";
 import { DailyReportForm } from "@/components/DailyReportForm";
 import { SignaturePad } from "@/components/SignaturePad";
+import { SimpleSignatureDialog } from "@/components/SimpleSignatureDialog";
 import { SerialPhotoCapture } from "@/components/SerialPhotoCapture";
 import { confirm } from "@/lib/confirm";
 import { format } from "date-fns";
@@ -45,13 +46,15 @@ type DailyReport = {
   unterschrift_am: string | null;
   unterschrift_name: string | null;
   status: string;
+  pdf_url: string | null;
+  pdf_generated_at: string | null;
   created_at: string;
   projects: { name: string; plz: string | null; adresse: string | null } | null;
 };
 
 type Activity = { id: string; geschoss: string; beschreibung: string; sort_order: number };
 type Photo = { id: string; file_path: string; file_name: string };
-type Worker = { user_id: string; name: string };
+type Worker = { user_id: string; name: string; is_main?: boolean };
 
 export default function DailyReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -69,6 +72,7 @@ export default function DailyReportDetail() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [showSimpleSignDialog, setShowSimpleSignDialog] = useState(false);
   const [absending, setAbsending] = useState(false);
 
   // Signature state
@@ -105,18 +109,25 @@ export default function DailyReportDetail() {
 
   // BMR-Wunsch: Abschicken soll direkt passieren - kein Sicherheits-
   // checklisten-Dialog, keine Unterschrift. Einfach status = "abgeschlossen"
-  // setzen, ein PDF generieren und ins Projekt-Archiv schieben.
-  const handleAbschicken = async () => {
+  // setzen, ein PDF generieren und ins Projekt-Archiv schieben. Optional
+  // kann eine Unterschrift uebergeben werden - dann wird das PDF MIT
+  // Signatur neu erzeugt, auch bei bereits abgeschlossenen Berichten.
+  const handleAbschicken = async (withSignature?: { signature: string; name: string }) => {
     if (!report || !id) return;
-    // Doppelklick-Schutz: bereits laufender Submit blockt weitere Klicks.
-    // Sonst wuerden bei flotten Doppelklicks zwei PDFs ins Projekt
-    // hochgeladen und zwei documents-Eintraege angelegt.
     if (absending) return;
     setAbsending(true);
 
-    // PDF im selben Layout wie der Download generieren und automatisch
-    // ins Projekt hochladen, sodass es ueber den Projekt-Bereich UND
-    // die Tagesberichte-Liste runtergeladen werden kann.
+    const now = new Date().toISOString();
+    const unterschrift_kunde = withSignature?.signature ?? report.unterschrift_kunde;
+    const unterschrift_am = withSignature ? now : report.unterschrift_am;
+    const unterschrift_name = withSignature ? (withSignature.name || null) : report.unterschrift_name;
+
+    // Bestehende PDF entfernen, damit wir mit Signatur frisch erzeugen.
+    if (report.pdf_url) {
+      await supabase.storage.from("project-reports").remove([report.pdf_url]);
+      await supabase.from("documents").delete().eq("file_url", report.pdf_url);
+    }
+
     let pdfPublicUrl: string | null = null;
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -131,9 +142,9 @@ export default function DailyReportDetail() {
           notizen: report.notizen,
           sicherheitscheckliste: report.sicherheitscheckliste,
           sicherheit_bestaetigt: !!report.sicherheit_bestaetigt,
-          unterschrift_kunde: report.unterschrift_kunde,
-          unterschrift_am: report.unterschrift_am,
-          unterschrift_name: report.unterschrift_name,
+          unterschrift_kunde,
+          unterschrift_am,
+          unterschrift_name,
           project: report.projects ? {
             name: report.projects.name,
             adresse: report.projects.adresse,
@@ -144,7 +155,7 @@ export default function DailyReportDetail() {
         photos.map(p => ({ file_path: p.file_path, file_name: p.file_name })),
         supabaseUrl,
         { asBlob: true },
-        workers.map(w => ({ name: w.name })),
+        workers.map(w => ({ name: w.name, is_main: !!w.is_main })),
       )) as Blob;
 
       const filename = getDailyReportPDFFilename({
@@ -163,11 +174,7 @@ export default function DailyReportDetail() {
           .from("project-reports")
           .upload(filePath, blob, { contentType: "application/pdf", upsert: false });
         if (!upErr) {
-          // Public URL nur fuer Anzeige - der Bucket ist privat, Download-
-          // Link generieren wir bei Klick als signed URL.
           pdfPublicUrl = filePath;
-
-          // documents-Eintrag fuer Projekt-Bereich (Regieberichte-Tab)
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             await supabase.from("documents").insert({
@@ -190,7 +197,12 @@ export default function DailyReportDetail() {
     const update: Record<string, unknown> = { status: "abgeschlossen" };
     if (pdfPublicUrl) {
       update.pdf_url = pdfPublicUrl;
-      update.pdf_generated_at = new Date().toISOString();
+      update.pdf_generated_at = now;
+    }
+    if (withSignature) {
+      update.unterschrift_kunde = unterschrift_kunde;
+      update.unterschrift_am = unterschrift_am;
+      update.unterschrift_name = unterschrift_name;
     }
 
     const { error } = await supabase.from("daily_reports").update(update).eq("id", id);
@@ -200,10 +212,14 @@ export default function DailyReportDetail() {
       return;
     }
     toast({
-      title: "Abgeschlossen",
+      title: withSignature ? "Unterzeichnet" : "Abgeschlossen",
       description: pdfPublicUrl
-        ? "Bericht abgeschlossen, PDF ins Projekt gespeichert."
-        : "Bericht abgeschlossen.",
+        ? withSignature
+          ? "Bericht unterzeichnet, PDF mit Unterschrift ins Projekt gespeichert."
+          : "Bericht abgeschlossen, PDF ins Projekt gespeichert."
+        : withSignature
+          ? "Bericht unterzeichnet."
+          : "Bericht abgeschlossen.",
     });
     await fetchReport();
     setAbsending(false);
@@ -240,20 +256,42 @@ export default function DailyReportDetail() {
       .order("created_at");
     if (pics) setPhotos(pics);
 
-    // Fetch workers
+    // Workers: Haupt-Mitarbeiter (= Ersteller) immer oben, dazu weitere
+    // aus daily_report_workers. Sonst wuerde der Ersteller im PDF
+    // ueberhaupt nicht auftauchen, wenn er sich nicht auch explizit als
+    // "Anwesender Mitarbeiter" abhakt.
+    const userIdsFromTable: string[] = [];
     const { data: workerData } = await supabase
       .from("daily_report_workers")
       .select("user_id")
       .eq("daily_report_id", id);
-    if (workerData && workerData.length > 0) {
-      const userIds = workerData.map((w: any) => w.user_id);
+    if (workerData) {
+      userIdsFromTable.push(...workerData.map((w: any) => w.user_id));
+    }
+    const creatorId = (data as any)?.user_id as string | undefined;
+    const allIds = Array.from(new Set([
+      ...(creatorId ? [creatorId] : []),
+      ...userIdsFromTable,
+    ]));
+    if (allIds.length > 0) {
       const { data: empData } = await supabase
         .from("employees")
         .select("user_id, vorname, nachname")
-        .in("user_id", userIds);
-      if (empData) {
-        setWorkers(empData.map((e: any) => ({ user_id: e.user_id, name: `${e.vorname} ${e.nachname}`.trim() })));
+        .in("user_id", allIds);
+      const byId = new Map<string, { vorname: string; nachname: string }>();
+      (empData || []).forEach((e: any) => byId.set(e.user_id, { vorname: e.vorname, nachname: e.nachname }));
+      // Reihenfolge: Ersteller zuerst, dann alle anderen
+      const ordered: Worker[] = [];
+      if (creatorId && byId.has(creatorId)) {
+        const e = byId.get(creatorId)!;
+        ordered.push({ user_id: creatorId, name: `${e.vorname} ${e.nachname}`.trim(), is_main: true });
       }
+      for (const uid of userIdsFromTable) {
+        if (uid === creatorId) continue;
+        const e = byId.get(uid);
+        if (e) ordered.push({ user_id: uid, name: `${e.vorname} ${e.nachname}`.trim(), is_main: false });
+      }
+      setWorkers(ordered);
     } else {
       setWorkers([]);
     }
@@ -512,8 +550,8 @@ export default function DailyReportDetail() {
         <h1 className="text-2xl font-bold">
           {report.report_type === "tagesbericht" ? "Tagesbericht" : "Zwischenbericht"}
         </h1>
-        <Badge variant={report.status === "offen" ? "outline" : "default"}>
-          {report.status === "offen" ? "Offen" : "Abgeschlossen"}
+        <Badge variant={report.unterschrift_kunde ? "default" : report.status === "offen" ? "outline" : "secondary"}>
+          {report.unterschrift_kunde ? "Unterzeichnet" : report.status === "offen" ? "Offen" : "Abgeschlossen"}
         </Badge>
       </div>
 
@@ -695,10 +733,20 @@ export default function DailyReportDetail() {
               <Button variant="outline" onClick={() => setShowEditForm(true)}>
                 <Pencil className="w-4 h-4 mr-2" /> Bearbeiten
               </Button>
-              <Button onClick={handleAbschicken} disabled={absending}>
+              <Button variant="secondary" onClick={() => handleAbschicken()} disabled={absending}>
                 {absending ? "Wird abgeschickt…" : "Absenden"}
               </Button>
+              <Button onClick={() => setShowSimpleSignDialog(true)} disabled={absending}>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Unterschreiben & Absenden
+              </Button>
             </>
+          )}
+          {report.status !== "offen" && !report.unterschrift_kunde && (
+            <Button onClick={() => setShowSimpleSignDialog(true)} disabled={absending}>
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              {absending ? "Erstellt PDF…" : "Nachträglich unterschreiben"}
+            </Button>
           )}
           {report.status !== "offen" && (
             <Button variant="outline" onClick={handleDownloadPDF}>
@@ -780,6 +828,19 @@ export default function DailyReportDetail() {
         onOpenChange={setShowSerialDialog}
         onFinish={handleSerialUpload}
         title="Fotos für Tagesbericht"
+      />
+
+      {/* Unterschrift-Dialog - einheitlicher Flow, egal ob direkt beim
+          Absenden oder nachträglich zum bereits abgeschlossenen Bericht. */}
+      <SimpleSignatureDialog
+        open={showSimpleSignDialog}
+        onOpenChange={setShowSimpleSignDialog}
+        title="Bericht unterschreiben"
+        description="Lassen Sie den Kunden bzw. Bauleiter direkt auf dem Gerät unterschreiben. Das PDF wird mit der Unterschrift neu erzeugt."
+        submitLabel="Unterschrift speichern"
+        onSubmit={async ({ signature, name }) => {
+          await handleAbschicken({ signature, name });
+        }}
       />
     </div>
   );

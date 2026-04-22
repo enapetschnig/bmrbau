@@ -13,6 +13,9 @@ export interface AufmassSheetForPDF {
   bauleiter: string | null;
   gewerk: string | null;
   notizen: string | null;
+  unterschrift_kunde?: string | null;
+  unterschrift_name?: string | null;
+  unterschrift_am?: string | null;
   project: { name: string; adresse: string | null; plz: string | null } | null;
 }
 
@@ -333,18 +336,61 @@ export async function generateAufmassPDF(
   }
 
   // Unterschriftsblock
-  ensureSpace(35);
+  ensureSpace(45);
   y += 6;
+  const hasSig = !!sheet.unterschrift_kunde && sheet.unterschrift_kunde.startsWith("data:");
+  const sigW = (contentWidth - 10) / 2;
+
+  // Linke Seite: Auftragnehmer - bleibt immer leer (Papier-Signatur).
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.4);
-  const sigW = (contentWidth - 10) / 2;
   doc.line(margin, y + 18, margin + sigW, y + 18);
-  doc.line(margin + sigW + 10, y + 18, margin + contentWidth, y + 18);
   doc.setFontSize(8);
   doc.setTextColor(120, 120, 120);
   doc.text("Auftragnehmer", margin, y + 22);
-  doc.text("Auftraggeber / Bauleiter", margin + sigW + 10, y + 22);
-  y += 26;
+
+  // Rechte Seite: Kundenunterschrift
+  if (hasSig) {
+    try {
+      // Unterschriftsbild 50x18mm ueber der Linie
+      doc.addImage(sheet.unterschrift_kunde as string, "PNG", margin + sigW + 10, y - 2, 55, 20);
+    } catch {
+      try {
+        const b64 = (sheet.unterschrift_kunde as string).split(",").pop() || "";
+        doc.addImage(b64, "PNG", margin + sigW + 10, y - 2, 55, 20);
+      } catch { /* skip */ }
+    }
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.4);
+    doc.line(margin + sigW + 10, y + 18, margin + contentWidth, y + 18);
+    doc.setFontSize(8);
+    doc.setTextColor(40, 40, 40);
+    const rightLabel = sheet.unterschrift_name
+      ? `Kunde — ${sheet.unterschrift_name}`
+      : "Kunde";
+    doc.text(rightLabel, margin + sigW + 10, y + 22);
+    if (sheet.unterschrift_am) {
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      try {
+        const d = new Date(sheet.unterschrift_am);
+        doc.text(
+          d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+          margin + sigW + 10,
+          y + 25.5,
+        );
+      } catch { /* ignore */ }
+    }
+  } else {
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.4);
+    doc.line(margin + sigW + 10, y + 18, margin + contentWidth, y + 18);
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Auftraggeber / Bauleiter", margin + sigW + 10, y + 22);
+  }
+  y += hasSig ? 30 : 26;
+  doc.setTextColor(0, 0, 0);
 
   // Footer (2 Zeilen, kein Overlap)
   const totalPages = doc.getNumberOfPages();

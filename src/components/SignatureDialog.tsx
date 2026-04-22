@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Send, User, Clock, Package, FileText, Loader2 } from "lucide-react";
+import { Send, User, Clock, Package, FileText, Loader2, Save } from "lucide-react";
 
 type Material = {
   id: string;
@@ -57,6 +57,7 @@ export const SignatureDialog = ({
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -89,6 +90,43 @@ export const SignatureDialog = ({
 
     if (!error && data) {
       setPhotos(data);
+    }
+  };
+
+  /**
+   * Entwurf speichern: Signatur (falls gemalt) speichern, Status
+   * bleibt "offen", kein E-Mail-Versand. Kann spaeter aus der
+   * Regiebericht-Liste heraus mit "Zur Unterschrift" unterschrieben
+   * und versendet werden.
+   */
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    try {
+      if (signature) {
+        const { error } = await supabase
+          .from("disturbances")
+          .update({
+            unterschrift_kunde: signature,
+            unterschrift_am: new Date().toISOString(),
+            // Status bleibt unveraendert - typischerweise "offen".
+          })
+          .eq("id", disturbance.id);
+        if (error) {
+          toast({ variant: "destructive", title: "Fehler", description: error.message });
+          setSavingDraft(false);
+          return;
+        }
+      }
+      toast({
+        title: "Entwurf gespeichert",
+        description: signature
+          ? "Unterschrift gespeichert. Kannst du später aus der Liste heraus versenden."
+          : "Regiebericht bleibt offen. Kannst du später in der Liste unterschreiben und versenden.",
+      });
+      onSuccess();
+      onOpenChange(false);
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -225,7 +263,8 @@ export const SignatureDialog = ({
             Regiebericht zur Unterschrift
           </DialogTitle>
           <DialogDescription>
-            Bitte lassen Sie den Kunden unterschreiben und senden Sie dann den Bericht.
+            Lassen Sie den Kunden unterschreiben und senden Sie den Bericht — oder
+            speichern Sie ihn als Entwurf und unterschreiben später aus der Liste.
           </DialogDescription>
         </DialogHeader>
 
@@ -355,13 +394,31 @@ export const SignatureDialog = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={sending}
+            disabled={sending || savingDraft}
           >
             Abbrechen
           </Button>
           <Button
+            variant="secondary"
+            onClick={handleSaveDraft}
+            disabled={sending || savingDraft}
+            className="gap-2"
+          >
+            {savingDraft ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Speichert…
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Als Entwurf speichern
+              </>
+            )}
+          </Button>
+          <Button
             onClick={handleSendReport}
-            disabled={!signature || sending}
+            disabled={!signature || sending || savingDraft}
             className="gap-2"
           >
             {sending ? (

@@ -21,6 +21,7 @@ type Sheet = {
   gewerk: string | null;
   status: "offen" | "abgeschlossen";
   pdf_url: string | null;
+  unterschrift_kunde: string | null;
   created_at: string;
 };
 
@@ -171,8 +172,11 @@ export default function AufmassList() {
                       <span className="font-semibold">
                         {s.aufmass_nr ? `Nr. ${s.aufmass_nr}` : "Aufmaß"}
                       </span>
-                      <Badge variant={s.status === "offen" ? "outline" : "default"} className="text-xs">
-                        {s.status === "offen" ? "Offen" : "Abgeschlossen"}
+                      <Badge
+                        variant={s.unterschrift_kunde ? "default" : s.status === "offen" ? "outline" : "secondary"}
+                        className="text-xs"
+                      >
+                        {s.unterschrift_kunde ? "Unterzeichnet" : s.status === "offen" ? "Offen" : "Abgeschlossen"}
                       </Badge>
                       {s.gewerk && <Badge variant="secondary" className="text-xs">{s.gewerk}</Badge>}
                     </div>
