@@ -717,22 +717,26 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                 <Label htmlFor="beschreibung">Durchgeführte Arbeit *</Label>
                 <VoiceAIInput
                   multiline
-                  rows={4}
+                  rows={6}
                   context="regiebericht"
+                  buttonsPosition="above"
                   value={formData.beschreibung}
                   onChange={(v) => setFormData({ ...formData, beschreibung: v })}
                   placeholder="Beschreiben Sie die durchgeführten Arbeiten..."
+                  inputClassName="text-base sm:text-sm min-h-[140px]"
                 />
               </div>
               <div>
                 <Label htmlFor="notizen">Notizen (optional)</Label>
                 <VoiceAIInput
                   multiline
-                  rows={2}
+                  rows={4}
                   context="notiz"
+                  buttonsPosition="above"
                   value={formData.notizen}
                   onChange={(v) => setFormData({ ...formData, notizen: v })}
                   placeholder="Zusätzliche Bemerkungen..."
+                  inputClassName="text-base sm:text-sm min-h-[96px]"
                 />
               </div>
             </div>
