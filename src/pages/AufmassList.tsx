@@ -99,10 +99,20 @@ export default function AufmassList() {
   const deleteSheet = async (s: Sheet) => {
     if (!(await confirm({
       title: "Aufmaßblatt löschen?",
-      description: "Auch das PDF wird aus dem Projekt entfernt.",
+      description: "Auch alle Fotos und das PDF werden aus dem Projekt entfernt.",
       destructive: true,
       confirmLabel: "Löschen",
     }))) return;
+    // Alle Foto-Dateien aus Storage entfernen, sonst bleiben sie verwaist.
+    const { data: pics } = await supabase
+      .from("aufmass_photos")
+      .select("file_path")
+      .eq("sheet_id", s.id);
+    if (pics && pics.length > 0) {
+      await supabase.storage
+        .from("project-aufmass")
+        .remove(pics.map((p) => p.file_path));
+    }
     if (s.pdf_url) {
       await supabase.storage.from("project-aufmass").remove([s.pdf_url]);
       await supabase.from("documents").delete().eq("file_url", s.pdf_url);

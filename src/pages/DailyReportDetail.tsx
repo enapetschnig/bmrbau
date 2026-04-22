@@ -87,6 +87,13 @@ export default function DailyReportDetail() {
     if (photos.length > 0) {
       await supabase.storage.from("daily-report-photos").remove(photos.map(p => p.file_path));
     }
+    // Auto-generiertes PDF im Projekt-Ordner mitloeschen, sonst bleibt
+    // die Datei im Storage liegen und der Berichte-Counter im Projekt
+    // zeigt einen veralteten Wert.
+    if (report?.pdf_url) {
+      await supabase.storage.from("project-reports").remove([report.pdf_url]);
+      await supabase.from("documents").delete().eq("file_url", report.pdf_url);
+    }
     const { error } = await supabase.from("daily_reports").delete().eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler beim Löschen", description: error.message });

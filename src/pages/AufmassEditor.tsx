@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
 import { SketchRow } from "@/components/SketchRow";
+import { AufmassPhotoStrip, type AufmassPhoto } from "@/components/AufmassPhotoStrip";
 import {
   generateAufmassPDF,
   getAufmassPDFFilename,
@@ -54,6 +55,7 @@ export default function AufmassEditor() {
 
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [photos, setPhotos] = useState<AufmassPhoto[]>([]);
   const [project, setProject] = useState<{ name: string; adresse: string | null; plz: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,6 +89,12 @@ export default function AufmassEditor() {
         .eq("sheet_id", sheetId)
         .order("sort_order");
       if (pos) setPositions(pos as Position[]);
+      const { data: pics } = await supabase
+        .from("aufmass_photos")
+        .select("*")
+        .eq("sheet_id", sheetId)
+        .order("sort_order");
+      if (pics) setPhotos(pics as AufmassPhoto[]);
       setLoading(false);
     })();
   }, [sheetId]);
@@ -170,6 +178,7 @@ export default function AufmassEditor() {
         project: project,
       };
       const positionsForPdf: AufmassPositionForPDF[] = positions.map((p) => ({
+        id: p.id,
         sort_order: p.sort_order,
         input_mode: p.input_mode,
         pos_nr: p.pos_nr,
@@ -180,7 +189,31 @@ export default function AufmassEditor() {
         einheit: p.einheit,
         sketch_data_url: p.sketch_data_url,
       }));
-      const blob = (await generateAufmassPDF(sheetForPdf, positionsForPdf, { asBlob: true })) as Blob;
+
+      // Alle Fotos parallel als Base64 laden (signed URLs).
+      const photosForPdf = await Promise.all(photos.map(async (ph) => {
+        const { data } = await supabase
+          .storage.from("project-aufmass")
+          .createSignedUrl(ph.file_path, 60);
+        if (!data) return null;
+        try {
+          const resp = await fetch(data.signedUrl);
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onloadend = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+          return { position_id: ph.position_id, imageDataUrl: dataUrl, file_name: ph.file_name };
+        } catch {
+          return null;
+        }
+      }));
+      const validPhotos = photosForPdf.filter((p): p is { position_id: string | null; imageDataUrl: string; file_name: string | null } => p !== null);
+
+      const blob = (await generateAufmassPDF(sheetForPdf, positionsForPdf, validPhotos, { asBlob: true })) as Blob;
       const filename = getAufmassPDFFilename(sheetForPdf);
       const filePath = `${sheet.project_id}/${Date.now()}_${filename}`;
       const { error: upErr } = await supabase.storage
@@ -466,6 +499,21 @@ export default function AufmassEditor() {
                         disabled={isReadOnly}
                       />
                     )}
+
+                    {/* Foto-Strip pro Position */}
+                    <div className="border-t pt-2">
+                      <AufmassPhotoStrip
+                        sheetId={sheet.id}
+                        positionId={pos.id}
+                        projectId={sheet.project_id}
+                        photos={photos.filter((ph) => ph.position_id === pos.id)}
+                        onChange={(next) => {
+                          const others = photos.filter((ph) => ph.position_id !== pos.id);
+                          setPhotos([...others, ...next]);
+                        }}
+                        disabled={isReadOnly}
+                      />
+                    </div>
                   </div>
                 ))
             )}
@@ -476,6 +524,26 @@ export default function AufmassEditor() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Globale Foto-Anhaenge (am Ende des Aufmasses) */}
+        <Card>
+          <CardHeader className="p-3 sm:p-4">
+            <CardTitle className="text-base">Foto-Anhänge</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <AufmassPhotoStrip
+              sheetId={sheet.id}
+              positionId={null}
+              projectId={sheet.project_id}
+              photos={photos.filter((ph) => ph.position_id === null)}
+              onChange={(next) => {
+                const positionPhotos = photos.filter((ph) => ph.position_id !== null);
+                setPhotos([...positionPhotos, ...next]);
+              }}
+              disabled={isReadOnly}
+            />
           </CardContent>
         </Card>
 

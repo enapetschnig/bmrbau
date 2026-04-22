@@ -58,8 +58,8 @@ const ProjectOverview = () => {
     },
     {
       type: "reports",
-      title: "Regieberichte",
-      description: "Bautagebücher und Stundenberichte",
+      title: "Berichte",
+      description: "Tagesberichte und Regieberichte",
       icon: <FileCheck className="h-8 w-8" />,
       count: 0,
     },
@@ -326,30 +326,23 @@ const ProjectOverview = () => {
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
-    const bucketMap: Record<string, string> = {
-      plans: "project-plans",
-      reports: "project-reports",
-      photos: "project-photos",
-      chef: "project-chef",
-    };
-
+    // Counter aus documents-Tabelle: das ist die einzige Quelle die
+    // synchron mit Loeschungen bleibt (verwaiste Storage-Files
+    // werden ignoriert, Auto-PDFs vom Tagesbericht-Loeschen werden
+    // sauber abgezogen).
     const updatedCategories = await Promise.all(
       categories.map(async (category) => {
         if (category.type === "chef" && !isAdmin) {
           return { ...category, count: 0 };
         }
-
-        const bucket = bucketMap[category.type];
-        const { data } = await supabase
-          .storage
-          .from(bucket)
-          .list(projectId);
-
-        return {
-          ...category,
-          count: data?.length || 0,
-        };
-      })
+        const { count } = await supabase
+          .from("documents")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .eq("typ", category.type)
+          .eq("archived", false);
+        return { ...category, count: count ?? 0 };
+      }),
     );
 
     setCategories(updatedCategories);

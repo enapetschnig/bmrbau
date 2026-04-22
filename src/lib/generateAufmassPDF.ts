@@ -17,6 +17,7 @@ export interface AufmassSheetForPDF {
 }
 
 export interface AufmassPositionForPDF {
+  id: string;
   sort_order: number;
   input_mode: "text" | "sketch";
   pos_nr: string | null;
@@ -26,6 +27,17 @@ export interface AufmassPositionForPDF {
   menge: number | null;
   einheit: string | null;
   sketch_data_url: string | null;
+}
+
+/**
+ * Foto-Eintrag fuers PDF. position_id = null heisst globaler Anhang.
+ * imageDataUrl ist die fertige Base64-PNG/JPEG die der Aufrufer aus
+ * dem Storage geholt hat.
+ */
+export interface AufmassPhotoForPDF {
+  position_id: string | null;
+  imageDataUrl: string;
+  file_name?: string | null;
 }
 
 export interface GenerateAufmassOptions {
@@ -73,6 +85,7 @@ export function getAufmassPDFFilename(sheet: AufmassSheetForPDF): string {
 export async function generateAufmassPDF(
   sheet: AufmassSheetForPDF,
   positions: AufmassPositionForPDF[],
+  photos: AufmassPhotoForPDF[] = [],
   options: GenerateAufmassOptions = {},
 ): Promise<Blob | void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -248,9 +261,59 @@ export async function generateAufmassPDF(
     doc.setLineWidth(0.2);
     doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
     y += rowHeight;
+
+    // Position-Fotos: 3 pro Reihe, je 50 mm breit
+    const posPhotos = photos.filter((p) => p.position_id === pos.id);
+    if (posPhotos.length > 0) {
+      const photoW = (contentWidth - 6) / 3;
+      const photoH = photoW * 0.7;
+      for (let i = 0; i < posPhotos.length; i += 3) {
+        ensureSpace(photoH + 4);
+        const rowY = y;
+        for (let col = 0; col < 3 && i + col < posPhotos.length; col++) {
+          const ph = posPhotos[i + col];
+          const xPos = margin + col * (photoW + 3);
+          try {
+            doc.addImage(ph.imageDataUrl, "JPEG", xPos, rowY, photoW, photoH);
+          } catch { /* skip */ }
+        }
+        y = rowY + photoH + 3;
+      }
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, y, margin + contentWidth, y);
+      y += 2;
+    }
   }
 
   y += 4;
+
+  // Globale Foto-Anhaenge (am Ende, gross & 2-spaltig)
+  const globalPhotos = photos.filter((p) => p.position_id === null);
+  if (globalPhotos.length > 0) {
+    ensureSpace(12);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...BMR_DARK_RGB);
+    doc.text(`Foto-Anhänge (${globalPhotos.length})`, margin, y);
+    y += 6;
+    doc.setTextColor(0, 0, 0);
+
+    const photoW = (contentWidth - 4) / 2;
+    const photoH = photoW * 0.7;
+    for (let i = 0; i < globalPhotos.length; i += 2) {
+      ensureSpace(photoH + 4);
+      const rowY = y;
+      for (let col = 0; col < 2 && i + col < globalPhotos.length; col++) {
+        const ph = globalPhotos[i + col];
+        const xPos = margin + col * (photoW + 4);
+        try {
+          doc.addImage(ph.imageDataUrl, "JPEG", xPos, rowY, photoW, photoH);
+        } catch { /* skip */ }
+      }
+      y = rowY + photoH + 4;
+    }
+    y += 2;
+  }
 
   // Notizen
   if (sheet.notizen && sheet.notizen.trim()) {
