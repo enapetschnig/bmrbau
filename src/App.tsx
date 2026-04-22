@@ -25,6 +25,8 @@ import ExternalTimeTracking from "./pages/ExternalTimeTracking";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import ProjectOverview from "./pages/ProjectOverview";
+import AufmassList from "./pages/AufmassList";
+import AufmassEditor from "./pages/AufmassEditor";
 import MyHours from "./pages/MyHours";
 import MyDocuments from "./pages/MyDocuments";
 import Reports from "./pages/Reports";
@@ -158,6 +160,8 @@ function AppContent() {
           <Route path="/projects" element={<ProtectedRoute minRole="facharbeiter"><Projects /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute minRole="facharbeiter"><ProjectOverview /></ProtectedRoute>} />
           <Route path="/projects/:projectId/chat" element={<ProtectedRoute minRole="extern"><ProjectChatPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/aufmass" element={<ProtectedRoute minRole="facharbeiter"><AufmassList /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/aufmass/:sheetId" element={<ProtectedRoute minRole="facharbeiter"><AufmassEditor /></ProtectedRoute>} />
           <Route path="/projects/:projectId/:type" element={<ProtectedRoute minRole="facharbeiter"><ProjectDetail /></ProtectedRoute>} />
           <Route path="/projects/:projectId/orders" element={<ProtectedRoute minRole="facharbeiter"><OrderManagement /></ProtectedRoute>} />
           {/* Alle eingeloggten */}
