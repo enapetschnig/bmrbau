@@ -83,12 +83,19 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
   }
 }
 
+export interface GenerateOptions {
+  /** Wenn true: PDF wird als Blob zurueckgegeben (nicht ueber doc.save()
+      heruntergeladen). Fuer den Auto-Upload-in-Projekt-Workflow. */
+  asBlob?: boolean;
+}
+
 export async function generateDailyReportPDF(
   report: DailyReportForPDF,
   activities: ActivityForPDF[],
   photos: PhotoForPDF[],
   supabaseUrl: string,
-): Promise<void> {
+  options: GenerateOptions = {},
+): Promise<Blob | void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -367,5 +374,17 @@ export async function generateDailyReportPDF(
   const projectSlug = (report.project?.name || "Projekt").replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
   const dateSlug = formatDateShort(report.datum).replace(/\./g, "-");
   const typeLabel = report.report_type === "tagesbericht" ? "Bautagesbericht" : "Zwischenbericht";
-  doc.save(`${typeLabel}_${projectSlug}_${dateSlug}.pdf`);
+  const filename = `${typeLabel}_${projectSlug}_${dateSlug}.pdf`;
+
+  if (options.asBlob) {
+    return doc.output("blob");
+  }
+  doc.save(filename);
+}
+
+export function getDailyReportPDFFilename(report: DailyReportForPDF): string {
+  const projectSlug = (report.project?.name || "Projekt").replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
+  const dateSlug = formatDateShort(report.datum).replace(/\./g, "-");
+  const typeLabel = report.report_type === "tagesbericht" ? "Bautagesbericht" : "Zwischenbericht";
+  return `${typeLabel}_${projectSlug}_${dateSlug}.pdf`;
 }

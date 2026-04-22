@@ -30,6 +30,8 @@ type DailyReport = {
   wetter: string[] | null;
   status: string;
   created_at: string;
+  pdf_url: string | null;
+  unterschrift_kunde?: string | null;
   projects: { name: string; plz: string | null } | null;
 };
 
@@ -349,6 +351,29 @@ export default function DailyReports() {
                       )}
                     </div>
                   </div>
+                  {report.pdf_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 h-9"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const { data, error: signErr } = await supabase
+                          .storage
+                          .from("project-reports")
+                          .createSignedUrl(report.pdf_url!, 60);
+                        if (signErr || !data) {
+                          toast({ variant: "destructive", title: "Fehler", description: "PDF konnte nicht geladen werden" });
+                          return;
+                        }
+                        window.open(data.signedUrl, "_blank");
+                      }}
+                      title="PDF herunterladen"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span className="hidden sm:inline ml-1">PDF</span>
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

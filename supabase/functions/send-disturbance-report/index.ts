@@ -459,7 +459,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const officeEmail = setting?.value || "office@bmrbau.at";
     const recipients = [officeEmail];
-    if (disturbance.kunde_email) recipients.push(disturbance.kunde_email);
+
+    // Kundenmail ist OPTIONAL und muss formgueltig sein - sonst skippen.
+    // Vorher hat Resend bei "abc" o. ae. die ganze Anfrage mit 400
+    // beantwortet und der User sah einen Fehler obwohl die Office-Mail
+    // problemlos rausgegangen waere.
+    const isValidEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+    if (disturbance.kunde_email && isValidEmail(disturbance.kunde_email)) {
+      recipients.push(disturbance.kunde_email.trim());
+    } else if (disturbance.kunde_email) {
+      console.warn(`Kundenmail "${disturbance.kunde_email}" ist ungueltig - wird uebersprungen.`);
+    }
 
     const dateForFilename = formatDateShort(disturbance.datum).replace(/\./g, "-");
     const kundeForFilename = disturbance.kunde_name.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");

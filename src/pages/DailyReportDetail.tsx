@@ -16,7 +16,7 @@ import { SerialPhotoCapture } from "@/components/SerialPhotoCapture";
 import { confirm } from "@/lib/confirm";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { generateDailyReportPDF } from "@/lib/generateDailyReportPDF";
+import { generateDailyReportPDF, getDailyReportPDFFilename } from "@/lib/generateDailyReportPDF";
 
 const WETTER_LABELS: Record<string, string> = {
   sonnig: "☀️ Sonnig", bewoelkt: "☁️ Bewölkt", regen: "🌧️ Regen",
@@ -96,20 +96,100 @@ export default function DailyReportDetail() {
   };
 
   // BMR-Wunsch: Abschicken soll direkt passieren - kein Sicherheits-
-  // checklisten-Dialog, keine Unterschrift. Einfach status = "gesendet"
-  // setzen und fertig. Wer trotzdem unterschreiben/editieren will,
-  // nutzt den Bearbeiten-Button.
+  // checklisten-Dialog, keine Unterschrift. Einfach status = "abgeschlossen"
+  // setzen, ein PDF generieren und ins Projekt-Archiv schieben.
   const handleAbschicken = async () => {
     if (!report || !id) return;
-    const { error } = await supabase
-      .from("daily_reports")
-      .update({ status: "abgeschlossen" })
-      .eq("id", id);
+
+    // PDF im selben Layout wie der Download generieren und automatisch
+    // ins Projekt hochladen, sodass es ueber den Projekt-Bereich UND
+    // die Tagesberichte-Liste runtergeladen werden kann.
+    let pdfPublicUrl: string | null = null;
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const blob = (await generateDailyReportPDF(
+        {
+          report_type: report.report_type,
+          datum: report.datum,
+          temperatur_min: report.temperatur_min,
+          temperatur_max: report.temperatur_max,
+          wetter: report.wetter,
+          beschreibung: report.beschreibung,
+          notizen: report.notizen,
+          sicherheitscheckliste: report.sicherheitscheckliste,
+          sicherheit_bestaetigt: !!report.sicherheit_bestaetigt,
+          unterschrift_kunde: report.unterschrift_kunde,
+          unterschrift_am: report.unterschrift_am,
+          unterschrift_name: report.unterschrift_name,
+          project: report.projects ? {
+            name: report.projects.name,
+            adresse: report.projects.adresse,
+            plz: report.projects.plz,
+          } : null,
+        },
+        activities.map(a => ({ geschoss: a.geschoss, beschreibung: a.beschreibung })),
+        photos.map(p => ({ file_path: p.file_path, file_name: p.file_name })),
+        supabaseUrl,
+        { asBlob: true },
+      )) as Blob;
+
+      const filename = getDailyReportPDFFilename({
+        report_type: report.report_type,
+        datum: report.datum,
+        project: report.projects ? {
+          name: report.projects.name,
+          adresse: report.projects.adresse,
+          plz: report.projects.plz,
+        } : null,
+      } as any);
+
+      if (report.project_id) {
+        const filePath = `${report.project_id}/${Date.now()}_${filename}`;
+        const { error: upErr } = await supabase.storage
+          .from("project-reports")
+          .upload(filePath, blob, { contentType: "application/pdf", upsert: false });
+        if (!upErr) {
+          // Public URL nur fuer Anzeige - der Bucket ist privat, Download-
+          // Link generieren wir bei Klick als signed URL.
+          pdfPublicUrl = filePath;
+
+          // documents-Eintrag fuer Projekt-Bereich (Regieberichte-Tab)
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("documents").insert({
+              user_id: user.id,
+              project_id: report.project_id,
+              typ: "reports",
+              name: filename,
+              file_url: filePath,
+              beschreibung: "Bautagesbericht (automatisch generiert)",
+            });
+          }
+        } else {
+          console.warn("PDF-Upload ins Projekt fehlgeschlagen:", upErr);
+        }
+      }
+    } catch (pdfErr) {
+      console.warn("PDF-Generierung fehlgeschlagen:", pdfErr);
+    }
+
+    const update: Record<string, unknown> = { status: "abgeschlossen" };
+    if (pdfPublicUrl) {
+      update.pdf_url = pdfPublicUrl;
+      update.pdf_generated_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase.from("daily_reports").update(update).eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: error.message });
       return;
     }
-    toast({ title: "Abgeschlossen", description: "Bericht wurde als abgeschlossen markiert." });
+    toast({
+      title: "Abgeschlossen",
+      description: pdfPublicUrl
+        ? "Bericht abgeschlossen, PDF ins Projekt gespeichert."
+        : "Bericht abgeschlossen.",
+    });
     fetchReport();
   };
 
