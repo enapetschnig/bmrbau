@@ -164,50 +164,52 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     if (y + needed > pageH - 18) { doc.addPage(); y = 20; }
   }
 
-  // ── Header ──────────────────────────────────────────────────────────────
-  // Green accent bar at top
+  // ── Header: NUR das Logo, gross + zentriert ──────────────────────────────
+  // Akzent-Bar oben (BMR-Gruen) bleibt als feines Branding-Element.
   setFill(D2);
   doc.rect(0, 0, pageW, 2, "F");
 
-  // Logo links, Firmenblock rechts daneben
-  const ly = 10;
-  const logoSize = 20;
+  let topY = 8;
+  const logoMaxWidth = 90;   // mm
+  const logoMaxHeight = 28;  // mm
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, "PNG", margin, ly, logoSize, logoSize);
+      const imgProps = (doc as unknown as { getImageProperties: (data: string) => { width: number; height: number } }).getImageProperties(logoBase64);
+      const ratio = imgProps.width / imgProps.height;
+      let w = logoMaxWidth;
+      let h = w / ratio;
+      if (h > logoMaxHeight) {
+        h = logoMaxHeight;
+        w = h * ratio;
+      }
+      const x = (pageW - w) / 2;
+      doc.addImage(logoBase64, "PNG", x, topY, w, h);
+      topY += h + 4;
     } catch {
-      /* Logo konnte nicht geladen werden - Header wird ohne gesetzt */
+      doc.addImage(logoBase64, "PNG", (pageW - logoMaxWidth) / 2, topY, logoMaxWidth, logoMaxHeight);
+      topY += logoMaxHeight + 4;
     }
+  } else {
+    topY += 6;
   }
 
-  const txtX = margin + logoSize + 5;
+  // Titel + Datum unter dem Logo
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  setTxt(DGRAY);
-  doc.text(COMPANY_NAME, txtX, ly + 6);
+  doc.setFontSize(13);
+  setTxt(D2);
+  doc.text("REGIEBERICHT", margin, topY + 4);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  setTxt(MGRAY);
-  COMPANY_ADDRESS_LINES.forEach((line, i) => {
-    doc.text(line, txtX, ly + 11 + i * 4);
-  });
+  doc.setFontSize(10);
+  setTxt({ r: 80, g: 80, b: 80 });
+  doc.text(formatDate(disturbance.datum), pageW - margin, topY + 4, { align: "right" });
+  topY += 7;
 
-  // Titel + Datum rechts
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  setTxt(BLACK);
-  doc.text("REGIEBERICHT", pageW - margin, ly + 6, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  setTxt(GRAY);
-  doc.text(formatDate(disturbance.datum), pageW - margin, ly + 12, { align: "right" });
-
-  // BMR-Gruen Trennlinie unter dem Header
+  // Trennlinie BMR-Akzent
   setDraw(ACCENT);
   doc.setLineWidth(0.8);
-  doc.line(margin, ly + logoSize + 2, margin + cW, ly + logoSize + 2);
+  doc.line(margin, topY, margin + cW, topY);
 
-  y = ly + logoSize + 10;
+  y = topY + 8;
 
   const col2x = margin + cW / 2 + 3;
   const colW  = cW / 2 - 5;
@@ -351,23 +353,31 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   doc.text(`Datum: ${new Date().toLocaleDateString("de-AT")}`, margin, y); y += 5;
   doc.text(doc.splitTextToSize("Der Kunde bestätigt mit seiner Unterschrift die ordnungsgemäße Durchführung der oben angeführten Arbeiten.", cW), margin, y);
 
-  // ── Footer on every page ──────────────────────────────────────────────────
+  // ── Footer on every page: 2 Zeilen, kein Overlap ─────────────────────────
   const totalPages = doc.getNumberOfPages();
-  const createdAt = new Date().toLocaleDateString("de-AT", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
+    const lineY1 = pageH - 12;
+    const lineY2 = pageH - 8;
+
     setDraw({ r: 220, g: 220, b: 220 });
     doc.setLineWidth(0.3);
-    doc.line(margin, pageH - 12, margin + cW, pageH - 12);
+    doc.line(margin, lineY1 - 4, margin + cW, lineY1 - 4);
+
+    // Zeile 1: Firmenname (links) + Seitenzahl (rechts)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    setTxt({ r: 80, g: 80, b: 80 });
+    doc.text(COMPANY_NAME, margin, lineY1);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
     setTxt(GRAY);
-    doc.text(`${COMPANY_NAME} · ${COMPANY_ADDRESS_ONE_LINE}`, margin, pageH - 7);
-    doc.text(`Erstellt: ${createdAt}`, pageW / 2, pageH - 7, { align: "center" });
-    doc.text(`Seite ${p} / ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
+    doc.text(`Seite ${p} / ${totalPages}`, pageW - margin, lineY1, { align: "right" });
+
+    // Zeile 2: Adresse (klein, links)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    setTxt(GRAY);
+    doc.text(COMPANY_ADDRESS_ONE_LINE, margin, lineY2);
   }
 
   return doc.output("datauristring").split(",")[1];

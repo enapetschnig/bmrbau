@@ -105,47 +105,50 @@ export async function generateDailyReportPDF(
   // Logo einmal laden - wird in Header + (falls nicht vorhanden) gesund durchfallen.
   const logoBase64 = await fetchImageAsBase64("/bmr-logo.png");
 
-  // -- Header -----------------------------------------------------
-  // Accent-Bar oben links (BMR-dunkelgrün)
+  // -- Header: NUR das Logo, schoen gross und zentriert --
+  // Auf Wunsch: kein Firmenname, kein Untertitel - das Logo allein.
+  // Akzent-Bar oben (BMR-dunkelgrün) bleibt als feines Branding-Element.
   doc.setFillColor(...BMR_DARK_RGB);
   doc.rect(0, 0, pageWidth, 4, "F");
 
   let y = margin;
-
-  const logoSize = 20;
+  const logoMaxWidth = 90;   // mm - prominent, aber nicht zu uebertrieben
+  const logoMaxHeight = 28;  // mm
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, "PNG", margin, y, logoSize, logoSize);
+      // Versuch ueber jsPDF die Original-Bildmasse zu ermitteln und aspect-ratio
+      // zu wahren. Fallback: feste Breite, Hoehe auto.
+      const imgProps = (doc as unknown as { getImageProperties: (data: string) => { width: number; height: number } }).getImageProperties(logoBase64);
+      const ratio = imgProps.width / imgProps.height;
+      let w = logoMaxWidth;
+      let h = w / ratio;
+      if (h > logoMaxHeight) {
+        h = logoMaxHeight;
+        w = h * ratio;
+      }
+      const x = (pageWidth - w) / 2;
+      doc.addImage(logoBase64, "PNG", x, y, w, h);
+      y += h + 4;
     } catch {
-      /* Logo defekt → ohne weiter */
+      // Fallback: feste Box
+      doc.addImage(logoBase64, "PNG", (pageWidth - logoMaxWidth) / 2, y, logoMaxWidth, logoMaxHeight);
+      y += logoMaxHeight + 4;
     }
+  } else {
+    y += 6;
   }
 
-  const textX = margin + logoSize + 5;
+  // Titel + Datum auf einer Zeile UNTER dem Logo
+  const title = report.report_type === "tagesbericht" ? "BAUTAGESBERICHT" : "ZWISCHENBERICHT";
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(40, 40, 40);
-  doc.text(COMPANY_NAME, textX, y + 6);
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  COMPANY_ADDRESS_LINES.forEach((line, i) => {
-    doc.text(line, textX, y + 11 + i * 4);
-  });
-
-  // Rechts-oben: Titel + Datum
-  const title = report.report_type === "tagesbericht" ? "BAUTAGESBERICHT" : "ZWISCHENBERICHT";
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
   doc.setTextColor(...BMR_DARK_RGB);
-  doc.text(title, pageWidth - margin, y + 6, { align: "right" });
-  doc.setFontSize(9);
+  doc.text(title, margin, y + 4);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text(formatDateShort(report.datum), pageWidth - margin, y + 11, { align: "right" });
-
-  y += logoSize + 2;
+  doc.setTextColor(80, 80, 80);
+  doc.text(formatDate(report.datum), pageWidth - margin, y + 4, { align: "right" });
+  y += 7;
 
   // Trennlinie in BMR-Akzent
   doc.setDrawColor(...BMR_ACCENT_RGB);
@@ -193,10 +196,7 @@ export async function generateDailyReportPDF(
     if (adrParts.length > 0) {
       doc.text(adrParts.join(", "), margin + 3, y + 11);
     }
-    doc.setTextColor(...BMR_DARK_RGB);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(formatDate(report.datum), pageWidth - margin - 3, y + 11, { align: "right" });
+    // Datum steht bereits oben unter dem Logo - hier nicht doppelt anzeigen.
     doc.setTextColor(0, 0, 0);
     y += 20;
   }
@@ -347,28 +347,32 @@ export async function generateDailyReportPDF(
     }
   }
 
-  // -- Footer auf jeder Seite ------------------------------------
+  // -- Footer auf jeder Seite: 2 Zeilen, kein Overlap -----------
+  // Zeile 1 (links): Firmenname, (rechts): Seitenzahl
+  // Zeile 2 (links): Adresse
   const totalPages = doc.getNumberOfPages();
-  const createdAt = new Date().toLocaleDateString("de-AT", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    const footerY = pageHeight - 10;
+    const footerLine1Y = pageHeight - 12;
+    const footerLine2Y = pageHeight - 8;
+
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.3);
-    doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+    doc.line(margin, footerLine1Y - 4, pageWidth - margin, footerLine1Y - 4);
 
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    doc.text(COMPANY_NAME, margin, footerLine1Y);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
+    doc.text(`Seite ${p} / ${totalPages}`, pageWidth - margin, footerLine1Y, { align: "right" });
+
     doc.setFont("helvetica", "normal");
-    doc.text(`${COMPANY_NAME} · ${COMPANY_ADDRESS_ONE_LINE}`, margin, footerY);
-    doc.text(`Erstellt: ${createdAt}`, pageWidth / 2, footerY, { align: "center" });
-    doc.text(`Seite ${p} / ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(COMPANY_ADDRESS_ONE_LINE, margin, footerLine2Y);
   }
 
   const projectSlug = (report.project?.name || "Projekt").replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");

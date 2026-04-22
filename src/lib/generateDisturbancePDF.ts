@@ -98,37 +98,40 @@ export async function generateDisturbancePDF(
   doc.setFillColor(...BMR_DARK_RGB);
   doc.rect(0, 0, pageWidth, 3, "F");
 
+  // Header: NUR Logo, gross + zentriert (ohne Firmenname-Block)
   let yPos = margin;
-  const logoSize = 20;
+  const logoMaxWidth = 90;
+  const logoMaxHeight = 28;
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, "PNG", margin, yPos, logoSize, logoSize);
-    } catch { /* Logo defekt - weiter ohne */ }
+      const imgProps = (doc as unknown as { getImageProperties: (data: string) => { width: number; height: number } }).getImageProperties(logoBase64);
+      const ratio = imgProps.width / imgProps.height;
+      let w = logoMaxWidth;
+      let h = w / ratio;
+      if (h > logoMaxHeight) {
+        h = logoMaxHeight;
+        w = h * ratio;
+      }
+      doc.addImage(logoBase64, "PNG", (pageWidth - w) / 2, yPos, w, h);
+      yPos += h + 4;
+    } catch {
+      doc.addImage(logoBase64, "PNG", (pageWidth - logoMaxWidth) / 2, yPos, logoMaxWidth, logoMaxHeight);
+      yPos += logoMaxHeight + 4;
+    }
+  } else {
+    yPos += 6;
   }
 
-  const textX = margin + logoSize + 5;
+  // Titel links + Datum rechts unter dem Logo
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(40, 40, 40);
-  doc.text(COMPANY_NAME, textX, yPos + 6);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  COMPANY_ADDRESS_LINES.forEach((line, i) => {
-    doc.text(line, textX, yPos + 11 + i * 4);
-  });
-
-  // Rechts oben: Titel + Datum
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
   doc.setTextColor(...BMR_DARK_RGB);
-  doc.text("REGIEBERICHT", pageWidth - margin, yPos + 6, { align: "right" });
-  doc.setFontSize(9);
+  doc.text("REGIEBERICHT", margin, yPos + 4);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text(formatDateShort(disturbance.datum), pageWidth - margin, yPos + 11, { align: "right" });
-
-  yPos += logoSize + 2;
+  doc.setTextColor(80, 80, 80);
+  doc.text(formatDateShort(disturbance.datum), pageWidth - margin, yPos + 4, { align: "right" });
+  yPos += 7;
 
   doc.setDrawColor(...BMR_ACCENT_RGB);
   doc.setLineWidth(0.8);
@@ -265,25 +268,29 @@ export async function generateDisturbancePDF(
   const confirmLines = doc.splitTextToSize(confirmText, contentWidth);
   doc.text(confirmLines, margin, yPos);
 
-  // Footer auf jeder Seite
+  // Footer auf jeder Seite: 2 Zeilen, kein Overlap
   const totalPages = doc.getNumberOfPages();
-  const createdAt = new Date().toLocaleDateString("de-AT", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    const footerY = pageHeight - 10;
+    const lineY1 = pageHeight - 12;
+    const lineY2 = pageHeight - 8;
+
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.3);
-    doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+    doc.line(margin, lineY1 - 4, pageWidth - margin, lineY1 - 4);
 
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    doc.text(COMPANY_NAME, margin, lineY1);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Seite ${p} / ${totalPages}`, pageWidth - margin, lineY1, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${COMPANY_NAME} · ${COMPANY_ADDRESS_ONE_LINE}`, margin, footerY);
-    doc.text(`Erstellt: ${createdAt}`, pageWidth / 2, footerY, { align: "center" });
-    doc.text(`Seite ${p} / ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+    doc.text(COMPANY_ADDRESS_ONE_LINE, margin, lineY2);
   }
 
   const pdfBase64 = doc.output("datauristring").split(",")[1];
