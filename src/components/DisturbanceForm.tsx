@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2, FolderOpen } from "lucide-react";
+import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2, FolderOpen, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,17 +88,54 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Admin-Check: Admins duerfen bis 7 Tage vorausbuchen (z. B. geplante
-  // Kundentermine eintragen), Mitarbeiter nur bis heute.
+  // Zusaetzliche Mitarbeiter die im Regiebericht erscheinen sollen
+  // (ohne Zeiterfassung - nur auf dem PDF). Der eingeloggte User
+  // ist automatisch Hauptverantwortlicher und taucht hier nicht auf.
+  const [employeeOptions, setEmployeeOptions] = useState<Array<{ user_id: string; name: string }>>([]);
+  const [additionalWorkerIds, setAdditionalWorkerIds] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
+  // Admin-Check + eingeloggter User + Mitarbeiter-Liste fuer Mehrfach-
+  // Auswahl (Admins duerfen bis 7 Tage vorausbuchen).
   useEffect(() => {
     if (!open) return;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setCurrentUserId(user.id);
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
       setIsAdmin(data?.role === "administrator");
+
+      // Alle internen Mitarbeiter laden, eingeloggten User ausblenden
+      // (er ist automatisch Hauptverantwortlicher).
+      const { data: emps } = await supabase
+        .from("employees")
+        .select("user_id, vorname, nachname, is_external, kategorie")
+        .not("user_id", "is", null)
+        .order("nachname");
+      if (emps) {
+        setEmployeeOptions(
+          emps
+            .filter((e) => !e.is_external && e.kategorie !== "extern" && e.user_id && e.user_id !== user.id)
+            .map((e) => ({ user_id: e.user_id!, name: `${e.vorname} ${e.nachname}`.trim() })),
+        );
+      }
     })();
   }, [open]);
+
+  // Bei Edit bestehende zusaetzliche Worker vorbelegen
+  useEffect(() => {
+    if (!editData?.id || !currentUserId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("disturbance_workers")
+        .select("user_id, is_main")
+        .eq("disturbance_id", editData.id);
+      if (data) {
+        setAdditionalWorkerIds(data.filter((w) => !w.is_main).map((w) => w.user_id));
+      }
+    })();
+  }, [editData?.id, currentUserId]);
 
   const maxBookingDate = (() => {
     const d = new Date();
@@ -338,6 +375,20 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       const matOk = await updateMaterials(editData.id, user.id);
       if (!matOk) { setSaving(false); return; }
 
+      // Additional workers synchronisieren: vorhandene non-main
+      // ersetzen durch die aktuelle Auswahl (main-Worker bleibt).
+      await supabase
+        .from("disturbance_workers")
+        .delete()
+        .eq("disturbance_id", editData.id)
+        .eq("is_main", false);
+      const extraIds = additionalWorkerIds.filter((id) => id !== user.id);
+      if (extraIds.length > 0) {
+        await supabase.from("disturbance_workers").insert(
+          extraIds.map((id) => ({ disturbance_id: editData.id, user_id: id, is_main: false })),
+        );
+      }
+
       toast({ title: "Erfolg", description: "Regiebericht wurde aktualisiert" });
     } else {
       // Create new disturbance
@@ -409,12 +460,15 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         return;
       }
 
-      // Add main worker entry
-      const { error: workerError } = await supabase.from("disturbance_workers").insert({
-        disturbance_id: newDisturbance.id,
-        user_id: user.id,
-        is_main: true,
-      });
+      // Main worker + zusaetzliche Mitarbeiter (kein Zeitentrag fuer die!)
+      const workerRows: Array<{ disturbance_id: string; user_id: string; is_main: boolean }> = [
+        { disturbance_id: newDisturbance.id, user_id: user.id, is_main: true },
+      ];
+      const extraIds = additionalWorkerIds.filter((id) => id !== user.id);
+      for (const id of extraIds) {
+        workerRows.push({ disturbance_id: newDisturbance.id, user_id: id, is_main: false });
+      }
+      const { error: workerError } = await supabase.from("disturbance_workers").insert(workerRows);
       if (workerError) {
         await rollback();
         toast({ variant: "destructive", title: "Fehler", description: "Mitarbeiter-Eintrag konnte nicht erstellt werden" });
@@ -740,6 +794,45 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                 />
               </div>
             </div>
+          </div>
+
+          {/* Zusaetzliche Mitarbeiter (erscheinen nur am PDF, keine Zeiterfassung) */}
+          <div className="space-y-2">
+            <h3 className="font-medium flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Weitere Mitarbeiter am Einsatz
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Werden unter "Mitarbeiter" am Regiebericht aufgeführt. Keine
+              automatische Zeiterfassung — der Hauptverantwortliche ist
+              der eingeloggte Nutzer.
+            </p>
+            {employeeOptions.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Keine weiteren Mitarbeiter verfügbar.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto border rounded-md p-2">
+                {employeeOptions.map((emp) => {
+                  const checked = additionalWorkerIds.includes(emp.user_id);
+                  return (
+                    <label
+                      key={emp.user_id}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer border text-sm ${checked ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) setAdditionalWorkerIds((p) => [...p, emp.user_id]);
+                          else setAdditionalWorkerIds((p) => p.filter((x) => x !== emp.user_id));
+                        }}
+                      />
+                      <span className="truncate">{emp.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Weather, Temperature, Floor */}

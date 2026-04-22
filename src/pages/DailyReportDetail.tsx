@@ -144,6 +144,7 @@ export default function DailyReportDetail() {
         photos.map(p => ({ file_path: p.file_path, file_name: p.file_name })),
         supabaseUrl,
         { asBlob: true },
+        workers.map(w => ({ name: w.name })),
       )) as Blob;
 
       const filename = getDailyReportPDFFilename({
@@ -491,7 +492,9 @@ export default function DailyReportDetail() {
       },
       activities,
       photos,
-      supabaseUrl
+      supabaseUrl,
+      {},
+      workers.map(w => ({ name: w.name })),
     );
   };
 

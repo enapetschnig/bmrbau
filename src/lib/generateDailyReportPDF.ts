@@ -33,6 +33,11 @@ export interface PhotoForPDF {
   file_name: string;
 }
 
+export interface WorkerForPDF {
+  name: string;
+  is_main?: boolean;
+}
+
 const WETTER_LABELS_PDF: Record<string, string> = {
   sonnig: "Sonnig",
   bewoelkt: "Bewölkt",
@@ -95,6 +100,7 @@ export async function generateDailyReportPDF(
   photos: PhotoForPDF[],
   supabaseUrl: string,
   options: GenerateOptions = {},
+  workers: WorkerForPDF[] = [],
 ): Promise<Blob | void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -245,6 +251,17 @@ export async function generateDailyReportPDF(
       y += 2;
     }
     y += 2;
+  }
+
+  // -- Anwesende Mitarbeiter --------------------------------------
+  if (workers.length > 0) {
+    sectionHeader("Anwesende Mitarbeiter");
+    const sorted = [...workers].sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0));
+    const namesText = sorted.map((w) => w.name + (w.is_main ? " (Hauptverantwortlich)" : "")).join(" · ");
+    const lines = doc.splitTextToSize(namesText, contentWidth);
+    ensureSpace(lines.length * 4.5 + 2);
+    doc.text(lines, margin, y);
+    y += lines.length * 4.5 + 4;
   }
 
   // -- Beschreibung ----------------------------------------------

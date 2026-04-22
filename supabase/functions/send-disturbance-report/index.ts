@@ -14,7 +14,7 @@ const corsHeaders = {
 // In der App-UI bleibt die Marke BMR Bau; auf gedruckten/versendeten
 // Dokumenten wird die Legal-Entity verwendet.
 const APP_URL = Deno.env.get("APP_URL") ?? "https://bmr.handwerkapp.at";
-const COMPANY_NAME = "JR Baumeisterbüro Rutter & Jäger GmbH";
+const COMPANY_NAME = "BMR Bau GmbH";
 const COMPANY_ADDRESS_LINES = ["Wirtschaftspark 15", "9130 Poggersdorf"];
 const COMPANY_ADDRESS_ONE_LINE = COMPANY_ADDRESS_LINES.join(" · ");
 
