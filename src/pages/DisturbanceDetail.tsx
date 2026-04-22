@@ -247,8 +247,11 @@ const DisturbanceDetail = () => {
       : [disturbance.profile_vorname && disturbance.profile_nachname ? `${disturbance.profile_vorname} ${disturbance.profile_nachname}` : "Unbekannt"];
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    // Unterschrift bewusst mit in die Download-PDF uebernehmen -
+    // vorher wurde sie hier immer auf "" gesetzt, dadurch fehlte die
+    // Unterschrift in jeder heruntergeladenen Version.
     const { pdfBase64, pdfFilename } = await generateDisturbancePDF(
-      { ...disturbance, unterschrift_kunde: "" },
+      disturbance,
       matData || [],
       techNames,
       photoData || [],

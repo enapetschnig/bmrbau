@@ -247,17 +247,35 @@ export async function generateDisturbancePDF(
     }
   }
 
-  // Signature
+  // Signature - nur rendern wenn wirklich eine da ist.
   if (yPos > 200) { doc.addPage(); yPos = margin; }
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.text("Kundenunterschrift", margin, yPos); yPos += 5;
-  try {
-    doc.addImage(disturbance.unterschrift_kunde, "PNG", margin, yPos, 60, 25); yPos += 30;
-  } catch {
+  const sig = disturbance.unterschrift_kunde?.trim() ?? "";
+  if (sig && sig.startsWith("data:")) {
+    try {
+      doc.addImage(sig, "PNG", margin, yPos, 60, 25);
+      yPos += 30;
+    } catch {
+      // 2. Versuch mit reinem base64 fuer alte jsPDF-Varianten.
+      try {
+        const b64 = sig.split(",").pop() || "";
+        doc.addImage(b64, "PNG", margin, yPos, 60, 25);
+        yPos += 30;
+      } catch {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(10);
+        doc.text("[Unterschrift konnte nicht geladen werden]", margin, yPos + 10);
+        yPos += 20;
+      }
+    }
+  } else {
     doc.setFont("helvetica", "italic");
-    doc.setFontSize(10);
-    doc.text("[Unterschrift konnte nicht geladen werden]", margin, yPos + 10);
+    doc.setFontSize(9);
+    doc.setTextColor(140, 140, 140);
+    doc.text("(Noch keine Kundenunterschrift vorhanden)", margin, yPos + 10);
+    doc.setTextColor(0, 0, 0);
     yPos += 20;
   }
 
