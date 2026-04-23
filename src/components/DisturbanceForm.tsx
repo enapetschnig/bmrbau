@@ -302,37 +302,41 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       return;
     }
 
-    // Check for overlapping time entries on the same day
+    // Check for overlapping time entries on the same day — pro
+    // angehaktem Mitarbeiter. Zeiteintraege werden nur fuer diese
+    // erstellt, also muss die Ueberschneidungspruefung auch pro
+    // Mitarbeiter laufen.
     const toMin = (t: string) => { const [h, m] = t.slice(0, 5).split(":").map(Number); return h * 60 + m; };
     const newStart = toMin(formData.startTime);
     const newEnd   = toMin(formData.endTime);
 
-    let overlapQuery = supabase
-      .from("time_entries")
-      .select("id, start_time, end_time, taetigkeit, disturbance_id")
-      .eq("user_id", user.id)
-      .eq("datum", formData.datum);
+    if (additionalWorkerIds.length > 0) {
+      let overlapQuery = supabase
+        .from("time_entries")
+        .select("id, start_time, end_time, taetigkeit, disturbance_id, user_id")
+        .in("user_id", additionalWorkerIds)
+        .eq("datum", formData.datum);
 
-    if (editData) {
-      // Exclude time entries belonging to the disturbance being edited
-      overlapQuery = overlapQuery.or(`disturbance_id.is.null,disturbance_id.neq.${editData.id}`);
-    }
+      if (editData) {
+        overlapQuery = overlapQuery.or(`disturbance_id.is.null,disturbance_id.neq.${editData.id}`);
+      }
 
-    const { data: existingEntries } = await overlapQuery;
-    const conflict = existingEntries?.find(e => {
-      const s = toMin(e.start_time);
-      const en = toMin(e.end_time);
-      return newStart < en && newEnd > s;
-    });
-
-    if (conflict) {
-      toast({
-        variant: "destructive",
-        title: "Zeitüberschneidung",
-        description: `Es existiert bereits ein Eintrag von ${conflict.start_time.slice(0, 5)} bis ${conflict.end_time.slice(0, 5)} Uhr an diesem Tag.`,
+      const { data: existingEntries } = await overlapQuery;
+      const conflict = existingEntries?.find(e => {
+        const s = toMin(e.start_time);
+        const en = toMin(e.end_time);
+        return newStart < en && newEnd > s;
       });
-      setSaving(false);
-      return;
+
+      if (conflict) {
+        toast({
+          variant: "destructive",
+          title: "Zeitüberschneidung",
+          description: `Ein ausgewählter Mitarbeiter hat bereits einen Eintrag von ${conflict.start_time.slice(0, 5)} bis ${conflict.end_time.slice(0, 5)} Uhr an diesem Tag.`,
+        });
+        setSaving(false);
+        return;
+      }
     }
 
     const stunden = calculateHours();
@@ -411,44 +415,6 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         return;
       }
 
-      // Create time entry for current user - wird automatisch mit dem
-      // Regiebericht synchronisiert (ueber disturbance_id). Dadurch erscheint
-      // der Regie-Einsatz direkt in der Monats-Stundenauswertung & Lohn-
-      // abrechnung, ohne dass der Mitarbeiter die Stunden doppelt erfassen
-      // muss.
-      const { data: empData } = await supabase
-        .from("employees")
-        .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const langSchedule = (empData?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
-      const kurzSchedule = (empData?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
-      // Grob: lang-Plan fuer die Berechnung verwenden – Wochentyp-Trigger
-      // setzt week_type in der Zeile automatisch.
-      const split = splitHours(
-        stunden,
-        new Date(formData.datum),
-        langSchedule || kurzSchedule,
-        empData?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
-      );
-
-      const timeEntryPayload: Record<string, any> = {
-        user_id: user.id,
-        datum: formData.datum,
-        start_time: formData.startTime,
-        end_time: formData.endTime,
-        pause_minutes: calculatePauseMinutes(),
-        pause_start: formData.pauseStart || null,
-        pause_end: formData.pauseEnd || null,
-        stunden,
-        project_id: projectId || null,
-        disturbance_id: newDisturbance.id,
-        taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
-        location_type: "baustelle",
-      };
-      if (split.lohnstunden > 0) timeEntryPayload.lohnstunden = split.lohnstunden;
-      if (split.zeitausgleich > 0) timeEntryPayload.zeitausgleich_stunden = split.zeitausgleich;
-
       // Rollback-Helfer: bei Folge-Fehlern den frisch angelegten
       // Regiebericht wieder aufrauemen, sonst bleibt ein verwaister
       // Eintrag ohne time_entry / worker in der DB liegen.
@@ -459,19 +425,53 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         await supabase.from("disturbances").delete().eq("id", newDisturbance.id);
       };
 
-      const { error: timeError } = await supabase.from("time_entries").insert(timeEntryPayload);
-      if (timeError) {
-        await rollback();
-        toast({ variant: "destructive", title: "Fehler", description: "Zeiteintrag konnte nicht erstellt werden" });
-        setSaving(false);
-        return;
-      }
-
-      // Nur die explizit angehakten Mitarbeiter landen am Regiebericht.
-      // Der Ersteller ist nicht automatisch dabei — er muss sich selbst
-      // in der Liste abhaken wenn er mit drauf stehen will. (Der
-      // Zeiteintrag fuer den Ersteller bleibt davon unberuehrt.)
+      // Zeiteintraege werden NUR fuer die im Formular angehakten
+      // "Mitarbeiter im Einsatz" erzeugt. Der Ersteller bekommt nur
+      // dann einen Zeiteintrag, wenn er sich selbst abgehakt hat.
+      // Der Split in lohnstunden / zeitausgleich laeuft pro Mitarbeiter
+      // (unterschiedliche Regelarbeitszeiten + Schwellenwerte).
       if (additionalWorkerIds.length > 0) {
+        const timeEntryRows: Record<string, any>[] = [];
+        for (const workerId of additionalWorkerIds) {
+          const { data: emp } = await supabase
+            .from("employees")
+            .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
+            .eq("user_id", workerId)
+            .maybeSingle();
+          const lang = (emp?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
+          const kurz = (emp?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
+          const split = splitHours(
+            stunden,
+            new Date(formData.datum),
+            lang || kurz,
+            emp?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
+          );
+          const payload: Record<string, any> = {
+            user_id: workerId,
+            datum: formData.datum,
+            start_time: formData.startTime,
+            end_time: formData.endTime,
+            pause_minutes: calculatePauseMinutes(),
+            pause_start: formData.pauseStart || null,
+            pause_end: formData.pauseEnd || null,
+            stunden,
+            project_id: projectId || null,
+            disturbance_id: newDisturbance.id,
+            taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
+            location_type: "baustelle",
+          };
+          if (split.lohnstunden > 0) payload.lohnstunden = split.lohnstunden;
+          if (split.zeitausgleich > 0) payload.zeitausgleich_stunden = split.zeitausgleich;
+          timeEntryRows.push(payload);
+        }
+        const { error: timeError } = await supabase.from("time_entries").insert(timeEntryRows);
+        if (timeError) {
+          await rollback();
+          toast({ variant: "destructive", title: "Fehler", description: "Zeiteintraege konnten nicht erstellt werden" });
+          setSaving(false);
+          return;
+        }
+
         const workerRows = additionalWorkerIds.map((id) => ({
           disturbance_id: newDisturbance.id,
           user_id: id,
@@ -519,44 +519,56 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
     onSuccess();
   };
 
-  const updateTimeEntriesForAllWorkers = async (disturbanceId: string, mainUserId: string, stunden: number): Promise<boolean> => {
-    // Fuer Lohnverrechnung: aktuellen Stand splitten, aber Schwellenwert wird
-    // pro-User ermittelt. Bei der Bulk-Update-Variante nehmen wir mainUserId
-    // als Referenz (fuer Worker sind Overwrites meist die gleichen Stunden).
-    const { data: empData } = await supabase
-      .from("employees")
-      .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
-      .eq("user_id", mainUserId)
-      .maybeSingle();
-    const langSchedule = (empData?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
-    const kurzSchedule = (empData?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
-    const split = splitHours(
-      stunden,
-      new Date(formData.datum),
-      langSchedule || kurzSchedule,
-      empData?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
-    );
-
-    const payload: Record<string, any> = {
-      datum: formData.datum,
-      start_time: formData.startTime,
-      end_time: formData.endTime,
-      pause_minutes: calculatePauseMinutes(),
-      pause_start: formData.pauseStart || null,
-      pause_end: formData.pauseEnd || null,
-      stunden,
-      project_id: projectId || null,
-      taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
-      lohnstunden: split.lohnstunden,
-      zeitausgleich_stunden: split.zeitausgleich,
-    };
-
-    const { error } = await supabase
+  const updateTimeEntriesForAllWorkers = async (disturbanceId: string, _mainUserId: string, stunden: number): Promise<boolean> => {
+    // Beim Edit werden die Zeiteintraege komplett neu geschrieben, damit
+    // geaenderte Mitarbeiter-Auswahl auch die Zeiterfassung aktualisiert.
+    const { error: delError } = await supabase
       .from("time_entries")
-      .update(payload)
+      .delete()
       .eq("disturbance_id", disturbanceId);
+    if (delError) {
+      toast({ variant: "destructive", title: "Fehler", description: "Alte Zeiteintraege konnten nicht entfernt werden" });
+      return false;
+    }
+
+    if (additionalWorkerIds.length === 0) return true;
+
+    const rows: Record<string, any>[] = [];
+    for (const workerId of additionalWorkerIds) {
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("regelarbeitszeit, regelarbeitszeit_kurz, schwellenwert")
+        .eq("user_id", workerId)
+        .maybeSingle();
+      const lang = (emp?.regelarbeitszeit as unknown as WeekSchedule) ?? null;
+      const kurz = (emp?.regelarbeitszeit_kurz as unknown as WeekSchedule) ?? null;
+      const split = splitHours(
+        stunden,
+        new Date(formData.datum),
+        lang || kurz,
+        emp?.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert | null | undefined ?? null,
+      );
+      rows.push({
+        user_id: workerId,
+        datum: formData.datum,
+        start_time: formData.startTime,
+        end_time: formData.endTime,
+        pause_minutes: calculatePauseMinutes(),
+        pause_start: formData.pauseStart || null,
+        pause_end: formData.pauseEnd || null,
+        stunden,
+        project_id: projectId || null,
+        disturbance_id: disturbanceId,
+        taetigkeit: `Regiebericht: ${formData.kundeName.trim() || "ohne Projekt"}`,
+        location_type: "baustelle",
+        lohnstunden: split.lohnstunden,
+        zeitausgleich_stunden: split.zeitausgleich,
+      });
+    }
+
+    const { error } = await supabase.from("time_entries").insert(rows);
     if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: "Zeiteinträge konnten nicht aktualisiert werden" });
+      toast({ variant: "destructive", title: "Fehler", description: "Zeiteintraege konnten nicht erstellt werden" });
       return false;
     }
     return true;
@@ -806,16 +818,17 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             </div>
           </div>
 
-          {/* Anwesende Mitarbeiter — nur angehakte erscheinen am PDF. */}
+          {/* Mitarbeiter im Einsatz — bestimmt gleichzeitig die
+              Zeitbuchung (time_entries pro Name) UND die Namen am PDF. */}
           <div className="space-y-2">
             <h3 className="font-medium flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Anwesende Mitarbeiter
+              Mitarbeiter im Einsatz
             </h3>
             <p className="text-xs text-muted-foreground">
-              Nur angehakte Mitarbeiter erscheinen am Regiebericht. Hake
-              dich selbst mit ab, wenn du auch drauf stehen willst. Die
-              Zeiterfassung fuer dich lauft unabhaengig davon.
+              Fuer jeden angehakten Mitarbeiter wird ein Zeiteintrag
+              erstellt und der Name erscheint am Regiebericht. Hake
+              dich selbst mit ab, wenn du auch mit drauf willst.
             </p>
             {employeeOptions.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">Keine weiteren Mitarbeiter verfügbar.</p>
