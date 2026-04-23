@@ -256,10 +256,11 @@ export const SignatureDialog = ({
       onOpenChange(false);
     } catch (error) {
       console.error("Error sending report:", error);
+      const msg = error instanceof Error ? error.message : String(error);
       toast({
         variant: "destructive",
-        title: "Fehler",
-        description: "Der Bericht konnte nicht gesendet werden",
+        title: "Fehler beim Senden",
+        description: msg || "Der Bericht konnte nicht gesendet werden",
       });
     } finally {
       setSending(false);
