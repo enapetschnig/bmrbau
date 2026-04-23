@@ -557,18 +557,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
       emailPayload.attachments = [{ filename: pdfFilename, content: pdfBase64 }];
     }
 
+    // Email-Groesse ermitteln fuer besseres Debugging bei Size-Limits
+    // (Resend-Hard-Limit liegt bei ~40 MB Total-Message-Size).
+    const estimatedMB = (JSON.stringify(emailPayload).length / 1024 / 1024).toFixed(1);
+    console.log(`Email payload size: ~${estimatedMB} MB, attachments: ${emailPayload.attachments?.length ?? 0}`);
+
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(emailPayload),
     });
 
-    const resendData = await resendResponse.json();
+    const resendData = await resendResponse.json().catch(() => ({}));
 
     if (!resendResponse.ok) {
-      console.error("Resend API error:", resendData);
+      console.error("Resend API error:", resendResponse.status, resendData);
+      // Volle Fehler-Info an den Client durchreichen: HTTP-Status von
+      // Resend + Message + name. Dadurch sieht der Nutzer im Toast
+      // exakt was Resend ablehnt (Domain, Attachment-Groesse, etc).
+      const detail = [
+        `HTTP ${resendResponse.status}`,
+        resendData?.statusCode ? `code ${resendData.statusCode}` : null,
+        resendData?.name,
+        resendData?.message,
+      ].filter(Boolean).join(" — ");
       return new Response(
-        JSON.stringify({ error: `E-Mail Fehler: ${resendData?.message || resendData?.name || JSON.stringify(resendData)}` }),
+        JSON.stringify({ error: `E-Mail Fehler: ${detail || JSON.stringify(resendData)}` }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
