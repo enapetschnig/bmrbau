@@ -850,6 +850,44 @@ export type Database = {
           },
         ]
       }
+      disturbance_attachments: {
+        Row: {
+          created_at: string
+          disturbance_id: string
+          file_name: string
+          file_path: string
+          id: string
+          size_bytes: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          disturbance_id: string
+          file_name: string
+          file_path: string
+          id?: string
+          size_bytes?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          disturbance_id?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          size_bytes?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disturbance_attachments_disturbance_id_fkey"
+            columns: ["disturbance_id"]
+            isOneToOne: false
+            referencedRelation: "disturbances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       disturbance_materials: {
         Row: {
           created_at: string
@@ -3796,3 +3834,4 @@ export const Constants = {
     },
   },
 } as const
+

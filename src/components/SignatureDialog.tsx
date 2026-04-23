@@ -55,6 +55,7 @@ export const SignatureDialog = ({
   const [signature, setSignature] = useState<string | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [attachments, setAttachments] = useState<{ id: string; file_path: string; file_name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -63,9 +64,19 @@ export const SignatureDialog = ({
     if (open) {
       fetchMaterials();
       fetchPhotos();
+      fetchAttachments();
       setSignature(null);
     }
   }, [open, disturbance.id]);
+
+  const fetchAttachments = async () => {
+    const { data } = await supabase
+      .from("disturbance_attachments")
+      .select("id, file_path, file_name")
+      .eq("disturbance_id", disturbance.id)
+      .order("created_at", { ascending: true });
+    if (data) setAttachments(data);
+  };
 
   const fetchMaterials = async () => {
     setLoading(true);
@@ -220,6 +231,7 @@ export const SignatureDialog = ({
           materials,
           technicianNames,
           photos,
+          attachments,
         }),
       });
 

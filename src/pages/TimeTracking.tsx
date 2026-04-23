@@ -96,11 +96,14 @@ const TimeTracking = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Admin editing another user's entries
+  // Admin/Vorarbeiter editing another user's entries
   const targetUserId = searchParams.get("user_id");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isVorarbeiter, setIsVorarbeiter] = useState(false);
   const [canCreateProjects, setCanCreateProjects] = useState(false);
   const [targetUserName, setTargetUserName] = useState("");
+  const canManageForeign = isAdmin || isVorarbeiter;
+  const [employeePickerOptions, setEmployeePickerOptions] = useState<{ user_id: string; name: string }[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -345,31 +348,40 @@ const TimeTracking = () => {
     }
   }, [existingDayEntries, loadingDayEntries]);
 
-  // Check admin status and fetch target user name
+  // Check admin / vorarbeiter status. Beide duerfen fuer andere Mit-
+  // arbeiter Zeit schreiben (RLS-Policy can_manage_foreign_time_entries).
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "administrator")
-        .maybeSingle();
-      const admin = !!data;
+      const [{ data: roleData }, { data: emp }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "administrator").maybeSingle(),
+        supabase.from("employees").select("kategorie").eq("user_id", user.id).maybeSingle(),
+      ]);
+      const admin = !!roleData;
+      const vorarbeiter = emp?.kategorie === "vorarbeiter";
       setIsAdmin(admin);
-      if (admin) {
-        setCanCreateProjects(true);
-      } else {
-        const { data: emp } = await supabase
+      setIsVorarbeiter(vorarbeiter);
+      setCanCreateProjects(admin || vorarbeiter);
+
+      // Liste aller Mitarbeiter fuer den Picker vorladen, wenn der
+      // aktuelle Nutzer fremde Zeit buchen darf.
+      if (admin || vorarbeiter) {
+        const { data: emps } = await supabase
           .from("employees")
-          .select("kategorie")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        setCanCreateProjects(emp?.kategorie === "vorarbeiter");
+          .select("user_id, vorname, nachname, is_external, kategorie")
+          .not("user_id", "is", null)
+          .order("nachname");
+        if (emps) {
+          setEmployeePickerOptions(
+            emps
+              .filter((e) => !e.is_external && e.kategorie !== "extern" && e.user_id && e.user_id !== user.id)
+              .map((e) => ({ user_id: e.user_id!, name: `${e.vorname} ${e.nachname}`.trim() })),
+          );
+        }
       }
     };
-    checkAdmin();
+    checkRole();
   }, []);
 
   useEffect(() => {
@@ -1163,16 +1175,39 @@ const TimeTracking = () => {
                   Bearbeitung für <strong>{targetUserName}</strong>
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => {
-                  const returnMonth = searchParams.get("return_month");
-                  const returnYear = searchParams.get("return_year");
                   const params = new URLSearchParams();
-                  if (returnMonth) params.set("month", returnMonth);
-                  if (returnYear) params.set("year", returnYear);
-                  if (targetUserId) params.set("user", targetUserId);
-                  navigate(`/hours-report?${params.toString()}`);
+                  setSearchParams(params, { replace: true });
                 }} className="text-blue-600 h-7">
-                  Zurück
+                  Eigene Zeit
                 </Button>
+              </div>
+            )}
+            {canManageForeign && !targetUserId && employeePickerOptions.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                <Label className="text-xs font-medium text-amber-900">
+                  Für anderen Mitarbeiter buchen
+                </Label>
+                <Select
+                  value=""
+                  onValueChange={(uid) => {
+                    if (!uid) return;
+                    const params = new URLSearchParams(searchParams);
+                    params.set("user_id", uid);
+                    setSearchParams(params, { replace: true });
+                  }}
+                >
+                  <SelectTrigger className="h-9 mt-1 bg-background">
+                    <SelectValue placeholder="Mitarbeiter auswählen…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employeePickerOptions.map((e) => (
+                      <SelectItem key={e.user_id} value={e.user_id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-amber-800/80 mt-1">
+                  Als {isAdmin ? "Admin" : "Vorarbeiter"} kannst du Zeiten für andere Mitarbeiter schreiben.
+                </p>
               </div>
             )}
             <div className="flex items-center justify-between gap-2 flex-wrap">

@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { PDFDocument } from "pdf-lib";
 import {
   COMPANY_NAME,
   COMPANY_ADDRESS_LINES,
@@ -16,6 +17,12 @@ export interface Material {
 
 export interface Photo {
   id: string;
+  file_path: string;
+  file_name: string;
+}
+
+export interface Attachment {
+  id?: string;
   file_path: string;
   file_name: string;
 }
@@ -76,7 +83,8 @@ export async function generateDisturbancePDF(
   materials: Material[],
   technicians: string[],
   photos: Photo[],
-  supabaseUrl: string
+  supabaseUrl: string,
+  attachments: Attachment[] = [],
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
   // Fetch photo images
   const photoImages: (string | null)[] = [];
@@ -311,7 +319,43 @@ export async function generateDisturbancePDF(
     doc.text(COMPANY_ADDRESS_ONE_LINE, margin, lineY2);
   }
 
-  const pdfBase64 = doc.output("datauristring").split(",")[1];
+  // PDF-Anhaenge (z.B. Rechnung, Skizze vom Kunden) ans Ende haengen.
+  // Die Original-Seiten des Haupt-PDFs bleiben exakt wie sie sind -
+  // pdf-lib kopiert nur die Seiten aus den Anhaengen und fuegt sie hinten
+  // an. Ein einzelner kaputter Anhang fliegt heraus, der Bericht bleibt.
+  let pdfBase64: string;
+  if (attachments.length > 0) {
+    try {
+      const baseBuf = doc.output("arraybuffer");
+      const merged = await PDFDocument.load(baseBuf);
+      for (const att of attachments) {
+        try {
+          const url = `${supabaseUrl}/storage/v1/object/public/disturbance-attachments/${att.file_path}`;
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const buf = await resp.arrayBuffer();
+          const extra = await PDFDocument.load(buf, { ignoreEncryption: true });
+          const copied = await merged.copyPages(extra, extra.getPageIndices());
+          copied.forEach((p) => merged.addPage(p));
+        } catch (err) {
+          console.warn("Anhang konnte nicht gemerged werden:", att.file_name, err);
+        }
+      }
+      const mergedBytes = await merged.save();
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < mergedBytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, Array.from(mergedBytes.subarray(i, i + chunkSize)));
+      }
+      pdfBase64 = btoa(binary);
+    } catch (err) {
+      console.warn("PDF-Merge fehlgeschlagen, fallback auf Haupt-PDF:", err);
+      pdfBase64 = doc.output("datauristring").split(",")[1];
+    }
+  } else {
+    pdfBase64 = doc.output("datauristring").split(",")[1];
+  }
+
   const dateForFilename = formatDateShort(disturbance.datum).replace(/\./g, "-");
   const kundeForFilename = disturbance.kunde_name.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
   const pdfFilename = `Regiebericht_${kundeForFilename}_${dateForFilename}.pdf`;

@@ -13,6 +13,7 @@ import { de } from "date-fns/locale";
 import { DisturbanceForm } from "@/components/DisturbanceForm";
 import { DisturbanceMaterials } from "@/components/DisturbanceMaterials";
 import { DisturbancePhotos } from "@/components/DisturbancePhotos";
+import { DisturbanceAttachments } from "@/components/DisturbanceAttachments";
 import { SignatureDialog } from "@/components/SignatureDialog";
 import { generateDisturbancePDF } from "@/lib/generateDisturbancePDF";
 
@@ -243,6 +244,12 @@ const DisturbanceDetail = () => {
     const { data: matData } = await supabase.from("disturbance_materials").select("*").eq("disturbance_id", disturbance.id);
     // Fetch photos
     const { data: photoData } = await supabase.from("disturbance_photos").select("*").eq("disturbance_id", disturbance.id);
+    // Fetch PDF-Anhaenge (werden ans Haupt-PDF hinten angehaengt)
+    const { data: attachData } = await supabase
+      .from("disturbance_attachments")
+      .select("id, file_path, file_name")
+      .eq("disturbance_id", disturbance.id)
+      .order("created_at", { ascending: true });
     // Technician names
     const techNames = workers.length > 0
       ? workers.map((w) => `${w.vorname} ${w.nachname}`)
@@ -258,6 +265,7 @@ const DisturbanceDetail = () => {
       techNames,
       photoData || [],
       supabaseUrl,
+      attachData || [],
     );
     // Download
     const link = document.createElement("a");
@@ -503,8 +511,15 @@ const DisturbanceDetail = () => {
         )}
 
         {/* Photos Section */}
-        <DisturbancePhotos 
-          disturbanceId={disturbance.id} 
+        <DisturbancePhotos
+          disturbanceId={disturbance.id}
+          canEdit={canEdit || false}
+        />
+
+        {/* PDF-Anhänge — werden beim Download + E-Mail-Versand ans
+            Haupt-Regiebericht-PDF hinten angehängt. */}
+        <DisturbanceAttachments
+          disturbanceId={disturbance.id}
           canEdit={canEdit || false}
         />
 

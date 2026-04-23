@@ -48,12 +48,19 @@ interface Disturbance {
   project_id?: string | null;
 }
 
+interface Attachment {
+  id?: string;
+  file_path: string;
+  file_name: string;
+}
+
 interface ReportRequest {
   disturbance: Disturbance;
   materials: Material[];
   technicianNames?: string[];
   technicianName?: string;
   photos?: Photo[];
+  attachments?: Attachment[];
 }
 
 function formatDate(dateStr: string): string {
@@ -390,6 +397,38 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   return doc.output("datauristring").split(",")[1];
 }
 
+// Haengt uploadgemeldete PDF-Anhaenge ans Haupt-PDF an. Wenn ein
+// einzelner Anhang kaputt ist, ueberspringt er den und macht mit dem
+// naechsten weiter - der Haupt-Bericht bleibt immer erhalten.
+async function mergeAttachments(baseBase64: string, attachments: Attachment[], supabaseUrl: string): Promise<string> {
+  if (!attachments || attachments.length === 0) return baseBase64;
+  try {
+    const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
+    const baseBytes = Uint8Array.from(atob(baseBase64), (c) => c.charCodeAt(0));
+    const merged = await PDFDocument.load(baseBytes);
+    for (const att of attachments) {
+      try {
+        const url = `${supabaseUrl}/storage/v1/object/public/disturbance-attachments/${att.file_path}`;
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const buf = new Uint8Array(await resp.arrayBuffer());
+        const extra = await PDFDocument.load(buf, { ignoreEncryption: true });
+        const copied = await merged.copyPages(extra, extra.getPageIndices());
+        copied.forEach((p: any) => merged.addPage(p));
+      } catch (err) {
+        console.warn("Attachment merge failed:", att.file_name, err);
+      }
+    }
+    const mergedBytes = await merged.save();
+    let binary = "";
+    for (let i = 0; i < mergedBytes.length; i++) binary += String.fromCharCode(mergedBytes[i]);
+    return btoa(binary);
+  } catch (err) {
+    console.warn("mergeAttachments failed, falling back to base PDF:", err);
+    return baseBase64;
+  }
+}
+
 function generateEmailHtml(data: ReportRequest & { technicians: string[] }): string {
   const { disturbance, technicians } = data;
   const technicianDisplay = technicians.length === 1 ? technicians[0] : technicians.join(", ");
@@ -433,7 +472,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const { disturbance, materials, technicianNames, technicianName, photos }: ReportRequest = await req.json();
+    const { disturbance, materials, technicianNames, technicianName, photos, attachments }: ReportRequest = await req.json();
 
     const technicians = technicianNames?.length ? technicianNames :
                         technicianName ? [technicianName] : ["Techniker"];
@@ -462,6 +501,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     try {
       pdfBase64 = await generatePDF({ disturbance, materials, technicians, photos }, photoImages);
       console.log("PDF generated successfully");
+      if (pdfBase64 && attachments && attachments.length > 0) {
+        pdfBase64 = await mergeAttachments(pdfBase64, attachments, supabaseUrl);
+        console.log(`Merged ${attachments.length} attachment(s) into PDF`);
+      }
     } catch (pdfError) {
       console.error("PDF generation failed, sending without PDF:", pdfError instanceof Error ? pdfError.message : String(pdfError));
     }
