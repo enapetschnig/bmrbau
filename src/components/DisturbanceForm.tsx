@@ -106,8 +106,9 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
       setIsAdmin(data?.role === "administrator");
 
-      // Alle internen Mitarbeiter laden, eingeloggten User ausblenden
-      // (er ist automatisch Hauptverantwortlicher).
+      // Alle internen Mitarbeiter laden — inkl. des eingeloggten Users.
+      // Der Ersteller erscheint am Regiebericht NUR wenn er sich selbst
+      // abhakt (keine Auto-Uebernahme mehr).
       const { data: emps } = await supabase
         .from("employees")
         .select("user_id, vorname, nachname, is_external, kategorie")
@@ -116,23 +117,25 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       if (emps) {
         setEmployeeOptions(
           emps
-            .filter((e) => !e.is_external && e.kategorie !== "extern" && e.user_id && e.user_id !== user.id)
+            .filter((e) => !e.is_external && e.kategorie !== "extern" && e.user_id)
             .map((e) => ({ user_id: e.user_id!, name: `${e.vorname} ${e.nachname}`.trim() })),
         );
       }
     })();
   }, [open]);
 
-  // Bei Edit bestehende zusaetzliche Worker vorbelegen
+  // Bei Edit alle bereits angehakten Worker vorbelegen (ohne
+  // is_main-Filter — der Ersteller steht nur drin, wenn er sich
+  // selbst abgehakt hat).
   useEffect(() => {
     if (!editData?.id || !currentUserId) return;
     (async () => {
       const { data } = await supabase
         .from("disturbance_workers")
-        .select("user_id, is_main")
+        .select("user_id")
         .eq("disturbance_id", editData.id);
       if (data) {
-        setAdditionalWorkerIds(data.filter((w) => !w.is_main).map((w) => w.user_id));
+        setAdditionalWorkerIds(data.map((w) => w.user_id));
       }
     })();
   }, [editData?.id, currentUserId]);
@@ -375,17 +378,21 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       const matOk = await updateMaterials(editData.id, user.id);
       if (!matOk) { setSaving(false); return; }
 
-      // Additional workers synchronisieren: vorhandene non-main
-      // ersetzen durch die aktuelle Auswahl (main-Worker bleibt).
+      // Alle Worker neu schreiben — nur die im Formular angehakten
+      // stehen am Regiebericht (inkl. Ersteller, falls er sich selbst
+      // angehakt hat). is_main bleibt auf dem Ersteller, falls er
+      // angehakt ist, sonst hat der Bericht keinen "main".
       await supabase
         .from("disturbance_workers")
         .delete()
-        .eq("disturbance_id", editData.id)
-        .eq("is_main", false);
-      const extraIds = additionalWorkerIds.filter((id) => id !== user.id);
-      if (extraIds.length > 0) {
+        .eq("disturbance_id", editData.id);
+      if (additionalWorkerIds.length > 0) {
         await supabase.from("disturbance_workers").insert(
-          extraIds.map((id) => ({ disturbance_id: editData.id, user_id: id, is_main: false })),
+          additionalWorkerIds.map((id) => ({
+            disturbance_id: editData.id,
+            user_id: id,
+            is_main: id === user.id,
+          })),
         );
       }
 
@@ -460,20 +467,23 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         return;
       }
 
-      // Main worker + zusaetzliche Mitarbeiter (kein Zeitentrag fuer die!)
-      const workerRows: Array<{ disturbance_id: string; user_id: string; is_main: boolean }> = [
-        { disturbance_id: newDisturbance.id, user_id: user.id, is_main: true },
-      ];
-      const extraIds = additionalWorkerIds.filter((id) => id !== user.id);
-      for (const id of extraIds) {
-        workerRows.push({ disturbance_id: newDisturbance.id, user_id: id, is_main: false });
-      }
-      const { error: workerError } = await supabase.from("disturbance_workers").insert(workerRows);
-      if (workerError) {
-        await rollback();
-        toast({ variant: "destructive", title: "Fehler", description: "Mitarbeiter-Eintrag konnte nicht erstellt werden" });
-        setSaving(false);
-        return;
+      // Nur die explizit angehakten Mitarbeiter landen am Regiebericht.
+      // Der Ersteller ist nicht automatisch dabei — er muss sich selbst
+      // in der Liste abhaken wenn er mit drauf stehen will. (Der
+      // Zeiteintrag fuer den Ersteller bleibt davon unberuehrt.)
+      if (additionalWorkerIds.length > 0) {
+        const workerRows = additionalWorkerIds.map((id) => ({
+          disturbance_id: newDisturbance.id,
+          user_id: id,
+          is_main: id === user.id,
+        }));
+        const { error: workerError } = await supabase.from("disturbance_workers").insert(workerRows);
+        if (workerError) {
+          await rollback();
+          toast({ variant: "destructive", title: "Fehler", description: "Mitarbeiter-Eintrag konnte nicht erstellt werden" });
+          setSaving(false);
+          return;
+        }
       }
 
       // Create materials
@@ -796,16 +806,16 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             </div>
           </div>
 
-          {/* Zusaetzliche Mitarbeiter (erscheinen nur am PDF, keine Zeiterfassung) */}
+          {/* Anwesende Mitarbeiter — nur angehakte erscheinen am PDF. */}
           <div className="space-y-2">
             <h3 className="font-medium flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Weitere Mitarbeiter am Einsatz
+              Anwesende Mitarbeiter
             </h3>
             <p className="text-xs text-muted-foreground">
-              Werden unter "Mitarbeiter" am Regiebericht aufgeführt. Keine
-              automatische Zeiterfassung — der Hauptverantwortliche ist
-              der eingeloggte Nutzer.
+              Nur angehakte Mitarbeiter erscheinen am Regiebericht. Hake
+              dich selbst mit ab, wenn du auch drauf stehen willst. Die
+              Zeiterfassung fuer dich lauft unabhaengig davon.
             </p>
             {employeeOptions.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">Keine weiteren Mitarbeiter verfügbar.</p>

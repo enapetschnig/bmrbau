@@ -115,29 +115,22 @@ const DisturbanceDetail = () => {
         profile_nachname: profile?.nachname || "",
       });
 
-      // Workers: Ersteller immer als Hauptmitarbeiter zeigen, auch
-      // bei alten Berichten wo er evtl. nicht in disturbance_workers
-      // drin steht (Form-Logik "creator as is_main" kam erst spaeter).
+      // Workers kommen ausschliesslich aus disturbance_workers — nur
+      // die im Formular explizit angehakten Mitarbeiter stehen am
+      // Regiebericht, NICHT automatisch der Ersteller.
       const { data: workersData } = await supabase
         .from("disturbance_workers")
         .select("user_id, is_main")
         .eq("disturbance_id", id);
 
-      const rows = (workersData || []).slice();
-      const creatorId = data.user_id as string | undefined;
-      if (creatorId && !rows.some((r) => r.user_id === creatorId)) {
-        rows.unshift({ user_id: creatorId, is_main: true });
-      }
-
-      if (rows.length > 0) {
-        const workerIds = Array.from(new Set(rows.map((w) => w.user_id)));
+      if (workersData && workersData.length > 0) {
+        const workerIds = workersData.map(w => w.user_id);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, vorname, nachname")
           .in("id", workerIds);
 
-        // Sortierung: is_main zuerst, dann alphabetisch
-        const workersWithNames: Worker[] = rows.map(w => {
+        const workersWithNames: Worker[] = workersData.map(w => {
           const profile = profiles?.find(p => p.id === w.user_id);
           return {
             user_id: w.user_id,
@@ -145,9 +138,6 @@ const DisturbanceDetail = () => {
             vorname: profile?.vorname || "",
             nachname: profile?.nachname || "",
           };
-        }).sort((a, b) => {
-          if (a.is_main !== b.is_main) return a.is_main ? -1 : 1;
-          return (a.nachname + a.vorname).localeCompare(b.nachname + b.vorname);
         });
         setWorkers(workersWithNames);
       } else {
@@ -499,19 +489,15 @@ const DisturbanceDetail = () => {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {workers.map((worker) => (
-                  <Badge 
-                    key={worker.user_id} 
-                    variant={worker.is_main ? "default" : "secondary"}
+                  <Badge
+                    key={worker.user_id}
+                    variant="secondary"
                     className="text-sm py-1 px-3"
                   >
                     {worker.vorname} {worker.nachname}
-                    {worker.is_main && " (Ersteller)"}
                   </Badge>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                Die Arbeitszeit wurde automatisch für alle {workers.length} Mitarbeiter gebucht.
-              </p>
             </CardContent>
           </Card>
         )}

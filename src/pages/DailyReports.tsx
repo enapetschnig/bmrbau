@@ -141,32 +141,22 @@ export default function DailyReports() {
             .select("file_path, file_name")
             .eq("daily_report_id", id);
 
-          // Anwesende Mitarbeiter laden (Ersteller + daily_report_workers).
-          const creatorId = (report as any)?.user_id as string | undefined;
+          // Anwesende Mitarbeiter = nur die im Formular angehakten,
+          // NICHT automatisch der Ersteller.
           const { data: workerRows } = await supabase
             .from("daily_report_workers")
             .select("user_id")
             .eq("daily_report_id", id);
-          const workerIds = Array.from(new Set([
-            ...(creatorId ? [creatorId] : []),
-            ...((workerRows || []).map((w: any) => w.user_id)),
-          ]));
-          let workersForPdf: { name: string; is_main?: boolean }[] = [];
-          if (workerIds.length > 0) {
+          let workersForPdf: { name: string }[] = [];
+          if (workerRows && workerRows.length > 0) {
+            const ids = workerRows.map((w: any) => w.user_id);
             const { data: emps } = await supabase
               .from("employees")
               .select("user_id, vorname, nachname")
-              .in("user_id", workerIds);
-            const byId = new Map<string, string>();
-            (emps || []).forEach((e: any) => byId.set(e.user_id, `${e.vorname} ${e.nachname}`.trim()));
-            if (creatorId && byId.has(creatorId)) {
-              workersForPdf.push({ name: byId.get(creatorId)!, is_main: true });
-            }
-            for (const wid of (workerRows || []).map((w: any) => w.user_id)) {
-              if (wid === creatorId) continue;
-              const n = byId.get(wid);
-              if (n) workersForPdf.push({ name: n, is_main: false });
-            }
+              .in("user_id", ids);
+            (emps || []).forEach((e: any) =>
+              workersForPdf.push({ name: `${e.vorname} ${e.nachname}`.trim() })
+            );
           }
 
           // Optional: interne Anmerkungen raus wenn nicht gewollt

@@ -54,7 +54,7 @@ type DailyReport = {
 
 type Activity = { id: string; geschoss: string; beschreibung: string; sort_order: number };
 type Photo = { id: string; file_path: string; file_name: string };
-type Worker = { user_id: string; name: string; is_main?: boolean };
+type Worker = { user_id: string; name: string };
 
 export default function DailyReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -155,7 +155,7 @@ export default function DailyReportDetail() {
         photos.map(p => ({ file_path: p.file_path, file_name: p.file_name })),
         supabaseUrl,
         { asBlob: true },
-        workers.map(w => ({ name: w.name, is_main: !!w.is_main })),
+        workers.map(w => ({ name: w.name })),
       )) as Blob;
 
       const filename = getDailyReportPDFFilename({
@@ -256,42 +256,22 @@ export default function DailyReportDetail() {
       .order("created_at");
     if (pics) setPhotos(pics);
 
-    // Workers: Haupt-Mitarbeiter (= Ersteller) immer oben, dazu weitere
-    // aus daily_report_workers. Sonst wuerde der Ersteller im PDF
-    // ueberhaupt nicht auftauchen, wenn er sich nicht auch explizit als
-    // "Anwesender Mitarbeiter" abhakt.
-    const userIdsFromTable: string[] = [];
+    // Workers kommen ausschliesslich aus daily_report_workers — kein
+    // Auto-Prepend des Erstellers. Wer am Bericht steht, steht nur dort
+    // weil im Formular die Checkbox explizit gesetzt wurde.
     const { data: workerData } = await supabase
       .from("daily_report_workers")
       .select("user_id")
       .eq("daily_report_id", id);
-    if (workerData) {
-      userIdsFromTable.push(...workerData.map((w: any) => w.user_id));
-    }
-    const creatorId = (data as any)?.user_id as string | undefined;
-    const allIds = Array.from(new Set([
-      ...(creatorId ? [creatorId] : []),
-      ...userIdsFromTable,
-    ]));
-    if (allIds.length > 0) {
+    if (workerData && workerData.length > 0) {
+      const userIds = workerData.map((w: any) => w.user_id);
       const { data: empData } = await supabase
         .from("employees")
         .select("user_id, vorname, nachname")
-        .in("user_id", allIds);
-      const byId = new Map<string, { vorname: string; nachname: string }>();
-      (empData || []).forEach((e: any) => byId.set(e.user_id, { vorname: e.vorname, nachname: e.nachname }));
-      // Reihenfolge: Ersteller zuerst, dann alle anderen
-      const ordered: Worker[] = [];
-      if (creatorId && byId.has(creatorId)) {
-        const e = byId.get(creatorId)!;
-        ordered.push({ user_id: creatorId, name: `${e.vorname} ${e.nachname}`.trim(), is_main: true });
+        .in("user_id", userIds);
+      if (empData) {
+        setWorkers(empData.map((e: any) => ({ user_id: e.user_id, name: `${e.vorname} ${e.nachname}`.trim() })));
       }
-      for (const uid of userIdsFromTable) {
-        if (uid === creatorId) continue;
-        const e = byId.get(uid);
-        if (e) ordered.push({ user_id: uid, name: `${e.vorname} ${e.nachname}`.trim(), is_main: false });
-      }
-      setWorkers(ordered);
     } else {
       setWorkers([]);
     }
@@ -627,9 +607,7 @@ export default function DailyReportDetail() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {workers.map((w) => (
-                  <Badge key={w.user_id} variant={w.is_main ? "default" : "secondary"}>
-                    {w.name}{w.is_main ? " (Ersteller)" : ""}
-                  </Badge>
+                  <Badge key={w.user_id} variant="secondary">{w.name}</Badge>
                 ))}
               </div>
             </CardContent>
