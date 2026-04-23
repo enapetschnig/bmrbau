@@ -50,7 +50,7 @@ export const DisturbanceAttachments = ({ disturbanceId, canEdit }: Props) => {
     let uploaded = 0;
     for (const file of Array.from(files)) {
       if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-        toast({ variant: "destructive", title: "Nur PDFs", description: `${file.name} ist keine PDF-Datei` });
+        toast({ variant: "destructive", title: "Nur PDF möglich", description: `${file.name} — es können nur PDF-Dokumente an den Regiebericht angehängt werden.` });
         continue;
       }
       if (file.size > MAX_BYTES) {
@@ -84,7 +84,7 @@ export const DisturbanceAttachments = ({ disturbanceId, canEdit }: Props) => {
     }
 
     if (uploaded > 0) {
-      toast({ title: "Hochgeladen", description: `${uploaded} PDF${uploaded > 1 ? "s" : ""} hinzugefügt — wird am Regiebericht-PDF hinten angehängt.` });
+      toast({ title: "Hochgeladen", description: `${uploaded} Dokument${uploaded > 1 ? "e" : ""} hinzugefügt — wird am Regiebericht-PDF hinten angehängt.` });
       await fetchItems();
     }
     if (inputRef.current) inputRef.current.value = "";
@@ -120,7 +120,7 @@ export const DisturbanceAttachments = ({ disturbanceId, canEdit }: Props) => {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            PDF-Anhänge
+            Dokumente
           </CardTitle>
           {canEdit && (
             <Button
@@ -131,12 +131,12 @@ export const DisturbanceAttachments = ({ disturbanceId, canEdit }: Props) => {
               className="gap-2"
             >
               <Upload className="h-4 w-4" />
-              {uploading ? "Lädt..." : "PDF hinzufügen"}
+              {uploading ? "Lädt..." : "Dokument hinzufügen"}
             </Button>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Angehängte PDFs werden ans Ende des Regiebericht-PDFs gehängt — beim Download und beim Versand per E-Mail.
+          Lade PDFs hoch (z.B. Kundenrechnung, externer Plan). Sie werden ans Ende des Regiebericht-PDFs angehängt — beim Download und beim Versand per E-Mail.
         </p>
         <input
           ref={inputRef}

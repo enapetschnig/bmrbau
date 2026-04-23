@@ -826,9 +826,10 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
               Mitarbeiter im Einsatz
             </h3>
             <p className="text-xs text-muted-foreground">
-              Fuer jeden angehakten Mitarbeiter wird ein Zeiteintrag
-              erstellt und der Name erscheint am Regiebericht. Hake
-              dich selbst mit ab, wenn du auch mit drauf willst.
+              Nur fuer angehakte Mitarbeiter wird ein Zeiteintrag
+              erstellt und nur deren Namen erscheinen am Regiebericht.
+              Der Ersteller bekommt nur dann einen Zeiteintrag, wenn
+              er sich selbst ankreuzt.
             </p>
             {employeeOptions.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">Keine weiteren Mitarbeiter verfügbar.</p>
