@@ -212,7 +212,23 @@ export const SignatureDialog = ({
       }
 
       // Send disturbance data to edge function via direct fetch (bypasses supabase client issues)
-      const { data: { session } } = await supabase.auth.getSession();
+      // Gateway hat verify_jwt=true — ein gueltiger User-JWT MUSS im
+      // Authorization-Header stehen, sonst 401. Session notfalls
+      // refreshen.
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        session = refreshed.session;
+      }
+      if (!session?.access_token) {
+        toast({
+          variant: "destructive",
+          title: "Sitzung abgelaufen",
+          description: "Bitte logge dich neu ein und versuche es nochmal.",
+        });
+        setSending(false);
+        return;
+      }
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
@@ -220,7 +236,7 @@ export const SignatureDialog = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token || supabaseKey}`,
+          "Authorization": `Bearer ${session.access_token}`,
           "apikey": supabaseKey,
         },
         body: JSON.stringify({
