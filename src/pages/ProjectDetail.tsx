@@ -573,7 +573,10 @@ const ProjectDetail = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>{titleMap[type]}</CardTitle>
-            <CardDescription>{files.length} Dateien gesamt</CardDescription>
+            <CardDescription>
+              {filteredFiles.length} {filteredFiles.length === 1 ? "Datei" : "Dateien"}
+              {activeTab === "archiv" ? " im Archiv" : ""}
+            </CardDescription>
           </CardHeader>
 
           <CardContent className="p-4 sm:p-6">
