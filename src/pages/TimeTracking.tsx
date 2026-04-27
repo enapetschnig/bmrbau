@@ -104,6 +104,12 @@ const TimeTracking = () => {
   const [targetUserName, setTargetUserName] = useState("");
   const canManageForeign = isAdmin || isVorarbeiter;
   const [employeePickerOptions, setEmployeePickerOptions] = useState<{ user_id: string; name: string }[]>([]);
+  // Normale Mitarbeiter (kein Admin, kein Vorarbeiter) muessen sich am Anfang
+  // explizit selbst auswaehlen, damit garantiert ist, dass die Zeit fuer sie
+  // erfasst wird. Default true → Admin/Vorarbeiter werden nicht gegated.
+  const [selfConfirmed, setSelfConfirmed] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -354,15 +360,24 @@ const TimeTracking = () => {
     const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setCurrentUserId(user.id);
       const [{ data: roleData }, { data: emp }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "administrator").maybeSingle(),
-        supabase.from("employees").select("kategorie").eq("user_id", user.id).maybeSingle(),
+        supabase.from("employees").select("kategorie, vorname, nachname").eq("user_id", user.id).maybeSingle(),
       ]);
       const admin = !!roleData;
       const vorarbeiter = emp?.kategorie === "vorarbeiter";
       setIsAdmin(admin);
       setIsVorarbeiter(vorarbeiter);
       setCanCreateProjects(admin || vorarbeiter);
+      if (emp?.vorname || emp?.nachname) {
+        setCurrentUserName(`${emp.vorname ?? ""} ${emp.nachname ?? ""}`.trim());
+      }
+      // Normale Mitarbeiter muessen sich vor dem Buchen explizit selbst
+      // bestaetigen (Sicherheit gegen Fehlbuchung).
+      if (!admin && !vorarbeiter) {
+        setSelfConfirmed(false);
+      }
 
       // Liste aller Mitarbeiter fuer den Picker vorladen, wenn der
       // aktuelle Nutzer fremde Zeit buchen darf.
@@ -1162,10 +1177,47 @@ const TimeTracking = () => {
 
   if (loading) return <div className="p-4">Lädt...</div>;
 
+  if (!canManageForeign && !selfConfirmed) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Zeiterfassung" />
+        <div className="p-4">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle>Mitarbeiter auswählen</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Bitte wähle dich selbst aus, damit deine Zeit korrekt erfasst wird.
+              </p>
+              <Select
+                value=""
+                onValueChange={(uid) => {
+                  if (uid && uid === currentUserId) setSelfConfirmed(true);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Mitarbeiter auswählen…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentUserId && (
+                    <SelectItem value={currentUserId}>
+                      {currentUserName ?? "Eigener Account"}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Zeiterfassung" />
-      
+
       <div className="p-4">
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
