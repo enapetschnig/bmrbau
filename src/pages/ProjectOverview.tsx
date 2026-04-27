@@ -210,9 +210,21 @@ const ProjectOverview = () => {
   }, [projectId]);
 
   useEffect(() => {
-    if (projectId) {
-      fetchFileCounts();
-    }
+    if (!projectId) return;
+    fetchFileCounts();
+
+    // Bei Aenderungen an documents (Upload/Archivieren/Loeschen)
+    // sofort neu zaehlen, damit der Counter live nachzieht.
+    const channel = supabase
+      .channel(`project-overview-${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "documents", filter: `project_id=eq.${projectId}` },
+        () => { fetchFileCounts(); },
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [projectId, isAdmin]);
 
   const checkAdminStatus = async () => {
@@ -326,10 +338,11 @@ const ProjectOverview = () => {
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
-    // Counter = tatsaechliche Files im Storage-Bucket (gleiche Zahl
-    // die der User in der Detail-Ansicht sieht). Wenn ein Tagesbericht
-    // / Aufmass / sonst was geloescht wird, wird das PDF auch aus
-    // dem Storage entfernt → Counter stimmt automatisch wieder.
+    // Counter = Storage-Files MINUS archivierte (per documents-Tabelle).
+    // Damit stimmt die Zahl mit der Detail-Ansicht ueberein, auch nachdem
+    // Dateien archiviert wurden (Storage behaelt sie, aber sie sind im
+    // 'Aktuell'-Tab unsichtbar). Storage-list-Limit auf 1000 statt
+    // Default 100.
     const bucketMap: Record<string, string> = {
       plans: "project-plans",
       reports: "project-reports",
@@ -344,8 +357,18 @@ const ProjectOverview = () => {
         }
         const bucket = bucketMap[category.type];
         if (!bucket) return { ...category, count: 0 };
-        const { data } = await supabase.storage.from(bucket).list(projectId);
-        return { ...category, count: data?.length ?? 0 };
+        const [storageRes, archivedRes] = await Promise.all([
+          supabase.storage.from(bucket).list(projectId, { limit: 1000 }),
+          supabase
+            .from("documents")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", projectId)
+            .eq("typ", category.type)
+            .eq("archived", true),
+        ]);
+        const total = storageRes.data?.length ?? 0;
+        const archived = archivedRes.count ?? 0;
+        return { ...category, count: Math.max(0, total - archived) };
       }),
     );
 
