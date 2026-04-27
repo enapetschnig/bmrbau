@@ -46,7 +46,17 @@ export function QuickUploadDialog({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const filesArray = Array.from(e.target.files);
-      setSelectedFiles(filesArray);
+      setSelectedFiles((prev) => [...prev, ...filesArray]);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (uploading) return;
+    const dropped = Array.from(e.dataTransfer?.files ?? []);
+    if (dropped.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...dropped]);
     }
   };
 
@@ -61,60 +71,81 @@ export function QuickUploadDialog({
     setUploadProgress(0);
 
     const bucket = bucketMap[documentType];
+    const total = selectedFiles.length;
+    const failed: { name: string; reason: string }[] = [];
     let successCount = 0;
 
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      const filePath = `${projectId}/${Date.now()}_${file.name}`;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      // Default-Sub-Type pro Typ, damit die Datei in den richtigen Tab in
+      // ProjectDetail einsortiert wird (sonst Filter-Mismatch → unsichtbar).
+      const defaultSubType: Record<DocumentType, string | null> = {
+        plans: "plan",
+        reports: null,
+        materials: null,
+        photos: null,
+      };
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const filePath = `${projectId}/${Date.now()}_${i}_${file.name}`;
 
-      if (uploadError) {
-        console.error('Storage-Upload-Fehler:', uploadError);
-        console.error('Datei:', file.name, 'Größe:', file.size, 'bytes');
-        toast({
-          variant: "destructive",
-          title: "Upload fehlgeschlagen",
-          description: `${file.name} (${(file.size / 1024).toFixed(0)} KB): ${uploadError.message}`
-        });
-        setUploading(false);
-        return;
-      }
+        const { error: uploadError } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
-      if (uploadData) {
+        if (uploadError) {
+          failed.push({ name: file.name, reason: uploadError.message });
+          setUploadProgress(((i + 1) / total) * 100);
+          continue;
+        }
+
+        if (user) {
+          const { error: dbError } = await supabase.from("documents").insert({
+            user_id: user.id,
+            project_id: projectId,
+            typ: documentType,
+            sub_type: defaultSubType[documentType],
+            name: file.name,
+            file_url: filePath,
+            archived: false,
+          });
+          if (dbError) {
+            failed.push({ name: file.name, reason: dbError.message });
+            setUploadProgress(((i + 1) / total) * 100);
+            continue;
+          }
+        }
+
         successCount++;
+        setUploadProgress(((i + 1) / total) * 100);
       }
-
-      setUploadProgress(((i + 1) / selectedFiles.length) * 100);
+    } catch (err: any) {
+      failed.push({ name: "Upload", reason: err?.message ?? "Unbekannter Fehler" });
+    } finally {
+      setUploading(false);
     }
 
-    setUploading(false);
-
-    if (successCount > 0) {
-      toast({
-        title: "Erfolg",
-        description: `${successCount} von ${selectedFiles.length} Datei(en) hochgeladen`,
-      });
-      
-      if (onSuccess) {
-        onSuccess();
-      }
-      
+    if (successCount > 0 && failed.length === 0) {
+      toast({ title: "Erfolg", description: `${successCount} Datei(en) hochgeladen` });
+      if (onSuccess) onSuccess();
       setTimeout(() => {
         setSelectedFiles([]);
         setUploadProgress(0);
         onClose();
       }, 500);
+    } else if (successCount > 0 && failed.length > 0) {
+      toast({
+        variant: "destructive",
+        title: `${successCount} von ${total} hochgeladen`,
+        description: failed.map((f) => `${f.name}: ${f.reason}`).join("\n"),
+      });
+      if (onSuccess) onSuccess();
     } else {
       toast({
         variant: "destructive",
-        title: "Fehler",
-        description: "Dateien konnten nicht hochgeladen werden",
+        title: "Upload fehlgeschlagen",
+        description: failed.map((f) => `${f.name}: ${f.reason}`).join("\n") || "Dateien konnten nicht hochgeladen werden",
       });
     }
   };
@@ -131,29 +162,34 @@ export function QuickUploadDialog({
 
         <div className="space-y-4">
           {/* Drag & Drop Zone */}
-          <label htmlFor="file-upload" className="cursor-pointer">
-            <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium mb-1">
-                Dateien auswählen
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Klicken zum Auswählen oder Drag & Drop
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Max. 50 MB pro Datei
-              </p>
-            </div>
-            <Input
-              id="file-upload"
-              type="file"
-              className="hidden"
-              onChange={handleFileSelect}
-              disabled={uploading}
-              accept={documentType === "photos" ? "image/*" : "*"}
-              multiple
-            />
-          </label>
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={handleDrop}
+          >
+            <label htmlFor="file-upload" className="cursor-pointer">
+              <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm font-medium mb-1">
+                  Dateien auswählen
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Klicken zum Auswählen oder Drag &amp; Drop
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Max. 200 MB pro Datei
+                </p>
+              </div>
+              <Input
+                id="file-upload"
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={uploading}
+                accept={documentType === "photos" ? "image/*" : "*"}
+                multiple
+              />
+            </label>
+          </div>
 
           {/* Hinweis für Google Fotos */}
           {documentType === "photos" && (

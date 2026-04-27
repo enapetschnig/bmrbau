@@ -242,7 +242,18 @@ export function ProjectFilesManager({ projectId, defaultTab = 'photos' }: Projec
       <div className="space-y-4">
         {/* Upload Area */}
         {canUpload(type) ? (
-          <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
+          <div
+            className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (uploading === type) return;
+              if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                handleUpload(type, e.dataTransfer.files);
+              }
+            }}
+          >
             <input
               type="file"
               multiple

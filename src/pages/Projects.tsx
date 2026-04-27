@@ -89,10 +89,15 @@ const Projects = () => {
     init();
     fetchFavorites();
 
-    // Realtime subscription
+    // Realtime subscription: Projekt-Aenderungen UND documents-Aenderungen
+    // (Upload, Archivieren, Loeschen) triggern ein refetch, damit die
+    // Datei-Zahlen auf den Cards immer synchron sind.
     const channel = supabase
       .channel('projects-list-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+        fetchProjects();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
         fetchProjects();
       })
       .subscribe();
@@ -400,16 +405,37 @@ const Projects = () => {
   };
 
   const getFileCount = async (projectId: string, bucketName: string): Promise<number> => {
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .list(projectId);
+    // Bucket → documents.typ Mapping. Nur Buckets ohne Eintrag werden ohne
+    // Archive-Abzug gezaehlt.
+    const bucketToTyp: Record<string, string> = {
+      "project-plans": "plans",
+      "project-reports": "reports",
+      "project-photos": "photos",
+      "project-chef": "chef",
+    };
+    const typ = bucketToTyp[bucketName];
 
-    if (error) {
-      console.error(`Error fetching file count from ${bucketName}:`, error);
+    const [storageRes, archivedRes] = await Promise.all([
+      // Default-Limit von Supabase ist 100 → reicht fuer kleine Projekte nicht.
+      supabase.storage.from(bucketName).list(projectId, { limit: 1000 }),
+      typ
+        ? supabase
+            .from("documents")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", projectId)
+            .eq("typ", typ)
+            .eq("archived", true)
+        : Promise.resolve({ count: 0, error: null } as { count: number | null; error: null }),
+    ]);
+
+    if (storageRes.error) {
+      console.error(`Error fetching file count from ${bucketName}:`, storageRes.error);
       return 0;
     }
 
-    return data?.length || 0;
+    const total = storageRes.data?.length ?? 0;
+    const archived = archivedRes.count ?? 0;
+    return Math.max(0, total - archived);
   };
 
   const formatDate = (dateString: string) => {

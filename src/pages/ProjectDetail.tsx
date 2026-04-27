@@ -180,36 +180,77 @@ const ProjectDetail = () => {
     if (data) setDocRecords(data as DocRecord[]);
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, subType?: string) => {
-    if (!e.target.files || e.target.files.length === 0 || !projectId || !type) return;
+  const performUpload = async (files: File[], subType?: string) => {
+    if (!files.length || !projectId || !type) return;
     setUploading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const total = files.length;
+    const failed: { name: string; reason: string }[] = [];
+    let succeeded = 0;
 
-    for (const file of Array.from(e.target.files)) {
-      const bucket = bucketMap[type];
-      const filePath = `${projectId}/${Date.now()}_${file.name}`;
-      const { error } = await supabase.storage.from(bucket).upload(filePath, file);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (!error && user) {
-        // Dokument-Record in DB speichern
-        await supabase.from("documents").insert({
-          name: file.name,
-          project_id: projectId,
-          typ: type,
-          sub_type: subType || null,
-          file_url: filePath,
-          user_id: user.id,
-          archived: false,
-        });
+      for (const [i, file] of files.entries()) {
+        const bucket = bucketMap[type];
+        const filePath = `${projectId}/${Date.now()}_${i}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+
+        if (uploadError) {
+          failed.push({ name: file.name, reason: uploadError.message });
+          continue;
+        }
+
+        if (user) {
+          const { error: dbError } = await supabase.from("documents").insert({
+            name: file.name,
+            project_id: projectId,
+            typ: type,
+            sub_type: subType || null,
+            file_url: filePath,
+            user_id: user.id,
+            archived: false,
+          });
+          if (dbError) {
+            failed.push({ name: file.name, reason: dbError.message });
+            continue;
+          }
+        }
+
+        succeeded++;
       }
+    } catch (err: any) {
+      failed.push({ name: "Upload", reason: err?.message ?? "Unbekannter Fehler" });
+    } finally {
+      fetchFiles();
+      fetchDocRecords();
+      setUploading(false);
     }
 
-    toast({ title: "Hochgeladen", description: `${e.target.files.length} Datei(en) hochgeladen` });
-    fetchFiles();
-    fetchDocRecords();
-    setUploading(false);
+    if (failed.length === 0) {
+      toast({ title: "Hochgeladen", description: `${succeeded} Datei(en) hochgeladen` });
+    } else {
+      toast({
+        variant: "destructive",
+        title: succeeded === 0 ? "Upload fehlgeschlagen" : `${succeeded} von ${total} hochgeladen`,
+        description: failed.map((f) => `${f.name}: ${f.reason}`).join("\n"),
+      });
+    }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, subType?: string) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    await performUpload(files, subType);
     e.target.value = "";
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, subType?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (uploading) return;
+    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+    if (files.length > 0) await performUpload(files, subType);
   };
 
   // Verschiebt eine Datei ins Archiv (soft delete - fuer alle)
@@ -484,8 +525,14 @@ const ProjectDetail = () => {
       // Nicht-archivierte Dateien
       if (isArchived) return false;
 
-      // Sub-Type Filter (fuer Plaene)
+      // Sub-Type Filter (fuer Plaene). "Aktuelle Plaene" (subType="plan") ist
+      // zugleich der Default-Tab fuer den Plans-Bereich → Dateien ohne
+      // docRecord (Legacy-Uploads, oder Quick-Uploads) zaehlen wir hier auch
+      // dazu, damit sie nicht unsichtbar werden.
       if (currentTabConfig?.subType) {
+        if (currentTabConfig.subType === "plan") {
+          return !docRecord?.sub_type || docRecord.sub_type === "plan";
+        }
         return docRecord?.sub_type === currentTabConfig.subType;
       }
 
@@ -581,7 +628,11 @@ const ProjectDetail = () => {
                       duerfen auch Mitarbeiter hochladen (Fotos, Plaene,
                       Regieberichte, Material-Lieferscheine usw.). */}
                   {!isArchivTab && (isAdmin || type !== "chef") && (
-                    <div className="mb-4">
+                    <div
+                      className="mb-4"
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onDrop={(e) => handleDrop(e, currentTabConfig?.subType)}
+                    >
                       <label htmlFor={`file-upload-${tab.key}`} className="cursor-pointer">
                         <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
                           <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
