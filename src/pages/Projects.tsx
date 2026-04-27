@@ -18,6 +18,7 @@ import { QuickUploadDialog } from "@/components/QuickUploadDialog";
 import { MobilePhotoCapture } from "@/components/MobilePhotoCapture";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SafetyEmployeeSelector } from "@/components/safety/SafetyEmployeeSelector";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 type Project = {
   id: string;
@@ -367,7 +368,7 @@ const Projects = () => {
     }
 
     const timestamp = Date.now();
-    const filePath = `${quickUploadProject.projectId}/${timestamp}_${file.name}`;
+    const filePath = `${quickUploadProject.projectId}/${timestamp}_${sanitizeStorageKey(file.name)}`;
     
     const { error: uploadError } = await supabase
       .storage

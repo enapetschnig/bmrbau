@@ -17,6 +17,7 @@ import { confirm } from "@/lib/confirm";
 import { ENABLE_CHAT } from "@/lib/features";
 import { FileViewer } from "@/components/FileViewer";
 import { Nachkalkulation } from "@/components/Nachkalkulation";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 type DocumentType = "plans" | "reports" | "photos" | "chef" | "polier";
 
@@ -193,7 +194,8 @@ const ProjectDetail = () => {
 
       for (const [i, file] of files.entries()) {
         const bucket = bucketMap[type];
-        const filePath = `${projectId}/${Date.now()}_${i}_${file.name}`;
+        const safeName = sanitizeStorageKey(file.name);
+        const filePath = `${projectId}/${Date.now()}_${i}_${safeName}`;
         const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
 
         if (uploadError) {

@@ -6,6 +6,7 @@ import { Upload, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 type DocumentType = "plans" | "reports" | "materials" | "photos";
 
@@ -88,7 +89,8 @@ export function QuickUploadDialog({
 
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        const filePath = `${projectId}/${Date.now()}_${i}_${file.name}`;
+        const safeName = sanitizeStorageKey(file.name);
+        const filePath = `${projectId}/${Date.now()}_${i}_${safeName}`;
 
         const { error: uploadError } = await supabase.storage
           .from(bucket)
