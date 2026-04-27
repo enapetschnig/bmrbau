@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { confirm } from "@/lib/confirm";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -107,7 +108,7 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
 
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
-        const filePath = `${userId || employeeId}/${type}/${Date.now()}_${file.name}`;
+        const filePath = `${userId || employeeId}/${type}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
         const { error } = await supabase.storage.from("employee-documents").upload(filePath, file);
 
         if (error) throw error;

@@ -10,6 +10,7 @@ import { FileText, Camera, Upload, Download, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { FileViewer } from "@/components/FileViewer";
 import { confirm } from "@/lib/confirm";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 interface Document {
   name: string;
@@ -103,7 +104,7 @@ export default function MyDocuments() {
 
     setUploading(true);
 
-    const filePath = `${userId}/${type}/${Date.now()}_${file.name}`;
+    const filePath = `${userId}/${type}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
     const { error } = await supabase.storage
       .from("employee-documents")
       .upload(filePath, file);

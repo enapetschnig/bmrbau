@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DocumentDetailDialog, type IncomingDocument } from "@/components/DocumentDetailDialog";
 import { BatchInvoiceProcessor } from "@/components/BatchInvoiceProcessor";
 import { Layers } from "lucide-react";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, Upload, Filter, FileText, Check, CheckCircle2, AlertTriangle, XCircle, Loader2, X, Plus, Sparkles } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -410,7 +411,7 @@ export default function IncomingInvoices() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Nicht eingeloggt");
 
-      const filePath = `temp/${user.id}/${Date.now()}_${uploadFile.name}`;
+      const filePath = `temp/${user.id}/${Date.now()}_${sanitizeStorageKey(uploadFile.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("incoming-documents")
         .upload(filePath, uploadFile);
@@ -477,7 +478,7 @@ export default function IncomingInvoices() {
       if (!user) throw new Error("Nicht eingeloggt");
 
       // Upload final file
-      const filePath = `${user.id}/rechnungen/${Date.now()}_${uploadFile.name}`;
+      const filePath = `${user.id}/rechnungen/${Date.now()}_${sanitizeStorageKey(uploadFile.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("incoming-documents")
         .upload(filePath, uploadFile);

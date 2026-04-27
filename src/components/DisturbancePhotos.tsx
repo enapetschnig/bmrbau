@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 interface DisturbancePhoto {
   id: string;
@@ -90,7 +91,7 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
         continue;
       }
 
-      const fileName = `${disturbanceId}/${Date.now()}_${file.name}`;
+      const fileName = `${disturbanceId}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
 
       const { error: uploadError } = await supabase.storage
         .from("disturbance-photos")

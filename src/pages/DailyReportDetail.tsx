@@ -18,6 +18,7 @@ import { confirm } from "@/lib/confirm";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { generateDailyReportPDF, getDailyReportPDFFilename } from "@/lib/generateDailyReportPDF";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 const WETTER_LABELS: Record<string, string> = {
   sonnig: "☀️ Sonnig", bewoelkt: "☁️ Bewölkt", regen: "🌧️ Regen",
@@ -169,7 +170,7 @@ export default function DailyReportDetail() {
       } as any);
 
       if (report.project_id) {
-        const filePath = `${report.project_id}/${Date.now()}_${filename}`;
+        const filePath = `${report.project_id}/${Date.now()}_${sanitizeStorageKey(filename)}`;
         const { error: upErr } = await supabase.storage
           .from("project-reports")
           .upload(filePath, blob, { contentType: "application/pdf", upsert: false });
@@ -351,7 +352,7 @@ export default function DailyReportDetail() {
       // bleibt auf jeden Fall erhalten.
       if (projectIdForMirror) {
         try {
-          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${file.name}`;
+          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
           const { error: mirrorErr } = await supabase.storage
             .from("project-photos")
             .upload(mirrorPath, rotatedBlob, { upsert: false });
@@ -413,7 +414,7 @@ export default function DailyReportDetail() {
 
       if (projectIdForMirror) {
         try {
-          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${file.name}`;
+          const mirrorPath = `${projectIdForMirror}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
           const { error: mirrorErr } = await supabase.storage
             .from("project-photos")
             .upload(mirrorPath, rotatedBlob, { upsert: false });

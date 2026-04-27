@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Camera, Send, ChevronUp, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 type BroadcastMessage = {
   id: string;
@@ -238,7 +239,7 @@ export function CompanyChat({
     if (!file || !currentUserId || !channelId || !channel) return;
 
     setSending(true);
-    const filePath = `${Date.now()}_${file.name}`;
+    const filePath = `${Date.now()}_${sanitizeStorageKey(file.name)}`;
 
     const { error: uploadError } = await supabase.storage
       .from("broadcast-chat")

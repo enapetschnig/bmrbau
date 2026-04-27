@@ -6,6 +6,7 @@ import { Camera, Send, ChevronUp, Trash2, X, ChevronLeft, ChevronRight, Download
 import { ImageEditor } from "@/components/ImageEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 type ChatMessage = {
   id: string;
@@ -320,7 +321,8 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
     if (!file || !currentUserId) return;
 
     setSending(true);
-    const filePath = `${projectId}/${Date.now()}_${file.name}`;
+    const safeName = sanitizeStorageKey(file.name);
+    const filePath = `${projectId}/${Date.now()}_${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("project-chat")
@@ -333,7 +335,7 @@ export function ProjectChat({ projectId, projectName, isAdmin }: { projectId: st
     }
 
     // Also save to project-photos bucket
-    const photosPath = `${projectId}/${Date.now()}_${file.name}`;
+    const photosPath = `${projectId}/${Date.now()}_${safeName}`;
     await supabase.storage
       .from("project-photos")
       .upload(photosPath, file, { cacheControl: "3600", upsert: false });

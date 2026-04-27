@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeStorageKey } from "@/lib/sanitizeStorageKey";
 
 interface Attachment {
   id: string;
@@ -58,7 +59,7 @@ export const DisturbanceAttachments = ({ disturbanceId, canEdit }: Props) => {
         continue;
       }
 
-      const filePath = `${disturbanceId}/${Date.now()}_${file.name}`;
+      const filePath = `${disturbanceId}/${Date.now()}_${sanitizeStorageKey(file.name)}`;
       const { error: upErr } = await supabase.storage
         .from("disturbance-attachments")
         .upload(filePath, file, { contentType: "application/pdf" });
