@@ -46,6 +46,8 @@ export function AppLayout() {
         ? "vorarbeiter"
         : empData?.kategorie === "lehrling"
         ? "lehrling"
+        : empData?.kategorie === "hilfsarbeiter"
+        ? "hilfsarbeiter"
         : empData?.kategorie === "extern"
         ? "extern"
         : "facharbeiter";

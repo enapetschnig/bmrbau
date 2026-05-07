@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
-type MinRole = "extern" | "lehrling" | "facharbeiter" | "vorarbeiter" | "admin";
+type MinRole = "extern" | "lehrling" | "hilfsarbeiter" | "facharbeiter" | "vorarbeiter" | "admin";
 
 const ROLE_LEVEL: Record<string, number> = {
   extern: 0,
   lehrling: 1,
+  hilfsarbeiter: 1,
   facharbeiter: 2,
   vorarbeiter: 3,
   admin: 4,
@@ -16,7 +17,7 @@ function getEffectiveRole(isAdmin: boolean, kategorie: string | null): string {
   if (isAdmin) return "admin";
   if (!kategorie) return "facharbeiter";
   if (kategorie === "extern") return "extern";
-  return kategorie; // lehrling, facharbeiter, vorarbeiter
+  return kategorie; // lehrling, hilfsarbeiter, facharbeiter, vorarbeiter
 }
 
 export function ProtectedRoute({

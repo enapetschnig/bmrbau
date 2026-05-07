@@ -936,6 +936,7 @@ export default function Admin() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="lehrling">Lehrling</SelectItem>
+                            <SelectItem value="hilfsarbeiter">Hilfsarbeiter</SelectItem>
                             <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
                             <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                             <SelectItem value="extern">Extern</SelectItem>
@@ -1084,6 +1085,7 @@ export default function Admin() {
                           <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                           <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
                           <SelectItem value="lehrling">Lehrling</SelectItem>
+                          <SelectItem value="hilfsarbeiter">Hilfsarbeiter</SelectItem>
                           <SelectItem value="extern">Extern</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1285,6 +1287,7 @@ export default function Admin() {
                 const ROLES = [
                   { key: "extern", label: "Extern" },
                   { key: "lehrling", label: "Lehrling" },
+                  { key: "hilfsarbeiter", label: "Hilfsarbeiter" },
                   { key: "facharbeiter", label: "Facharbeiter" },
                   { key: "vorarbeiter", label: "Vorarbeiter" },
                   { key: "admin", label: "Admin" },

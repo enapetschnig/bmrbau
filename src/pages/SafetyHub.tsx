@@ -63,7 +63,7 @@ const MODUL_COLOR: Record<ModulType, string> = {
   geraeteunterweisung: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200",
 };
 
-type Role = "administrator" | "vorarbeiter" | "facharbeiter" | "lehrling" | "extern" | null;
+type Role = "administrator" | "vorarbeiter" | "facharbeiter" | "lehrling" | "hilfsarbeiter" | "extern" | null;
 
 export default function SafetyHub() {
   const navigate = useNavigate();

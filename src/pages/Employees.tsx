@@ -53,6 +53,7 @@ interface Employee {
 
 const KATEGORIE_LABELS: Record<string, string> = {
   lehrling: "Lehrling",
+  hilfsarbeiter: "Hilfsarbeiter",
   facharbeiter: "Facharbeiter",
   vorarbeiter: "Vorarbeiter",
   extern: "Extern",
@@ -485,6 +486,7 @@ export default function Employees() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="lehrling">Lehrling</SelectItem>
+                            <SelectItem value="hilfsarbeiter">Hilfsarbeiter</SelectItem>
                             <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
                             <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                             <SelectItem value="extern">Extern</SelectItem>

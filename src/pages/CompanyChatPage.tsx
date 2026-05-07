@@ -32,6 +32,7 @@ const ROLE_OPTIONS = [
   { value: "vorarbeiter", label: "Vorarbeiter" },
   { value: "facharbeiter", label: "Facharbeiter" },
   { value: "lehrling", label: "Lehrling" },
+  { value: "hilfsarbeiter", label: "Hilfsarbeiter" },
   { value: "extern", label: "Extern" },
 ];
 

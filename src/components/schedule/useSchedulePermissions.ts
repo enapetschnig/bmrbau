@@ -7,6 +7,7 @@ type YearRoles = {
   vorarbeiter: boolean;
   facharbeiter: boolean;
   lehrling: boolean;
+  hilfsarbeiter: boolean;
   extern: boolean;
 };
 
@@ -15,6 +16,7 @@ const DEFAULT_YEAR_ROLES: YearRoles = {
   vorarbeiter: true,
   facharbeiter: false,
   lehrling: false,
+  hilfsarbeiter: false,
   extern: false,
 };
 
@@ -91,6 +93,7 @@ export function useSchedulePermissions() {
     if (isVorarbeiter) return yearRoles.vorarbeiter;
     if (kategorie === "facharbeiter") return yearRoles.facharbeiter;
     if (kategorie === "lehrling") return yearRoles.lehrling;
+    if (kategorie === "hilfsarbeiter") return yearRoles.hilfsarbeiter;
     if (kategorie === "extern") return yearRoles.extern;
     return false;
   })();

@@ -1057,6 +1057,7 @@ export default function HoursReport() {
                         <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                         <SelectItem value="facharbeiter">Facharbeiter</SelectItem>
                         <SelectItem value="lehrling">Lehrling</SelectItem>
+                        <SelectItem value="hilfsarbeiter">Hilfsarbeiter</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={selectedUserId} onValueChange={setSelectedUserId}>

@@ -107,7 +107,7 @@ export default function Index() {
 
   // Role-based visibility helper
   const ROLE_LEVEL: Record<string, number> = {
-    extern: 0, lehrling: 1, facharbeiter: 2, vorarbeiter: 3, admin: 4,
+    extern: 0, lehrling: 1, hilfsarbeiter: 1, facharbeiter: 2, vorarbeiter: 3, admin: 4,
   };
   const getEffectiveRole = () => {
     if (userRole === "administrator") return "admin";
@@ -322,6 +322,7 @@ export default function Index() {
     vorarbeiter: "Vorarbeiter",
     facharbeiter: "Facharbeiter",
     lehrling: "Lehrling",
+    hilfsarbeiter: "Hilfsarbeiter",
     extern: "Extern",
   };
 
@@ -1022,7 +1023,7 @@ export default function Index() {
                     </label>
                     {newChAudience === "roles" && (
                       <div className="ml-5 flex flex-wrap gap-2">
-                        {["vorarbeiter", "facharbeiter", "lehrling", "extern"].map((r) => (
+                        {["vorarbeiter", "facharbeiter", "lehrling", "hilfsarbeiter", "extern"].map((r) => (
                           <button
                             key={r}
                             type="button"

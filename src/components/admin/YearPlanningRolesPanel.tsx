@@ -12,6 +12,7 @@ type Roles = {
   vorarbeiter: boolean;
   facharbeiter: boolean;
   lehrling: boolean;
+  hilfsarbeiter: boolean;
   extern: boolean;
 };
 
@@ -20,6 +21,7 @@ const DEFAULT: Roles = {
   vorarbeiter: true,
   facharbeiter: false,
   lehrling: false,
+  hilfsarbeiter: false,
   extern: false,
 };
 
@@ -28,6 +30,7 @@ const ROLE_LABELS: Record<keyof Roles, string> = {
   vorarbeiter: "Vorarbeiter",
   facharbeiter: "Facharbeiter",
   lehrling: "Lehrling",
+  hilfsarbeiter: "Hilfsarbeiter",
   extern: "Extern",
 };
 
@@ -94,7 +97,7 @@ export function YearPlanningRolesPanel() {
           <p className="text-sm text-muted-foreground">Lädt...</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {(Object.keys(ROLE_LABELS) as (keyof Roles)[]).map(key => (
                 <label
                   key={key}
