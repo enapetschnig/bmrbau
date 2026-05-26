@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
-import { Plus, ShieldCheck, FileSpreadsheet, Download, X } from "lucide-react";
+import { Plus, ShieldCheck, FileSpreadsheet, Download, X, FileText } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
