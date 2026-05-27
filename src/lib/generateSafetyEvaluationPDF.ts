@@ -12,11 +12,27 @@ export interface SafetyChecklistAnswer {
   bemerkung: string | null;
 }
 
+export interface SafetyFrageAntwort {
+  frage_id?: string;
+  frage?: string;
+  gewaehlt?: number;
+  korrekt?: number;
+  ist_richtig?: boolean;
+}
+
 export interface SafetySignature {
   unterschrift: string;
   unterschrift_name: string;
   unterschrieben_am: string;
   personal_answers?: Array<{ item_id: string; checked: boolean; bemerkung: string | null }>;
+  fragen_antworten?: SafetyFrageAntwort[];
+}
+
+export interface SafetyFrage {
+  id: string;
+  frage: string;
+  optionen: string[];
+  korrekt: number;
 }
 
 export interface SafetyEvaluationData {
@@ -31,13 +47,24 @@ export interface SafetyEvaluationData {
   diskussionNotizen: string | null;
   signatures: SafetySignature[];
   employees: { vorname: string; nachname: string }[];
+  modul?: string;
+  jahr?: number | null;
+  equipmentName?: string;
+  fragen?: SafetyFrage[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
   entwurf: "Entwurf",
+  warte_auf_unterschrift: "Zur Unterschrift",
   ausgefuellt: "Ausgefüllt",
   diskutiert: "Diskutiert",
   abgeschlossen: "Abgeschlossen",
+};
+
+const MODUL_LABELS: Record<string, string> = {
+  jahresunterweisung: "Jahresunterweisung",
+  baustellenunterweisung: "Baustellenunterweisung",
+  geraeteunterweisung: "Geräteunterweisung",
 };
 
 export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
@@ -67,10 +94,12 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
   doc.line(margin, yPos, margin + contentWidth, yPos);
   yPos += 6;
 
-  const typLabel = data.typ === "evaluierung" ? "Evaluierung" : "Sicherheitsunterweisung";
+  const modulLabel = data.modul
+    ? (MODUL_LABELS[data.modul] || data.modul)
+    : (data.typ === "evaluierung" ? "Evaluierung" : "Sicherheitsunterweisung");
   doc.setFontSize(16);
   doc.setTextColor(100, 100, 100);
-  doc.text(typLabel, margin, yPos);
+  doc.text(modulLabel, margin, yPos);
   yPos += 10;
 
   // Title
@@ -80,10 +109,13 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
   doc.text(data.titel, margin, yPos);
   yPos += 8;
 
-  // Meta info
+  // Meta info — modul-spezifisch: Projekt nur bei Baustelle, Equipment nur bei
+  // Geraet, Jahr nur bei Jahresunterweisung.
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text(`Projekt: ${data.projektName}`, margin, yPos); yPos += 5;
+  if (data.projektName) { doc.text(`Projekt: ${data.projektName}`, margin, yPos); yPos += 5; }
+  if (data.equipmentName) { doc.text(`Gerät: ${data.equipmentName}`, margin, yPos); yPos += 5; }
+  if (data.jahr) { doc.text(`Jahr: ${data.jahr}`, margin, yPos); yPos += 5; }
   if (data.kategorie) { doc.text(`Kategorie: ${data.kategorie}`, margin, yPos); yPos += 5; }
   doc.text(`Status: ${STATUS_LABELS[data.status] || data.status}`, margin, yPos); yPos += 5;
   doc.text(`Erstellt: ${new Date(data.created_at).toLocaleDateString("de-AT")}`, margin, yPos); yPos += 5;
@@ -141,6 +173,38 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
     yPos += 5;
   }
 
+  // Fragen-Katalog (Multi-Choice) — wichtig vor allem fuer Jahresunterweisung
+  if (data.fragen && data.fragen.length > 0) {
+    checkPage(15);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Fragen zum Inhalt", margin, yPos);
+    yPos += 8;
+
+    data.fragen.forEach((f, idx) => {
+      checkPage(12 + f.optionen.length * 4);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      const fLines = doc.splitTextToSize(`${idx + 1}. ${f.frage}`, contentWidth - 4);
+      doc.text(fLines, margin, yPos);
+      yPos += fLines.length * 5;
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      f.optionen.forEach((opt, oi) => {
+        const isCorrect = oi === f.korrekt;
+        doc.setTextColor(isCorrect ? 34 : 80, isCorrect ? 139 : 80, isCorrect ? 34 : 80);
+        const marker = isCorrect ? "✓" : "○";
+        doc.text(`  ${marker}  ${opt}`, margin + 2, yPos);
+        yPos += 4;
+      });
+      doc.setTextColor(0, 0, 0);
+      yPos += 2;
+    });
+    yPos += 5;
+  }
+
   // Discussion notes
   if (data.diskussionNotizen) {
     checkPage(20);
@@ -186,6 +250,31 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
         }
       }
 
+      // Fragen-Antworten dieses Mitarbeiters (Quiz-Ergebnis)
+      const fragenAntw = sig.fragen_antworten || [];
+      if (fragenAntw.length > 0) {
+        checkPage(8);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(80, 80, 80);
+        const richtige = fragenAntw.filter((a) => a.ist_richtig).length;
+        doc.text(`Fragen-Antworten (${richtige}/${fragenAntw.length} richtig):`, margin + 2, yPos);
+        yPos += 4;
+
+        for (const fa of fragenAntw) {
+          checkPage(6);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(fa.ist_richtig ? 34 : 200, fa.ist_richtig ? 139 : 60, fa.ist_richtig ? 34 : 60);
+          const marker = fa.ist_richtig ? "✓" : "✗";
+          const frageText = fa.frage || `Frage ${fa.frage_id || "?"}`;
+          const lines = doc.splitTextToSize(`${marker}  ${frageText}`, contentWidth - 10);
+          doc.text(lines, margin + 4, yPos);
+          yPos += lines.length * 4;
+        }
+        doc.setTextColor(0, 0, 0);
+        yPos += 2;
+      }
+
       // Personal answers for this employee
       const checkedAnswers = (sig.personal_answers || []).filter((a) => a.checked);
       if (checkedAnswers.length > 0) {
@@ -220,5 +309,5 @@ export function generateSafetyEvaluationPDF(data: SafetyEvaluationData): void {
 
   const dateStr = new Date(data.created_at).toISOString().slice(0, 10);
   const titelClean = data.titel.replace(/[^a-zA-Z0-9äöüÄÖÜß ]/g, "_").slice(0, 40);
-  doc.save(`${typLabel}_${titelClean}_${dateStr}.pdf`);
+  doc.save(`${modulLabel}_${titelClean}_${dateStr}.pdf`);
 }

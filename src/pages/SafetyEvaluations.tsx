@@ -29,12 +29,18 @@ type Evaluation = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  entwurf: "Entwurf",
   warte_auf_unterschrift: "Zur Unterschrift",
+  ausgefuellt: "Ausgefüllt",
+  diskutiert: "Diskutiert",
   abgeschlossen: "Unterschrieben",
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  entwurf: "bg-slate-100 text-slate-700",
   warte_auf_unterschrift: "bg-orange-100 text-orange-700",
+  ausgefuellt: "bg-blue-100 text-blue-700",
+  diskutiert: "bg-violet-100 text-violet-700",
   abgeschlossen: "bg-green-100 text-green-700",
 };
 
