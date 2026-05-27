@@ -723,26 +723,45 @@ const ProjectDetail = () => {
           <CardContent className="p-4 sm:p-6">
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedFiles(new Set()); }}>
-              <div className="flex flex-wrap items-center gap-1 mb-4">
-                <TabsList className="flex flex-wrap h-auto gap-1">
-                  {tabs.map((tab) => (
-                    <TabsTrigger key={tab.key} value={tab.key} className="text-xs sm:text-sm">
-                      {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {type === "photos" && (
+              {type === "photos" ? (
+                /* Mobil: horizontal scrollende Tabs + fix sichtbarer "+ Ordner"-Button */
+                <div className="flex items-stretch gap-2 mb-4">
+                  <div className="flex-1 min-w-0 overflow-x-auto -mx-1 px-1">
+                    <TabsList className="flex h-auto gap-1 w-max">
+                      {tabs.map((tab) => (
+                        <TabsTrigger
+                          key={tab.key}
+                          value={tab.key}
+                          className="text-xs sm:text-sm h-9 max-w-[160px] truncate"
+                        >
+                          <span className="truncate">{tab.label}</span>
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs"
+                    className="h-9 shrink-0"
                     onClick={() => { setNewFolderName(""); setShowNewFolderDialog(true); }}
                     title="Neuen Foto-Ordner anlegen"
+                    aria-label="Neuen Foto-Ordner anlegen"
                   >
-                    <FolderPlus className="h-3.5 w-3.5 mr-1" /> Ordner
+                    <FolderPlus className="h-4 w-4" />
+                    <span className="ml-1 hidden sm:inline">Ordner</span>
                   </Button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1 mb-4">
+                  <TabsList className="flex flex-wrap h-auto gap-1">
+                    {tabs.map((tab) => (
+                      <TabsTrigger key={tab.key} value={tab.key} className="text-xs sm:text-sm">
+                        {tab.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+              )}
 
               {tabs.map((tab) => (
                 <TabsContent key={tab.key} value={tab.key}>
@@ -751,15 +770,15 @@ const ProjectDetail = () => {
                     const folder = photoFolders.find((f) => f.name === activePhotoFolder);
                     if (!folder) return null;
                     return (
-                      <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-muted/40 rounded-lg">
-                        <span className="text-sm">📁 <strong>{folder.name}</strong></span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 px-3 py-2 bg-muted/40 rounded-lg">
+                        <span className="text-sm min-w-0 truncate">📁 <strong>{folder.name}</strong></span>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs text-destructive"
+                          className="h-9 text-destructive justify-start sm:justify-center shrink-0"
                           onClick={() => handleDeleteFolder(folder)}
                         >
-                          <FolderMinus className="h-3.5 w-3.5 mr-1" /> Ordner löschen
+                          <FolderMinus className="h-4 w-4 mr-1.5" /> Ordner löschen
                         </Button>
                       </div>
                     );
