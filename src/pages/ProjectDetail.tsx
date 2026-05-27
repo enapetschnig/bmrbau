@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus } from "lucide-react";
+import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { VoiceAIInput } from "@/components/VoiceAIInput";
 import { ImageEditor } from "@/components/ImageEditor";
@@ -109,15 +110,40 @@ const ProjectDetail = () => {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [urlsLoading, setUrlsLoading] = useState(false);
 
-  const tabs = type ? tabConfig[type] : [];
+  // Foto-Unterordner (nur bei type === "photos")
+  type PhotoFolder = { id: string; name: string };
+  const [photoFolders, setPhotoFolders] = useState<PhotoFolder[]>([]);
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [savingFolder, setSavingFolder] = useState(false);
+
+  const FOLDER_TAB_PREFIX = "folder:";
+  const getActiveFolderName = (key: string): string | null =>
+    key.startsWith(FOLDER_TAB_PREFIX) ? key.slice(FOLDER_TAB_PREFIX.length) : null;
+
+  // Dynamisch um Unterordner ergaenzte Tab-Liste fuer Fotos.
+  // Andere Typen verhalten sich unveraendert.
+  type TabDef = { key: string; label: string; subType?: string };
+  const tabs: TabDef[] = (() => {
+    const base = type ? tabConfig[type] : [];
+    if (type !== "photos") return base;
+    const aktuell = base.find((t) => t.key === "aktuell") ?? { key: "aktuell", label: "Alle Fotos" };
+    const archiv = base.find((t) => t.key === "archiv") ?? { key: "archiv", label: "Archiv" };
+    return [
+      { ...aktuell, label: "Alle Fotos" },
+      ...photoFolders.map<TabDef>((f) => ({ key: `${FOLDER_TAB_PREFIX}${f.name}`, label: f.name })),
+      archiv,
+    ];
+  })();
 
   useEffect(() => {
     if (projectId && type) {
-      setActiveTab(tabs[0]?.key || "aktuell");
+      setActiveTab("aktuell");
       checkAdminStatus();
       fetchProjectName();
       fetchFiles();
       fetchDocRecords();
+      if (type === "photos") fetchPhotoFolders();
     }
   }, [projectId, type]);
 
@@ -179,6 +205,106 @@ const ProjectDetail = () => {
       .eq("typ", type)
       .order("created_at", { ascending: false });
     if (data) setDocRecords(data as DocRecord[]);
+  };
+
+  const fetchPhotoFolders = async () => {
+    if (!projectId) return;
+    const { data } = await supabase
+      .from("project_photo_folders" as any)
+      .select("id, name")
+      .eq("project_id", projectId)
+      .order("name");
+    if (data) setPhotoFolders(data as unknown as PhotoFolder[]);
+  };
+
+  const handleCreateFolder = async () => {
+    if (!projectId) return;
+    const name = newFolderName.trim();
+    if (!name) return;
+    if (photoFolders.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
+      toast({ variant: "destructive", title: "Ordner existiert bereits" });
+      return;
+    }
+    setSavingFolder(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSavingFolder(false); return; }
+    const { error } = await supabase
+      .from("project_photo_folders" as any)
+      .insert({ project_id: projectId, name, created_by: user.id });
+    setSavingFolder(false);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    toast({ title: "Ordner angelegt" });
+    setNewFolderName("");
+    setShowNewFolderDialog(false);
+    await fetchPhotoFolders();
+    setActiveTab(`${FOLDER_TAB_PREFIX}${name}`);
+  };
+
+  const handleDeleteFolder = async (folder: PhotoFolder) => {
+    if (!projectId) return;
+    if (!(await confirm({
+      title: `Ordner "${folder.name}" löschen?`,
+      description: "Alle Fotos im Ordner werden ins Archiv verschoben. Die Fotos selbst bleiben erhalten.",
+      destructive: true,
+      confirmLabel: "Ordner löschen",
+    }))) return;
+    // Alle Fotos im Ordner ins Archiv verschieben
+    await supabase.from("documents")
+      .update({ archived: true })
+      .eq("project_id", projectId)
+      .eq("typ", "photos")
+      .eq("sub_type", folder.name);
+    // Ordner-Zeile entfernen
+    const { error } = await supabase
+      .from("project_photo_folders" as any)
+      .delete()
+      .eq("id", folder.id);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    toast({ title: "Ordner gelöscht", description: "Fotos wurden ins Archiv verschoben" });
+    await Promise.all([fetchPhotoFolders(), fetchDocRecords()]);
+    setActiveTab("aktuell");
+  };
+
+  const handleMoveSelectedToFolder = async (targetFolder: string | null) => {
+    if (!projectId || selectedFiles.size === 0) return;
+    const names = Array.from(selectedFiles);
+    // Fuer jedes File: DB-Record sicherstellen und sub_type setzen.
+    const { data: { user } } = await supabase.auth.getUser();
+    for (const fileName of names) {
+      const filePath = `${projectId}/${fileName}`;
+      const existing = docRecords.find(
+        (d) => d.file_url === filePath || d.name === fileName
+      );
+      if (existing) {
+        await supabase.from("documents")
+          .update({ sub_type: targetFolder })
+          .eq("id", existing.id);
+      } else if (user) {
+        // Legacy-Datei ohne DB-Record → jetzt einen anlegen.
+        await supabase.from("documents").insert({
+          project_id: projectId,
+          user_id: user.id,
+          typ: "photos",
+          name: fileName,
+          file_url: filePath,
+          sub_type: targetFolder,
+          archived: false,
+        });
+      }
+    }
+    toast({
+      title: targetFolder
+        ? `${names.length} Foto(s) nach "${targetFolder}" verschoben`
+        : `${names.length} Foto(s) aus dem Ordner entfernt`,
+    });
+    setSelectedFiles(new Set());
+    await fetchDocRecords();
   };
 
   const performUpload = async (files: File[], subType?: string) => {
@@ -507,6 +633,7 @@ const ProjectDetail = () => {
   const getFilteredFiles = (): StorageFile[] => {
     const isArchivTab = activeTab === "archiv";
     const currentTabConfig = tabs.find((t) => t.key === activeTab);
+    const activeFolderName = type === "photos" ? getActiveFolderName(activeTab) : null;
 
     return files.filter((file) => {
       const docRecord = docRecords.find((d) => d.name === file.name || d.file_url === `${projectId}/${file.name}`);
@@ -526,6 +653,15 @@ const ProjectDetail = () => {
 
       // Nicht-archivierte Dateien
       if (isArchived) return false;
+
+      // Foto-Unterordner: aktiver Folder-Tab → exakter sub_type Match.
+      if (type === "photos" && activeFolderName) {
+        return docRecord?.sub_type === activeFolderName;
+      }
+      // "Alle Fotos": zeigt alle nicht-archivierten Fotos (egal welcher Ordner).
+      if (type === "photos") {
+        return true;
+      }
 
       // Sub-Type Filter (fuer Plaene). "Aktuelle Plaene" (subType="plan") ist
       // zugleich der Default-Tab fuer den Plans-Bereich → Dateien ohne
@@ -566,6 +702,9 @@ const ProjectDetail = () => {
   const imageFiles = filteredFiles.filter(f => f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i));
   const isArchivTab = activeTab === "archiv";
   const currentTabConfig = tabs.find((t) => t.key === activeTab);
+  const activePhotoFolder = type === "photos" ? getActiveFolderName(activeTab) : null;
+  // Upload-Subtype: bei Plans aus tabConfig, bei Photos aus aktivem Ordner.
+  const uploadSubType = type === "photos" ? (activePhotoFolder || undefined) : currentTabConfig?.subType;
 
   return (
     <div className="min-h-screen bg-background">
@@ -584,16 +723,48 @@ const ProjectDetail = () => {
           <CardContent className="p-4 sm:p-6">
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedFiles(new Set()); }}>
-              <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
-                {tabs.map((tab) => (
-                  <TabsTrigger key={tab.key} value={tab.key} className="text-xs sm:text-sm">
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div className="flex flex-wrap items-center gap-1 mb-4">
+                <TabsList className="flex flex-wrap h-auto gap-1">
+                  {tabs.map((tab) => (
+                    <TabsTrigger key={tab.key} value={tab.key} className="text-xs sm:text-sm">
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {type === "photos" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => { setNewFolderName(""); setShowNewFolderDialog(true); }}
+                    title="Neuen Foto-Ordner anlegen"
+                  >
+                    <FolderPlus className="h-3.5 w-3.5 mr-1" /> Ordner
+                  </Button>
+                )}
+              </div>
 
               {tabs.map((tab) => (
                 <TabsContent key={tab.key} value={tab.key}>
+                  {/* Foto-Ordner-Header: aktiver Ordner-Tab → Ordner-Loeschen anbieten */}
+                  {type === "photos" && activePhotoFolder && tab.key === activeTab && (() => {
+                    const folder = photoFolders.find((f) => f.name === activePhotoFolder);
+                    if (!folder) return null;
+                    return (
+                      <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-muted/40 rounded-lg">
+                        <span className="text-sm">📁 <strong>{folder.name}</strong></span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-destructive"
+                          onClick={() => handleDeleteFolder(folder)}
+                        >
+                          <FolderMinus className="h-3.5 w-3.5 mr-1" /> Ordner löschen
+                        </Button>
+                      </div>
+                    );
+                  })()}
+
                   {/* Archiv-Sub-Tabs: nur bei plans */}
                   {tab.key === "archiv" && type === "plans" && (
                     <div className="flex flex-wrap gap-1 mb-3 p-1 bg-muted/40 rounded-lg">
@@ -636,20 +807,24 @@ const ProjectDetail = () => {
                     <div
                       className="mb-4"
                       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      onDrop={(e) => handleDrop(e, currentTabConfig?.subType)}
+                      onDrop={(e) => handleDrop(e, uploadSubType)}
                     >
                       <label htmlFor={`file-upload-${tab.key}`} className="cursor-pointer">
                         <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
                           <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                           <p className="text-sm font-medium">
-                            {uploading ? "Lädt hoch..." : "Dateien auswählen oder hierher ziehen"}
+                            {uploading
+                              ? "Lädt hoch..."
+                              : activePhotoFolder
+                                ? `In Ordner "${activePhotoFolder}" hochladen`
+                                : "Dateien auswählen oder hierher ziehen"}
                           </p>
                         </div>
                       </label>
                       <Input
                         id={`file-upload-${tab.key}`}
                         type="file"
-                        onChange={(e) => handleUpload(e, currentTabConfig?.subType)}
+                        onChange={(e) => handleUpload(e, uploadSubType)}
                         disabled={uploading}
                         multiple
                         className="hidden"
@@ -668,6 +843,38 @@ const ProjectDetail = () => {
                       <Button size="sm" variant="outline" onClick={handleShareSelected}>
                         <Share2 className="h-3.5 w-3.5 mr-1" /> Weiterleiten
                       </Button>
+                      {/* Verschieben in einen anderen Ordner (nur Fotos) */}
+                      {!isArchivTab && type === "photos" && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline">
+                              <MoveRight className="h-3.5 w-3.5 mr-1" /> Verschieben
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem
+                              onClick={() => handleMoveSelectedToFolder(null)}
+                              disabled={!activePhotoFolder}
+                            >
+                              📂 Kein Ordner (Alle Fotos)
+                            </DropdownMenuItem>
+                            {photoFolders.length > 0 && <DropdownMenuSeparator />}
+                            {photoFolders.map((f) => (
+                              <DropdownMenuItem
+                                key={f.id}
+                                onClick={() => handleMoveSelectedToFolder(f.name)}
+                                disabled={f.name === activePhotoFolder}
+                              >
+                                📁 {f.name}
+                              </DropdownMenuItem>
+                            ))}
+                            {photoFolders.length > 0 && <DropdownMenuSeparator />}
+                            <DropdownMenuItem onClick={() => { setNewFolderName(""); setShowNewFolderDialog(true); }}>
+                              <FolderPlus className="h-3.5 w-3.5 mr-2" /> Neuer Ordner…
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                       {!isArchivTab && (
                         <Button size="sm" variant="destructive" onClick={async () => {
                           for (const fn of Array.from(selectedFiles)) {
@@ -1067,6 +1274,31 @@ const ProjectDetail = () => {
               disabled={savingTextAuftrag || !textAuftragTitle.trim() || !textAuftragContent.trim()}
             >
               {savingTextAuftrag ? "Speichert..." : "Auftrag speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Neuer Foto-Ordner Dialog */}
+      <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Neuer Foto-Ordner</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pt-2">
+            <Label>Ordnername</Label>
+            <Input
+              autoFocus
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="z.B. Vorher / Nachher / Schäden"
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(); }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewFolderDialog(false)}>Abbrechen</Button>
+            <Button onClick={handleCreateFolder} disabled={savingFolder || !newFolderName.trim()}>
+              {savingFolder ? "Legt an…" : "Anlegen"}
             </Button>
           </DialogFooter>
         </DialogContent>
