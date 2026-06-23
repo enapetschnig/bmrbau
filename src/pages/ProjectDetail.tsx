@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight } from "lucide-react";
+import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight, FileArchive } from "lucide-react";
+import { buildZipDownload, triggerBlobDownload, isLikelyiOS, type ZipProgress } from "@/lib/zipDownloader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -110,6 +111,11 @@ const ProjectDetail = () => {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [urlsLoading, setUrlsLoading] = useState(false);
 
+  // ZIP-Download State
+  const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
+  const [zipReady, setZipReady] = useState<{ blobUrl: string; filename: string } | null>(null);
+  const zipAbortRef = useRef<AbortController | null>(null);
+
   // Foto-Unterordner (nur bei type === "photos")
   type PhotoFolder = { id: string; name: string };
   const [photoFolders, setPhotoFolders] = useState<PhotoFolder[]>([]);
@@ -189,10 +195,24 @@ const ProjectDetail = () => {
   const fetchFiles = async () => {
     if (!projectId || !type) return;
     const bucket = bucketMap[type];
-    const { data, error } = await supabase.storage.from(bucket).list(projectId, {
-      sortBy: { column: "created_at", order: "desc" },
-    });
-    if (!error && data) setFiles(data);
+    // Supabase Storage liefert default nur die ersten 100 Files. Wir paginieren
+    // explizit, damit Projekte mit mehr Fotos vollstaendig angezeigt werden.
+    const PAGE = 1000;
+    const MAX_ITER = 50; // Schutzgurt: max. 50_000 Dateien pro Projekt
+    const all: StorageFile[] = [];
+    let offset = 0;
+    for (let i = 0; i < MAX_ITER; i++) {
+      const { data, error } = await supabase.storage.from(bucket).list(projectId, {
+        limit: PAGE,
+        offset,
+        sortBy: { column: "created_at", order: "desc" },
+      });
+      if (error || !data) break;
+      all.push(...(data as StorageFile[]));
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
+    setFiles(all);
     setLoading(false);
   };
 
@@ -529,19 +549,141 @@ const ProjectDetail = () => {
     fetchDocRecords();
   };
 
+  // Gemeinsamer ZIP-Download fuer beliebige Dateilisten. Sonderfall:
+  // bei genau 1 Datei direkter Download — kein ZIP-Overhead, kein
+  // Gesture-Problem auf iOS.
+  const downloadFilesAsZip = async (
+    fileList: StorageFile[],
+    zipName: string,
+    sourceLabel: string,
+  ) => {
+    if (fileList.length === 0) {
+      toast({ variant: "destructive", title: "Keine Dateien", description: `${sourceLabel} ist leer.` });
+      return;
+    }
+
+    const itemsAll = fileList
+      .map((f) => ({ name: f.name, url: signedUrls[f.name] }))
+      .filter((x): x is { name: string; url: string } => !!x.url);
+    if (itemsAll.length === 0) {
+      toast({ variant: "destructive", title: "Download fehlgeschlagen", description: "Keine gueltigen URLs gefunden." });
+      return;
+    }
+    if (itemsAll.length < fileList.length) {
+      toast({
+        title: `${fileList.length - itemsAll.length} Datei(en) uebersprungen`,
+        description: "Fuer einige Dateien liegt keine URL vor. Bitte Seite neu laden.",
+      });
+    }
+
+    // Single-File-Shortcut: direkter Download, ohne ZIP/Pipeline. So kommt
+    // die Datei mit ihrem Original-Namen an, und iOS Safari hat kein
+    // Gesture-Timing-Problem.
+    if (itemsAll.length === 1) {
+      const a = document.createElement("a");
+      a.href = itemsAll[0].url;
+      a.download = itemsAll[0].name;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast({ title: "Download gestartet", description: itemsAll[0].name });
+      return;
+    }
+
+    // Groesse schaetzen — iOS RAM-Limit fuer den Blob-Fallback ist konservativ.
+    const totalBytes = fileList.reduce(
+      (sum, f) => sum + (typeof f.metadata?.size === "number" ? f.metadata.size : 0),
+      0,
+    );
+    const totalMb = totalBytes / (1024 * 1024);
+    const iOS = isLikelyiOS();
+    if (iOS && totalMb > 100) {
+      toast({
+        variant: "destructive",
+        title: "Paket zu groß für iPhone",
+        description: `Geschätzt ${Math.round(totalMb)} MB. Safari kommt damit nicht zuverlässig klar — bitte am Desktop herunterladen oder Auswahl reduzieren.`,
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    zipAbortRef.current = controller;
+    setZipProgress({
+      filesDone: 0,
+      filesTotal: itemsAll.length,
+      currentFile: itemsAll[0]?.name || "",
+      phase: "fetching",
+    });
+    try {
+      const result = await buildZipDownload(itemsAll, zipName, {
+        signal: controller.signal,
+        onProgress: (p) => setZipProgress(p),
+      });
+      if (result.mode === "saved") {
+        // File System Access API hat direkt auf die Platte geschrieben.
+        toast({ title: `${itemsAll.length} Datei(en) gespeichert`, description: zipName });
+      } else {
+        // Blob bereit — User triggert den Save-Click aus dem Dialog,
+        // damit Safari/iOS den Download akzeptiert.
+        setZipReady({ blobUrl: result.blobUrl, filename: result.filename });
+      }
+    } catch (err) {
+      const e = err as { name?: string; message?: string };
+      if (e?.name === "AbortError") {
+        toast({ title: "Download abgebrochen" });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Download fehlgeschlagen",
+          description: e?.message || "Unbekannter Fehler",
+        });
+      }
+    } finally {
+      zipAbortRef.current = null;
+      setZipProgress(null);
+    }
+  };
+
   const handleBulkDownload = async () => {
     if (selectedFiles.size === 0) return;
-    // Download einzeln (kein JSZip noetig)
-    for (const fileName of Array.from(selectedFiles)) {
-      const url = signedUrls[fileName];
-      if (url) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-      }
+    const fileList = files.filter((f) => selectedFiles.has(f.name));
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safeProject = (projectName || "projekt").replace(/[\/\\:*?"<>|]+/g, "_");
+    const zipName = `${safeProject}_${titleMap[type!] || "dateien"}_${stamp}.zip`.replace(/\s+/g, "_");
+    await downloadFilesAsZip(fileList, zipName, "Auswahl");
+  };
+
+  // "Alle herunterladen" fuer den aktuellen Tab (alle sichtbaren Dateien).
+  const handleDownloadAllInTab = async () => {
+    const fileList = filteredFiles;
+    if (fileList.length === 0) {
+      toast({ variant: "destructive", title: "Keine Dateien", description: "Im aktiven Reiter sind keine Dateien." });
+      return;
     }
-    toast({ title: `${selectedFiles.size} Datei(en) werden heruntergeladen` });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safeProject = (projectName || "projekt").replace(/[\/\\:*?"<>|]+/g, "_");
+    const tabLabel = activePhotoFolder
+      ? `Fotos_${activePhotoFolder}`
+      : isArchivTab ? `${titleMap[type!]}_Archiv` : titleMap[type!] || "dateien";
+    const zipName = `${safeProject}_${tabLabel}_${stamp}.zip`.replace(/\s+/g, "_");
+    await downloadFilesAsZip(fileList, zipName, "Aktueller Reiter");
+  };
+
+  const cancelZip = () => {
+    zipAbortRef.current?.abort();
+  };
+
+  const triggerZipSave = () => {
+    if (!zipReady) return;
+    triggerBlobDownload(zipReady.blobUrl, zipReady.filename);
+    toast({ title: "Download gestartet", description: zipReady.filename });
+    setZipReady(null);
+  };
+
+  const dismissZipReady = () => {
+    if (zipReady) URL.revokeObjectURL(zipReady.blobUrl);
+    setZipReady(null);
   };
 
   const handleShareSelected = async () => {
@@ -932,18 +1074,31 @@ const ProjectDetail = () => {
                     </div>
                   )}
 
-                  {/* Alle auswählen + Sortierung */}
+                  {/* Alle auswählen + Sortierung + Alle-als-ZIP */}
                   {filteredFiles.length > 0 && (
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <button
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => toggleSelectAll(filteredFiles)}
-                      >
-                        {selectedFiles.size === filteredFiles.length
-                          ? <CheckSquare className="h-4 w-4" />
-                          : <Square className="h-4 w-4" />}
-                        Alle auswählen
-                      </button>
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => toggleSelectAll(filteredFiles)}
+                        >
+                          {selectedFiles.size === filteredFiles.length
+                            ? <CheckSquare className="h-4 w-4" />
+                            : <Square className="h-4 w-4" />}
+                          Alle auswählen
+                        </button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={handleDownloadAllInTab}
+                          disabled={!!zipProgress}
+                          title={`Alle ${filteredFiles.length} Datei(en) im aktuellen Reiter als ZIP herunterladen`}
+                        >
+                          <FileArchive className="h-3.5 w-3.5 mr-1" />
+                          Alle als ZIP
+                        </Button>
+                      </div>
                       <div className="flex items-center gap-2">
                         <input
                           type="month"
@@ -1295,6 +1450,70 @@ const ProjectDetail = () => {
               {savingTextAuftrag ? "Speichert..." : "Auftrag speichern"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ZIP-Download Fortschritt + Save-Click */}
+      <Dialog
+        open={!!zipProgress || !!zipReady}
+        onOpenChange={(v) => {
+          if (v) return;
+          if (zipProgress) cancelZip();
+          if (zipReady) dismissZipReady();
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{zipReady ? "ZIP fertig" : "ZIP wird erstellt…"}</DialogTitle>
+          </DialogHeader>
+
+          {/* Phase A: Build laeuft */}
+          {zipProgress && !zipReady && (
+            <div className="space-y-3 pt-1">
+              <div className="text-sm text-muted-foreground">
+                {zipProgress.phase === "finalizing"
+                  ? "Wird zusammengepackt…"
+                  : `Datei ${Math.min(zipProgress.filesDone + 1, zipProgress.filesTotal)} von ${zipProgress.filesTotal}`}
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width: `${zipProgress.filesTotal === 0
+                      ? 0
+                      : Math.min(100, Math.round((zipProgress.filesDone / zipProgress.filesTotal) * 100))}%`,
+                  }}
+                />
+              </div>
+              {zipProgress.currentFile && zipProgress.phase === "fetching" && (
+                <p className="text-xs text-muted-foreground truncate">📄 {zipProgress.currentFile}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Dialog nicht schließen — bricht den Download ab.
+              </p>
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={cancelZip}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Abbrechen
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Phase B: ZIP fertig - User clickt aus frischem Gesture */}
+          {zipReady && (
+            <div className="space-y-3 pt-1">
+              <p className="text-sm text-muted-foreground">
+                Klick zum Speichern. {isLikelyiOS() && "Die Datei landet in der Dateien-App → Downloads."}
+              </p>
+              <p className="text-xs truncate">📦 {zipReady.filename}</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={dismissZipReady}>Verwerfen</Button>
+                <Button size="sm" onClick={triggerZipSave}>
+                  <Download className="h-3.5 w-3.5 mr-1" /> ZIP speichern
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

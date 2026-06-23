@@ -416,25 +416,35 @@ const Projects = () => {
     };
     const typ = bucketToTyp[bucketName];
 
-    const [storageRes, archivedRes] = await Promise.all([
-      // Default-Limit von Supabase ist 100 → reicht fuer kleine Projekte nicht.
-      supabase.storage.from(bucketName).list(projectId, { limit: 1000 }),
-      typ
-        ? supabase
-            .from("documents")
-            .select("id", { count: "exact", head: true })
-            .eq("project_id", projectId)
-            .eq("typ", typ)
-            .eq("archived", true)
-        : Promise.resolve({ count: 0, error: null } as { count: number | null; error: null }),
-    ]);
-
-    if (storageRes.error) {
-      console.error(`Error fetching file count from ${bucketName}:`, storageRes.error);
-      return 0;
+    // Pagination, damit Projekte mit >1000 Dateien korrekt gezaehlt werden.
+    const PAGE = 1000;
+    const MAX_ITER = 50; // Schutzgurt: max. 50_000 Dateien
+    let total = 0;
+    let offset = 0;
+    for (let i = 0; i < MAX_ITER; i++) {
+      const { data, error } = await supabase.storage.from(bucketName).list(projectId, {
+        limit: PAGE,
+        offset,
+      });
+      if (error) {
+        console.error(`Error fetching file count from ${bucketName}:`, error);
+        return 0;
+      }
+      const n = data?.length ?? 0;
+      total += n;
+      if (n < PAGE) break;
+      offset += PAGE;
     }
 
-    const total = storageRes.data?.length ?? 0;
+    const archivedRes = typ
+      ? await supabase
+          .from("documents")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .eq("typ", typ)
+          .eq("archived", true)
+      : { count: 0, error: null } as { count: number | null; error: null };
+
     const archived = archivedRes.count ?? 0;
     return Math.max(0, total - archived);
   };
