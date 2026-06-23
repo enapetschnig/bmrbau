@@ -1,6 +1,9 @@
 // Progress + Save-Button Dialog fuer Foto-ZIP-Downloads.
-// Im Streaming-Modus: zeigt Byte-Fortschritt (Streaming aufs Filesystem).
-// Im Blob-Fallback: zeigt Datei-Zaehler + "ZIP speichern"-Button.
+//
+// Wichtig: waehrend der Build laeuft, ist der Dialog NICHT dismissible
+// durch ESC oder Outside-Click — sonst tippt der Bauarbeiter mit
+// dreckigen Haenden auf dem iPad versehentlich daneben und der Download
+// bricht stumm ab. Cancel geht nur ueber den expliziten Button.
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,22 +27,34 @@ const formatMB = (bytes: number): string => {
 export function ZipDownloadDialog({
   zipProgress,
   zipReady,
-  onCancel,
+  onCancel: _onCancel,
   onSave,
   onDismiss,
   iOS,
 }: Props) {
   const open = !!zipProgress || !!zipReady;
+  const buildRunning = !!zipProgress && !zipReady;
+
   return (
     <Dialog
       open={open}
+      // Waehrend Build: kein Dismiss durch ESC/Outside-Click. Nur explizit
+      // ueber den Cancel-Button (der den Hook-State sauber aufraeumt).
+      // Wenn ZIP fertig (blob-ready) und User klickt weg → revoke + close.
       onOpenChange={(v) => {
         if (v) return;
-        if (zipProgress) onCancel();
         if (zipReady) onDismiss();
+        // buildRunning: bewusst ignorieren — Cancel nur via Button.
       }}
     >
-      <DialogContent className="max-w-sm">
+      <DialogContent
+        className="max-w-sm"
+        // Pointer- und Escape-Down-Events vom Radix-Dialog blockieren
+        // solange ein Build laeuft.
+        onPointerDownOutside={(e) => { if (buildRunning) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (buildRunning) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (buildRunning) e.preventDefault(); }}
+      >
         <DialogHeader>
           <DialogTitle>{zipReady ? "ZIP fertig" : "ZIP wird gebaut…"}</DialogTitle>
         </DialogHeader>
@@ -65,16 +80,19 @@ export function ZipDownloadDialog({
               </div>
             )}
             <div className="text-[11px] text-muted-foreground space-y-1">
+              {/* bytesWritten nur anzeigen wenn echte Bytes (Streaming-Pfad).
+                  Im Blob-Pfad ist bytesWritten=0 → wir verbergen die Zeile,
+                  weil "0 KB geladen" wie ein Bug aussieht. */}
               {zipProgress.bytesWritten > 0 && (
                 <p>📥 {formatMB(zipProgress.bytesWritten)} geladen</p>
               )}
               {zipProgress.currentFile && zipProgress.phase === "fetching" && zipProgress.filesTotal > 0 && (
                 <p className="truncate">📄 {zipProgress.currentFile}</p>
               )}
-              <p>Dialog nicht schließen — bricht den Download ab.</p>
+              <p>Bitte warten — der Browser kümmert sich um den Download.</p>
             </div>
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={onCancel}>
+              <Button variant="outline" size="sm" onClick={_onCancel}>
                 <X className="h-3.5 w-3.5 mr-1" /> Abbrechen
               </Button>
             </div>

@@ -92,6 +92,16 @@ self.addEventListener('message', (event) => {
     mimeType: mimeType || 'application/octet-stream',
   });
 
+  // Memory-Leak-Schutz: wenn der erwartete fetch innerhalb 60s NICHT
+  // kommt (z.B. iframe konnte nicht laden, oder client crashed), den
+  // Eintrag aufraeumen. Bei normalem Flow wird er beim fetch-Handler
+  // selbst geloescht (siehe unten).
+  setTimeout(() => {
+    if (activeDownloads.has(id)) {
+      try { activeDownloads.delete(id); } catch (_) { /* noop */ }
+    }
+  }, 60_000);
+
   // Reply back so client knows the SW is ready for this id
   try {
     port.postMessage('ready');

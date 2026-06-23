@@ -1165,7 +1165,7 @@ const Projects = () => {
 
       {/* Projekt-Auswahl: welches Projekt soll als Foto-ZIP runter? */}
       <Dialog open={showZipPicker} onOpenChange={setShowZipPicker}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[92vw] max-w-md sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Projekt wählen</DialogTitle>
             <DialogDescription>

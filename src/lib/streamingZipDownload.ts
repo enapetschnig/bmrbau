@@ -69,8 +69,21 @@ const dedupeNames = (files: StreamZipFile[]): StreamZipFile[] => {
   });
 };
 
+// iOS-Detection. Auf iOS Safari ist der SW-Stream-Proxy unzuverlaessig:
+// - Hidden iframe + Content-Disposition wird oft inline gerendert statt
+//   einen Download zu triggern
+// - SW wird beim App-Switch / Screen-Lock suspendiert → Download bricht
+// - In PWA-Standalone-Modus verhalten sich Downloads anders als im
+//   normalen Safari
+// Wir routen iOS daher IMMER zum Blob-Fallback.
+export const isIosLike = (): boolean =>
+  typeof navigator !== "undefined" &&
+  /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  !((window as unknown as { MSStream?: unknown }).MSStream);
+
 export const isStreamingSupported = async (): Promise<boolean> => {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return false;
+  if (isIosLike()) return false;
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     return !!(reg && reg.active);
@@ -101,7 +114,30 @@ export async function streamingZipDownload(
   if (files.length === 0) throw new Error("Keine Dateien zum Herunterladen");
 
   if (!("serviceWorker" in navigator)) throw new StreamingUnavailableError();
-  const reg = await navigator.serviceWorker.ready;
+  if (isIosLike()) throw new StreamingUnavailableError();
+
+  // SW-Bereitschaft mit Feedback. navigator.serviceWorker.ready kann beim
+  // ersten Besuch 5-30 Sek dauern — ohne Hinweis denkt der User die App
+  // ist eingefroren.
+  opts.onProgress?.({
+    filesDone: 0,
+    filesTotal: files.length,
+    bytesWritten: 0,
+    currentFile: "Initialisiere Download-Engine…",
+    phase: "fetching",
+  });
+
+  let reg: ServiceWorkerRegistration;
+  try {
+    reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<ServiceWorkerRegistration>((_, reject) =>
+        setTimeout(() => reject(new StreamingUnavailableError()), 8000),
+      ),
+    ]);
+  } catch {
+    throw new StreamingUnavailableError();
+  }
   if (!reg.active) throw new StreamingUnavailableError();
 
   const safeFiles = dedupeNames(files);
@@ -114,9 +150,14 @@ export async function streamingZipDownload(
   const channel = new MessageChannel();
 
   // Warten, bis der SW "ready" zurueckmeldet (verhindert Race-Condition
-  // bei sehr schnellem iframe-Trigger)
+  // bei sehr schnellem iframe-Trigger). Bei Timeout werfen wir
+  // StreamingUnavailableError, damit der Hook auf den Blob-Fallback
+  // umschalten kann statt einen unverstaendlichen Error zu zeigen.
   const readyPromise = new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("SW antwortet nicht")), 5000);
+    const timeout = setTimeout(
+      () => reject(new StreamingUnavailableError()),
+      5000,
+    );
     channel.port2.addEventListener("message", function onReady(e) {
       if (e.data === "ready") {
         clearTimeout(timeout);

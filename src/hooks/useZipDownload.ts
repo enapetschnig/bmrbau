@@ -1,11 +1,16 @@
-// One-Click Foto-ZIP-Download. Streaming via Service Worker (beliebig
-// grosse Projekte) mit Blob-Fallback (falls SW nicht verfuegbar).
+// One-Click Foto-ZIP-Download mit drei Pfaden:
+//   1. SW-Streaming (Desktop) — beliebige Groesse, Browser-native Download
+//   2. Blob-Fallback (Mac Safari, Firefox) — bis ~600 MB, "Save"-Button
+//   3. iOS: IMMER Blob, vorab Groessen-Guard - sonst silent OOM-Crash
+//
+// Bei SW-Fail (z.B. veraltete SW, Timeout) faellt automatisch auf Blob.
 
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   streamingZipDownload,
   isStreamingSupported,
+  isIosLike,
   StreamingUnavailableError,
   type StreamZipFile,
   type StreamZipProgress,
@@ -24,6 +29,12 @@ export type ServerZipParams = {
   subType?: string | null;
 };
 
+// Hard-Limits fuer den Blob-Fallback. iOS Safari blob limit liegt
+// realistisch unter 200 MB. Mac Safari/FF kann mehrere GB, aber wir wollen
+// nicht riskieren dass ein 1.5 GB Blob den Tab killt.
+const BLOB_LIMIT_IOS_MB = 150;
+const BLOB_LIMIT_DESKTOP_MB = 800;
+
 const asciiize = (s: string): string =>
   s
     .replace(/ä/g, "ae").replace(/Ä/g, "Ae")
@@ -33,6 +44,42 @@ const asciiize = (s: string): string =>
     .replace(/[^\x20-\x7E]/g, "_")
     .replace(/[/\\:*?"<>|]+/g, "_")
     .slice(0, 200);
+
+// Schaetzt die Gesamt-Groesse via HEAD-Requests (parallel, mit Concurrency-
+// Limit). Wenn ein Foto keine Content-Length liefert, zaehlen wir 5 MB als
+// Pessimismus. Frueh-Abbruch wenn Limit ueberschritten.
+async function estimateTotalBytes(
+  files: StreamZipFile[],
+  signal: AbortSignal,
+  hardLimitBytes: number,
+): Promise<{ totalBytes: number; over: boolean }> {
+  const CONCURRENCY = 8;
+  let totalBytes = 0;
+  let over = false;
+  for (let i = 0; i < files.length && !over; i += CONCURRENCY) {
+    if (signal.aborted) throw new DOMException("aborted", "AbortError");
+    const batch = files.slice(i, i + CONCURRENCY);
+    const sizes = await Promise.all(
+      batch.map(async (f) => {
+        try {
+          const r = await fetch(f.url, { method: "HEAD", cache: "no-store", signal });
+          const cl = r.headers.get("content-length");
+          return cl ? parseInt(cl) : 5 * 1024 * 1024;
+        } catch {
+          return 5 * 1024 * 1024;
+        }
+      }),
+    );
+    for (const s of sizes) {
+      totalBytes += s;
+      if (totalBytes > hardLimitBytes) {
+        over = true;
+        break;
+      }
+    }
+  }
+  return { totalBytes, over };
+}
 
 export function useZipDownload() {
   const { toast } = useToast();
@@ -119,46 +166,77 @@ export function useZipDownload() {
     const suffix = params.subType ? `_${asciiize(params.subType)}` : "";
     const zipName = `${safeProject}_fotos${suffix}_${stamp}.zip`;
 
-    // 4) Streaming-Pfad bevorzugen — kein RAM-Limit, beliebige Groessen
-    const swReady = await isStreamingSupported();
+    // 4) Pfad-Wahl
+    const ios = isIosLike();
+    const swReady = !ios && (await isStreamingSupported());
+
+    // Helper-Funktion: Blob-Fallback mit Groessen-Vorpruefung
+    const runBlobFallback = async () => {
+      const limitMb = ios ? BLOB_LIMIT_IOS_MB : BLOB_LIMIT_DESKTOP_MB;
+      setZipProgress({
+        filesDone: 0,
+        filesTotal: files.length,
+        bytesWritten: 0,
+        currentFile: "Pruefe Gesamtgroesse…",
+        phase: "fetching",
+      });
+      const { totalBytes, over } = await estimateTotalBytes(
+        files,
+        controller.signal,
+        limitMb * 1024 * 1024,
+      );
+      if (over) {
+        toast({
+          variant: "destructive",
+          title: "Projekt zu groß für diesen Browser",
+          description: ios
+            ? `Geschätzt > ${limitMb} MB. iOS Safari kann nicht so große ZIPs bauen — bitte vom Computer/Mac herunterladen.`
+            : `Geschätzt > ${limitMb} MB. Bitte einzelne Ordner herunterladen oder den Browser-Tab schließen und neu öffnen, dann mit Service-Worker-Streaming probieren.`,
+        });
+        return;
+      }
+      const blobFiles: ZipFile[] = files.map((f) => ({ name: f.name, url: f.url }));
+      const result = await buildZipDownload(blobFiles, zipName, {
+        signal: controller.signal,
+        onProgress: (p) => setZipProgress({
+          filesDone: p.filesDone,
+          filesTotal: p.filesTotal,
+          bytesWritten: 0, // bewusst 0 — wir tracken keinen Byte-Fortschritt im Blob-Pfad
+          currentFile: p.currentFile,
+          phase: p.phase,
+        }),
+      });
+      if (result.mode === "saved") {
+        toast({ title: "ZIP gespeichert", description: zipName });
+      } else {
+        setZipReady({ blobUrl: result.blobUrl, filename: result.filename });
+      }
+    };
 
     try {
       if (swReady) {
-        await streamingZipDownload(files, zipName, {
-          signal: controller.signal,
-          onProgress: setZipProgress,
-        });
-        toast({ title: "Download abgeschlossen", description: zipName });
-      } else {
-        // 5) Fallback: client-side ZIP als Blob (existing path)
-        // Mapped auf den ZipFile-Typ den buildZipDownload erwartet
-        const blobFiles: ZipFile[] = files.map((f) => ({ name: f.name, url: f.url }));
-        const result = await buildZipDownload(blobFiles, zipName, {
-          signal: controller.signal,
-          onProgress: (p) => setZipProgress({
-            filesDone: p.filesDone,
-            filesTotal: p.filesTotal,
-            bytesWritten: 0,
-            currentFile: p.currentFile,
-            phase: p.phase,
-          }),
-        });
-        if (result.mode === "saved") {
-          toast({ title: "ZIP gespeichert", description: zipName });
-        } else {
-          setZipReady({ blobUrl: result.blobUrl, filename: result.filename });
+        try {
+          await streamingZipDownload(files, zipName, {
+            signal: controller.signal,
+            onProgress: setZipProgress,
+          });
+          toast({ title: "Download abgeschlossen", description: zipName });
+        } catch (err) {
+          // SW-Pfad ist gescheitert — automatisch auf Blob umschalten,
+          // anstatt den User mit einem technischen Fehler abzuwerfen.
+          if (err instanceof StreamingUnavailableError) {
+            await runBlobFallback();
+          } else {
+            throw err;
+          }
         }
+      } else {
+        await runBlobFallback();
       }
     } catch (err) {
       const e = err as { name?: string; message?: string };
       if (e?.name === "AbortError") {
         toast({ title: "Download abgebrochen" });
-      } else if (e instanceof StreamingUnavailableError) {
-        toast({
-          variant: "destructive",
-          title: "Streaming nicht verfügbar",
-          description: "Bitte Seite neu laden — der Service Worker wird initialisiert.",
-        });
       } else {
         toast({
           variant: "destructive",
