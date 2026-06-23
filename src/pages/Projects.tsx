@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download, FileArchive } from "lucide-react";
 import { useZipDownload } from "@/hooks/useZipDownload";
-import { ZipDownloadDialog } from "@/components/ZipDownloadDialog";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -744,7 +743,7 @@ const Projects = () => {
                 Wähle ein aktives Projekt aus — das ZIP wird auf dem Server gepackt.
               </p>
             </div>
-            <Button onClick={() => setShowZipPicker(true)} disabled={!!zip.zipProgress} className="shrink-0">
+            <Button onClick={() => setShowZipPicker(true)} className="shrink-0">
               <Download className="w-4 h-4 mr-1" /> Fotos herunterladen
             </Button>
           </CardContent>
@@ -1210,16 +1209,6 @@ const Projects = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Server-ZIP-Dialog (Foto-Download) */}
-      <ZipDownloadDialog
-        zipProgress={zip.zipProgress}
-        zipReady={zip.zipReady}
-        onCancel={zip.cancel}
-        onSave={zip.save}
-        onDismiss={zip.dismiss}
-        iOS={zip.isLikelyiOS()}
-      />
 
     </div>
   );

@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight, FileArchive } from "lucide-react";
 import { buildZipDownload, triggerBlobDownload, isLikelyiOS, type ZipProgress } from "@/lib/zipDownloader";
 import { useZipDownload } from "@/hooks/useZipDownload";
-import { ZipDownloadDialog } from "@/components/ZipDownloadDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -670,7 +669,7 @@ const ProjectDetail = () => {
       return;
     }
     if (type === "photos" && !isArchivTab && projectId) {
-      await photoZip.startServerZip({
+      photoZip.startServerZip({
         projectId,
         projectName: projectName || "Projekt",
         subType: activePhotoFolder || null,
@@ -1108,7 +1107,7 @@ const ProjectDetail = () => {
                           variant="outline"
                           className="h-7 text-xs"
                           onClick={handleDownloadAllInTab}
-                          disabled={!!zipProgress || !!photoZip.zipProgress}
+                          disabled={!!zipProgress}
                           title={type === "photos"
                             ? `Alle ${filteredFiles.length} Foto(s) als ZIP herunterladen`
                             : `Alle ${filteredFiles.length} Datei(en) im aktuellen Reiter als ZIP herunterladen`}
@@ -1534,16 +1533,6 @@ const ProjectDetail = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Server-ZIP-Dialog (Fotos) */}
-      <ZipDownloadDialog
-        zipProgress={photoZip.zipProgress}
-        zipReady={photoZip.zipReady}
-        onCancel={photoZip.cancel}
-        onSave={photoZip.save}
-        onDismiss={photoZip.dismiss}
-        iOS={isLikelyiOS()}
-      />
 
       {/* Neuer Foto-Ordner Dialog */}
       <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>

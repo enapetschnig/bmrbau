@@ -19,10 +19,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  // Damit der Browser den X-File-Count-Header aus der Response lesen kann.
+  "Access-Control-Expose-Headers": "X-File-Count",
 };
 
 const BUCKET = "project-photos";
-const CONCURRENCY = 6;
+// Hoehere Concurrency = schnellerer Server-seitiger Download aus dem Storage.
+// 12 ist ein guter Kompromiss zwischen Durchsatz und Resource-Schonung.
+const CONCURRENCY = 12;
 
 // Dateiname-Sanitizer: Sonderzeichen raus, ASCII-Mapping fuer Umlaute,
 // damit Browser den ZIP-Namen korrekt setzen.
@@ -103,18 +107,33 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let body: RequestBody;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonError(400, "Ungueltiger JSON-Body");
+  // Sowohl GET (fuer nativen Browser-Download via <a download>) als auch
+  // POST (Legacy) akzeptieren. GET ist der bevorzugte Pfad, weil der
+  // Browser die ZIP dann nativ entgegennimmt und keinen Blob im RAM hat.
+  let projectId = "";
+  let subType: string | null = null;
+
+  if (req.method === "GET") {
+    const u = new URL(req.url);
+    projectId = (u.searchParams.get("projectId") || "").trim();
+    const s = u.searchParams.get("subType");
+    subType = s && s.length > 0 ? s : null;
+  } else if (req.method === "POST") {
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonError(400, "Ungueltiger JSON-Body");
+    }
+    projectId = (body.projectId || "").trim();
+    subType = typeof body.subType === "string" && body.subType.length > 0
+      ? body.subType
+      : null;
+  } else {
+    return jsonError(405, "Methode nicht erlaubt");
   }
 
-  const projectId = (body.projectId || "").trim();
   if (!projectId) return jsonError(400, "projectId fehlt");
-  const subType = typeof body.subType === "string" && body.subType.length > 0
-    ? body.subType
-    : null;
 
   // Projekt-Name fuer den ZIP-Dateinamen.
   const { data: project, error: projErr } = await supabaseAdmin
