@@ -1,17 +1,24 @@
-// Progress + Save-Button Dialog fuer den client-side ZIP-Download.
+// Progress + Save-Button Dialog fuer Foto-ZIP-Downloads.
+// Im Streaming-Modus: zeigt Byte-Fortschritt (Streaming aufs Filesystem).
+// Im Blob-Fallback: zeigt Datei-Zaehler + "ZIP speichern"-Button.
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download, X } from "lucide-react";
-import type { ZipProgress } from "@/lib/zipDownloader";
+import type { StreamZipProgress } from "@/lib/streamingZipDownload";
 
 type Props = {
-  zipProgress: ZipProgress | null;
+  zipProgress: StreamZipProgress | null;
   zipReady: { blobUrl: string; filename: string } | null;
   onCancel: () => void;
   onSave: () => void;
   onDismiss: () => void;
   iOS?: boolean;
+};
+
+const formatMB = (bytes: number): string => {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 export function ZipDownloadDialog({
@@ -57,12 +64,15 @@ export function ZipDownloadDialog({
                 />
               </div>
             )}
-            {zipProgress.currentFile && zipProgress.phase === "fetching" && zipProgress.filesTotal > 0 && (
-              <p className="text-[11px] text-muted-foreground truncate">📄 {zipProgress.currentFile}</p>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              Dialog nicht schließen — bricht den Build ab.
-            </p>
+            <div className="text-[11px] text-muted-foreground space-y-1">
+              {zipProgress.bytesWritten > 0 && (
+                <p>📥 {formatMB(zipProgress.bytesWritten)} geladen</p>
+              )}
+              {zipProgress.currentFile && zipProgress.phase === "fetching" && zipProgress.filesTotal > 0 && (
+                <p className="truncate">📄 {zipProgress.currentFile}</p>
+              )}
+              <p>Dialog nicht schließen — bricht den Download ab.</p>
+            </div>
             <div className="flex justify-end">
               <Button variant="outline" size="sm" onClick={onCancel}>
                 <X className="h-3.5 w-3.5 mr-1" /> Abbrechen
@@ -71,7 +81,7 @@ export function ZipDownloadDialog({
           </div>
         )}
 
-        {/* Phase: ZIP fertig - User clickt aus frischem Gesture */}
+        {/* Phase: ZIP fertig (nur Blob-Fallback) */}
         {zipReady && (
           <div className="space-y-3 pt-1">
             <p className="text-sm text-muted-foreground">

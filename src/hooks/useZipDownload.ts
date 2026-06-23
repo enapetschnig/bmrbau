@@ -1,19 +1,20 @@
-// One-Click Foto-ZIP-Download — client-side via client-zip.
-//
-// Der Browser zieht alle Fotos direkt von der Storage-CDN (Supabase-Edge-
-// Function-RAM-Limit umgangen), baut die ZIP via Stream-API und speichert
-// sie. Auf Chromium-Desktop nutzen wir den File-System-Access-API-Pfad
-// (Stream direkt auf Platte, beliebig grosse Downloads). Sonst Blob mit
-// Save-Button-Click im Progress-Dialog (Safari/iOS-Gesture-safe).
+// One-Click Foto-ZIP-Download. Streaming via Service Worker (beliebig
+// grosse Projekte) mit Blob-Fallback (falls SW nicht verfuegbar).
 
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  streamingZipDownload,
+  isStreamingSupported,
+  StreamingUnavailableError,
+  type StreamZipFile,
+  type StreamZipProgress,
+} from "@/lib/streamingZipDownload";
 import {
   buildZipDownload,
   triggerBlobDownload,
   isLikelyiOS,
   type ZipFile,
-  type ZipProgress,
 } from "@/lib/zipDownloader";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,7 +36,7 @@ const asciiize = (s: string): string =>
 
 export function useZipDownload() {
   const { toast } = useToast();
-  const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
+  const [zipProgress, setZipProgress] = useState<StreamZipProgress | null>(null);
   const [zipReady, setZipReady] = useState<{ blobUrl: string; filename: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -63,6 +64,7 @@ export function useZipDownload() {
     setZipProgress({
       filesDone: 0,
       filesTotal: 0,
+      bytesWritten: 0,
       currentFile: "Lade Foto-Liste…",
       phase: "fetching",
     });
@@ -89,44 +91,74 @@ export function useZipDownload() {
       return;
     }
 
-    // 2) URL-Liste bauen (public bucket → getPublicUrl, oder relative Pfad)
-    const files: ZipFile[] = data.map((d) => {
+    // 2) URL-Liste aus dem public bucket
+    const files: StreamZipFile[] = data.map((d) => {
       const fu = d.file_url as string | null;
+      let url: string;
       if (fu && fu.startsWith("http")) {
-        return { name: d.name as string, url: fu };
+        url = fu;
+      } else {
+        const storagePath = fu || `${params.projectId}/${d.name}`;
+        const { data: urlData } = supabase.storage
+          .from("project-photos")
+          .getPublicUrl(storagePath);
+        url = urlData.publicUrl;
       }
-      const storagePath = fu || `${params.projectId}/${d.name}`;
-      const { data: urlData } = supabase.storage
-        .from("project-photos")
-        .getPublicUrl(storagePath);
-      return { name: d.name as string, url: urlData.publicUrl };
+      return {
+        name: d.name as string,
+        url,
+        lastModified: d.created_at ? new Date(d.created_at as string) : undefined,
+      };
     });
 
-    // 3) Client-side ZIP-Build via client-zip
+    // 3) ZIP-Name + Pfad waehlen
     const controller = new AbortController();
     abortRef.current = controller;
-
     const stamp = new Date().toISOString().slice(0, 10);
     const safeProject = asciiize(params.projectName) || "projekt";
     const suffix = params.subType ? `_${asciiize(params.subType)}` : "";
     const zipName = `${safeProject}_fotos${suffix}_${stamp}.zip`;
 
+    // 4) Streaming-Pfad bevorzugen — kein RAM-Limit, beliebige Groessen
+    const swReady = await isStreamingSupported();
+
     try {
-      const result = await buildZipDownload(files, zipName, {
-        signal: controller.signal,
-        onProgress: setZipProgress,
-      });
-      if (result.mode === "saved") {
-        // Chromium-FSA-Pfad → schon auf der Platte
-        toast({ title: "ZIP gespeichert", description: zipName });
+      if (swReady) {
+        await streamingZipDownload(files, zipName, {
+          signal: controller.signal,
+          onProgress: setZipProgress,
+        });
+        toast({ title: "Download abgeschlossen", description: zipName });
       } else {
-        // Blob fertig → User klickt "Speichern" im Dialog (iOS-Gesture-safe)
-        setZipReady({ blobUrl: result.blobUrl, filename: result.filename });
+        // 5) Fallback: client-side ZIP als Blob (existing path)
+        // Mapped auf den ZipFile-Typ den buildZipDownload erwartet
+        const blobFiles: ZipFile[] = files.map((f) => ({ name: f.name, url: f.url }));
+        const result = await buildZipDownload(blobFiles, zipName, {
+          signal: controller.signal,
+          onProgress: (p) => setZipProgress({
+            filesDone: p.filesDone,
+            filesTotal: p.filesTotal,
+            bytesWritten: 0,
+            currentFile: p.currentFile,
+            phase: p.phase,
+          }),
+        });
+        if (result.mode === "saved") {
+          toast({ title: "ZIP gespeichert", description: zipName });
+        } else {
+          setZipReady({ blobUrl: result.blobUrl, filename: result.filename });
+        }
       }
     } catch (err) {
       const e = err as { name?: string; message?: string };
       if (e?.name === "AbortError") {
         toast({ title: "Download abgebrochen" });
+      } else if (e instanceof StreamingUnavailableError) {
+        toast({
+          variant: "destructive",
+          title: "Streaming nicht verfügbar",
+          description: "Bitte Seite neu laden — der Service Worker wird initialisiert.",
+        });
       } else {
         toast({
           variant: "destructive",
