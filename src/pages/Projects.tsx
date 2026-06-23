@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download } from "lucide-react";
+import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download, FileArchive } from "lucide-react";
+import { useZipDownload } from "@/hooks/useZipDownload";
+import { ZipDownloadDialog } from "@/components/ZipDownloadDialog";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +83,11 @@ const Projects = () => {
   const [accessEmployeeIds, setAccessEmployeeIds] = useState<string[]>([]);
 
   const [adminChecked, setAdminChecked] = useState(false);
+
+  // ZIP-Download: Picker fuer "Fotos eines beliebigen Projekts" + Hook fuer
+  // den eigentlichen Server-Build.
+  const [showZipPicker, setShowZipPicker] = useState(false);
+  const zip = useZipDownload();
 
   useEffect(() => {
     const init = async () => {
@@ -726,6 +733,23 @@ const Projects = () => {
           </p>
         </div>
 
+        {/* Schnellzugriff: Fotos eines Projekts als ZIP herunterladen */}
+        <Card className="mb-6 border-dashed">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-sm sm:text-base flex items-center gap-2">
+                <FileArchive className="w-4 h-4 shrink-0" /> Projekt-Fotos als ZIP herunterladen
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Wähle ein aktives Projekt aus — das ZIP wird auf dem Server gepackt.
+              </p>
+            </div>
+            <Button onClick={() => setShowZipPicker(true)} disabled={!!zip.zipProgress} className="shrink-0">
+              <Download className="w-4 h-4 mr-1" /> Fotos herunterladen
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Aktive Projekte Section */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
@@ -1138,6 +1162,64 @@ const Projects = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Projekt-Auswahl: welches Projekt soll als Foto-ZIP runter? */}
+      <Dialog open={showZipPicker} onOpenChange={setShowZipPicker}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Projekt wählen</DialogTitle>
+            <DialogDescription>
+              Fotos welches aktiven Projekts sollen als ZIP heruntergeladen werden?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto -mx-1 px-1 space-y-1.5">
+            {(() => {
+              const aktive = projects.filter((p) => p.status === "aktiv");
+              if (aktive.length === 0) {
+                return <p className="text-sm text-muted-foreground text-center py-6">Keine aktiven Projekte</p>;
+              }
+              return aktive.map((p) => {
+                const fotos = p.fileCount?.photos ?? 0;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setShowZipPicker(false);
+                      zip.startServerZip({
+                        projectId: p.id,
+                        projectName: p.name,
+                        subType: null,
+                      });
+                    }}
+                    disabled={fotos === 0}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-accent text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      {p.adresse && (
+                        <p className="text-xs text-muted-foreground truncate">{p.adresse}</p>
+                      )}
+                    </div>
+                    <Badge variant={fotos > 0 ? "secondary" : "outline"} className="shrink-0">
+                      {fotos} {fotos === 1 ? "Foto" : "Fotos"}
+                    </Badge>
+                  </button>
+                );
+              });
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Server-ZIP-Dialog (Foto-Download) */}
+      <ZipDownloadDialog
+        zipProgress={zip.zipProgress}
+        zipReady={zip.zipReady}
+        onCancel={zip.cancel}
+        onSave={zip.save}
+        onDismiss={zip.dismiss}
+        iOS={zip.isLikelyiOS()}
+      />
 
     </div>
   );

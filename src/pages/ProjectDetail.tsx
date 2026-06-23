@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight, FileArchive } from "lucide-react";
 import { buildZipDownload, triggerBlobDownload, isLikelyiOS, type ZipProgress } from "@/lib/zipDownloader";
+import { useZipDownload } from "@/hooks/useZipDownload";
+import { ZipDownloadDialog } from "@/components/ZipDownloadDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -111,10 +113,13 @@ const ProjectDetail = () => {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [urlsLoading, setUrlsLoading] = useState(false);
 
-  // ZIP-Download State
+  // ZIP-Download State (client-build fuer Plaene/Berichte/Material + Auswahl)
   const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
   const [zipReady, setZipReady] = useState<{ blobUrl: string; filename: string } | null>(null);
   const zipAbortRef = useRef<AbortController | null>(null);
+
+  // Server-ZIP fuer Fotos
+  const photoZip = useZipDownload();
 
   // Foto-Unterordner (nur bei type === "photos")
   type PhotoFolder = { id: string; name: string };
@@ -655,10 +660,21 @@ const ProjectDetail = () => {
   };
 
   // "Alle herunterladen" fuer den aktuellen Tab (alle sichtbaren Dateien).
+  // Bei Fotos: Server-seitige ZIP via Edge Function (schnell, iOS-safe).
+  // Bei Plaenen/Berichten/Material: client-seitiger Build wie bisher.
+  // Archiv-Reiter und Auswahl bleiben in beiden Faellen client-side.
   const handleDownloadAllInTab = async () => {
     const fileList = filteredFiles;
     if (fileList.length === 0) {
       toast({ variant: "destructive", title: "Keine Dateien", description: "Im aktiven Reiter sind keine Dateien." });
+      return;
+    }
+    if (type === "photos" && !isArchivTab && projectId) {
+      await photoZip.startServerZip({
+        projectId,
+        projectName: projectName || "Projekt",
+        subType: activePhotoFolder || null,
+      });
       return;
     }
     const stamp = new Date().toISOString().slice(0, 10);
@@ -1092,11 +1108,13 @@ const ProjectDetail = () => {
                           variant="outline"
                           className="h-7 text-xs"
                           onClick={handleDownloadAllInTab}
-                          disabled={!!zipProgress}
-                          title={`Alle ${filteredFiles.length} Datei(en) im aktuellen Reiter als ZIP herunterladen`}
+                          disabled={!!zipProgress || !!photoZip.zipProgress}
+                          title={type === "photos"
+                            ? `Alle ${filteredFiles.length} Foto(s) als ZIP herunterladen`
+                            : `Alle ${filteredFiles.length} Datei(en) im aktuellen Reiter als ZIP herunterladen`}
                         >
                           <FileArchive className="h-3.5 w-3.5 mr-1" />
-                          Alle als ZIP
+                          {type === "photos" && !isArchivTab ? "Alle Fotos runterladen" : "Alle als ZIP"}
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1516,6 +1534,16 @@ const ProjectDetail = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Server-ZIP-Dialog (Fotos) */}
+      <ZipDownloadDialog
+        zipProgress={photoZip.zipProgress}
+        zipReady={photoZip.zipReady}
+        onCancel={photoZip.cancel}
+        onSave={photoZip.save}
+        onDismiss={photoZip.dismiss}
+        iOS={isLikelyiOS()}
+      />
 
       {/* Neuer Foto-Ordner Dialog */}
       <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
