@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Upload, FileText, Trash2, Eye, Download, Archive, CheckSquare, Square, ChevronLeft, ChevronRight, X, Pencil, Share2, Plus, FolderPlus, FolderMinus, MoveRight, FileArchive } from "lucide-react";
 import { buildZipDownload, triggerBlobDownload, isLikelyiOS, type ZipProgress } from "@/lib/zipDownloader";
 import { useZipDownload } from "@/hooks/useZipDownload";
-import { ZipBatchesDialog } from "@/components/ZipBatchesDialog";
+import { ZipDownloadDialog } from "@/components/ZipDownloadDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -1535,11 +1535,14 @@ const ProjectDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Multi-Batch ZIP Dialog (grosse Projekte) */}
-      <ZipBatchesDialog
-        batches={photoZip.batches}
-        onNext={photoZip.downloadNextBatch}
-        onCancel={photoZip.cancelBatches}
+      {/* Client-side ZIP Progress + Save */}
+      <ZipDownloadDialog
+        zipProgress={photoZip.zipProgress}
+        zipReady={photoZip.zipReady}
+        onCancel={photoZip.cancel}
+        onSave={photoZip.saveReady}
+        onDismiss={photoZip.dismissReady}
+        iOS={photoZip.isLikelyiOS()}
       />
 
       {/* Neuer Foto-Ordner Dialog */}
