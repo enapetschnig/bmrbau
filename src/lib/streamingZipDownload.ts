@@ -230,9 +230,16 @@ export async function streamingZipDownload(
       if (done) break;
       if (value && value.byteLength > 0) {
         bytesWritten += value.byteLength;
-        // Transferable: zero-copy zum SW
-        // Vorsicht: nach postMessage ist `value` im Sender unbrauchbar
-        channel.port2.postMessage(value, [value.buffer]);
+        // WICHTIG: KOPIE erstellen, NICHT transferable.
+        // client-zip verwendet intern Buffer wieder — wenn wir
+        // value.buffer transferieren, werden NACHFOLGENDE Chunks
+        // (die in denselben Buffer schauen) korrumpiert. Die ZIP-Datei
+        // sieht dann strukturell ok aus, hat aber leere Datei-Inhalte
+        // → macOS sagt "Archiv ist leer oder enthaelt keine lesbaren
+        // Objekte". Strukturelles Kopieren ist messbar langsamer, aber
+        // bei ~10K Chunks * 64KB = ein paar Millisekunden Overhead.
+        const copy = new Uint8Array(value);
+        channel.port2.postMessage(copy);
         onProgress?.({
           filesDone,
           filesTotal: total,
