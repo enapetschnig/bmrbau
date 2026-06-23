@@ -89,10 +89,14 @@ async function* concurrentBlobFetcher(
     inFlight.delete(i);
     launchNext();
     const f = named[i];
+    // WICHTIG: blob direkt uebergeben (nicht blob.stream()). Mit Blob kennt
+    // client-zip die Groesse vorab und schreibt einen "normalen" ZIP-Eintrag.
+    // Mit Stream wuerde der "Data Descriptor"-Modus genutzt — manche
+    // Entpacker (insbesondere Apple Archive Utility) brechen damit ab.
     yield {
       name: f.outName,
       lastModified: new Date(f.created_at),
-      input: blob.stream(),
+      input: blob,
     };
   }
 }
