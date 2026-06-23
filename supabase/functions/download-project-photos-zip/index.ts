@@ -1,13 +1,23 @@
-// Streamt alle Fotos eines Projekts (optional eines Unter-Ordners) als
-// ZIP-Datei zurueck. Lauft server-seitig damit der Client nicht jedes
-// Foto einzeln ueber das Internet ziehen muss.
+// Server-seitige Foto-ZIP-Generierung.
 //
-// Body: { projectId: string; subType?: string | null }
-//   subType=null/undefined  →  alle nicht-archivierten Fotos
-//   subType="<ordner>"      →  nur Fotos mit documents.sub_type=<ordner>
+// Pipeline:
+//   1. Query: alle nicht-archivierten Fotos eines Projekts (oder Ordners)
+//   2. Subset auf [offset .. offset+limit) reduzieren (Default: alles)
+//   3. Parallele Storage-Downloads
+//   4. JSZip-Build vollstaendig im Memory → einzelne Response mit
+//      Content-Length. Kein Streaming (Supabase Edge schneidet grosse
+//      Streams ab — ein truncatedZIP ist unbrauchbar). Kein Data
+//      Descriptor (macOS Archive Utility schluckt das).
+//
+// Query-Parameter:
+//   projectId  (required)
+//   subType    optional, beschraenkt auf einen Foto-Ordner
+//   meta=1     gibt nur Metadaten zurueck (JSON), kein ZIP
+//   offset=N   Foto-Offset, default 0
+//   limit=M    max Anzahl Fotos im Paket, default 25 (≈ 150-200 MB)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { downloadZip } from "https://esm.sh/client-zip@2.5.0";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -18,18 +28,19 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  // Damit der Browser den X-File-Count-Header aus der Response lesen kann.
-  "Access-Control-Expose-Headers": "X-File-Count",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Expose-Headers":
+    "X-Total-Files, X-Batch-From, X-Batch-To, X-Next-Offset",
 };
 
 const BUCKET = "project-photos";
-// Hoehere Concurrency = schnellerer Server-seitiger Download aus dem Storage.
-// 12 ist ein guter Kompromiss zwischen Durchsatz und Resource-Schonung.
-const CONCURRENCY = 12;
+const CONCURRENCY = 4;
+// Experimentell ermittelt: Edge Function OOM ueber ~75-80 MB Batch-Input.
+// 8 Fotos × ~9 MB ≈ 72 MB ist die sichere Obergrenze. Hoehere Werte gehen
+// gelegentlich aber crashen mit WORKER_RESOURCE_LIMIT bei groesseren Fotos.
+const DEFAULT_BATCH_LIMIT = 8;
+const MAX_BATCH_BYTES = 90 * 1024 * 1024;
 
-// Dateiname-Sanitizer: Sonderzeichen raus, ASCII-Mapping fuer Umlaute,
-// damit Browser den ZIP-Namen korrekt setzen.
 const asciiize = (s: string): string =>
   s
     .replace(/ä/g, "ae").replace(/Ä/g, "Ae")
@@ -43,15 +54,19 @@ const asciiize = (s: string): string =>
 
 const safeNameFor = (raw: string): string => asciiize(raw || "datei") || "datei";
 
-// Verspricht: ein konsumierender Async-Iterator ueber {name, lastModified,
-// input: ReadableStream<Uint8Array>}. Parallele Pre-Fetches mit
-// Concurrency-Limit, yielded in Eingabe-Reihenfolge fuer stabile ZIP-Inhalte.
-async function* concurrentBlobFetcher(
-  files: { name: string; storagePath: string; created_at: string }[],
-) {
-  // Names entdoppeln (foto.jpg, foto_1.jpg …)
+interface FileEntry {
+  name: string;
+  storagePath: string;
+  created_at: string;
+}
+
+interface NamedFile extends FileEntry {
+  outName: string;
+}
+
+function dedupeNames(files: FileEntry[]): NamedFile[] {
   const seen = new Map<string, number>();
-  const named = files.map((f) => {
+  return files.map((f) => {
     const base = safeNameFor(f.name);
     const c = seen.get(base) || 0;
     seen.set(base, c + 1);
@@ -61,49 +76,40 @@ async function* concurrentBlobFetcher(
     const ext = dot > 0 ? base.slice(dot) : "";
     return { ...f, outName: `${stem}_${c}${ext}` };
   });
+}
 
-  // In Eingabe-Reihenfolge yielden, aber Pre-Fetch im Pool.
-  let nextStart = 0;
-  const inFlight = new Map<number, Promise<Blob>>();
-
-  const launchNext = () => {
-    if (nextStart >= named.length) return;
-    const i = nextStart++;
-    const f = named[i];
-    inFlight.set(
-      i,
-      (async () => {
+async function downloadAllInBatches(
+  files: NamedFile[],
+): Promise<{ outName: string; blob: Blob; modDate: Date }[]> {
+  const out: { outName: string; blob: Blob; modDate: Date }[] = [];
+  for (let i = 0; i < files.length; i += CONCURRENCY) {
+    const batch = files.slice(i, i + CONCURRENCY);
+    const downloaded = await Promise.all(
+      batch.map(async (f) => {
         const { data, error } = await supabaseAdmin.storage
           .from(BUCKET)
           .download(f.storagePath);
-        if (error || !data) throw new Error(`Storage download ${f.storagePath}: ${error?.message || "leer"}`);
-        return data;
-      })(),
+        if (error || !data) {
+          throw new Error(`Foto ${f.outName}: ${error?.message || "leer"}`);
+        }
+        return {
+          outName: f.outName,
+          blob: data,
+          modDate: new Date(f.created_at),
+        };
+      }),
     );
-  };
-
-  for (let i = 0; i < CONCURRENCY && i < named.length; i++) launchNext();
-
-  for (let i = 0; i < named.length; i++) {
-    const blob = await inFlight.get(i)!;
-    inFlight.delete(i);
-    launchNext();
-    const f = named[i];
-    // WICHTIG: blob direkt uebergeben (nicht blob.stream()). Mit Blob kennt
-    // client-zip die Groesse vorab und schreibt einen "normalen" ZIP-Eintrag.
-    // Mit Stream wuerde der "Data Descriptor"-Modus genutzt — manche
-    // Entpacker (insbesondere Apple Archive Utility) brechen damit ab.
-    yield {
-      name: f.outName,
-      lastModified: new Date(f.created_at),
-      input: blob,
-    };
+    out.push(...downloaded);
   }
+  return out;
 }
 
 interface RequestBody {
   projectId?: string;
   subType?: string | null;
+  offset?: number;
+  limit?: number;
+  meta?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -111,17 +117,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Sowohl GET (fuer nativen Browser-Download via <a download>) als auch
-  // POST (Legacy) akzeptieren. GET ist der bevorzugte Pfad, weil der
-  // Browser die ZIP dann nativ entgegennimmt und keinen Blob im RAM hat.
   let projectId = "";
   let subType: string | null = null;
+  let offset = 0;
+  let limit = DEFAULT_BATCH_LIMIT;
+  let metaOnly = false;
 
   if (req.method === "GET") {
     const u = new URL(req.url);
     projectId = (u.searchParams.get("projectId") || "").trim();
     const s = u.searchParams.get("subType");
     subType = s && s.length > 0 ? s : null;
+    offset = Math.max(0, parseInt(u.searchParams.get("offset") || "0") || 0);
+    limit = Math.max(1, Math.min(200,
+      parseInt(u.searchParams.get("limit") || String(DEFAULT_BATCH_LIMIT)) || DEFAULT_BATCH_LIMIT));
+    metaOnly = u.searchParams.get("meta") === "1";
   } else if (req.method === "POST") {
     let body: RequestBody;
     try {
@@ -133,13 +143,15 @@ Deno.serve(async (req) => {
     subType = typeof body.subType === "string" && body.subType.length > 0
       ? body.subType
       : null;
+    offset = Math.max(0, body.offset || 0);
+    limit = Math.max(1, Math.min(200, body.limit || DEFAULT_BATCH_LIMIT));
+    metaOnly = !!body.meta;
   } else {
     return jsonError(405, "Methode nicht erlaubt");
   }
 
   if (!projectId) return jsonError(400, "projectId fehlt");
 
-  // Projekt-Name fuer den ZIP-Dateinamen.
   const { data: project, error: projErr } = await supabaseAdmin
     .from("projects")
     .select("name")
@@ -148,8 +160,6 @@ Deno.serve(async (req) => {
   if (projErr) return jsonError(500, `Projekt-Lookup: ${projErr.message}`);
   if (!project) return jsonError(404, "Projekt nicht gefunden");
 
-  // Foto-Dateien aus documents holen. Storage-Listing ist nicht zuverlaessig
-  // (Archive-Flag fehlt dort), deshalb DB-only.
   let query = supabaseAdmin
     .from("documents")
     .select("name, file_url, created_at, sub_type")
@@ -166,12 +176,13 @@ Deno.serve(async (req) => {
       : "Keine Fotos in diesem Projekt");
   }
 
-  // file_url kann entweder ein voller Public-URL sein (Legacy) oder ein
-  // reiner Storage-Pfad. Wir extrahieren den Storage-Pfad fuer den
-  // Server-internen Download.
-  const files = docs
+  const allFiles: FileEntry[] = docs
     .map((d) => {
-      const storagePath = toStoragePath(d.file_url as string | null, projectId, d.name as string);
+      const storagePath = toStoragePath(
+        d.file_url as string | null,
+        projectId,
+        d.name as string,
+      );
       if (!storagePath) return null;
       return {
         name: d.name as string,
@@ -179,27 +190,83 @@ Deno.serve(async (req) => {
         created_at: (d.created_at as string) || new Date().toISOString(),
       };
     })
-    .filter((x): x is { name: string; storagePath: string; created_at: string } => !!x);
+    .filter((x): x is FileEntry => !!x);
 
-  if (files.length === 0) return jsonError(404, "Keine Foto-Pfade auflösbar");
+  if (allFiles.length === 0) return jsonError(404, "Keine Foto-Pfade auflösbar");
 
-  // ZIP-Dateiname.
+  // Meta-Only: nur Anzahl der Fotos zurueck, damit Frontend Batches planen kann.
+  if (metaOnly) {
+    return new Response(
+      JSON.stringify({
+        totalFiles: allFiles.length,
+        defaultBatchLimit: DEFAULT_BATCH_LIMIT,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // Batch-Subset.
+  if (offset >= allFiles.length) {
+    return jsonError(400, `offset ${offset} >= total ${allFiles.length}`);
+  }
+  const batchEnd = Math.min(offset + limit, allFiles.length);
+  const subset = allFiles.slice(offset, batchEnd);
+  const deduped = dedupeNames(subset);
+
+  let downloads: { outName: string; blob: Blob; modDate: Date }[];
+  try {
+    downloads = await downloadAllInBatches(deduped);
+  } catch (err) {
+    const e = err as { message?: string };
+    return jsonError(502, `Storage-Download: ${e?.message || "Fehler"}`);
+  }
+
+  // Falls trotz Limit ueber MAX_BATCH_BYTES: defensive fail (sollte selten
+  // sein bei Default-Limit 25, kann bei sehr grossen Fotos passieren).
+  const totalBytes = downloads.reduce((sum, d) => sum + d.blob.size, 0);
+  if (totalBytes > MAX_BATCH_BYTES) {
+    const mb = Math.round(totalBytes / 1024 / 1024);
+    return jsonError(413,
+      `Paket-Groesse ${mb} MB überschreitet Limit. Bitte mit kleinerem limit (≤ ${Math.max(5, Math.floor(limit / 2))}) anfordern.`,
+    );
+  }
+
+  const zip = new JSZip();
+  for (const d of downloads) {
+    zip.file(d.outName, d.blob, { date: d.modDate, binary: true });
+  }
+  const zipBytes = await zip.generateAsync({
+    type: "uint8array",
+    compression: "STORE",
+  });
+
   const date = new Date().toISOString().slice(0, 10);
   const safeProject = safeNameFor(project.name as string) || "projekt";
   const suffix = subType ? `_${safeNameFor(subType)}` : "";
-  const zipName = `${safeProject}_fotos${suffix}_${date}.zip`;
+  const totalBatches = Math.ceil(allFiles.length / limit);
+  const batchIdx = Math.floor(offset / limit) + 1;
+  // Im Dateinamen "_teil-2-von-5" wenn aufgeteilt, sonst ohne.
+  const batchTag = totalBatches > 1 ? `_teil-${batchIdx}-von-${totalBatches}` : "";
+  const zipName = `${safeProject}_fotos${suffix}${batchTag}_${date}.zip`;
 
-  // ZIP-Stream bauen — client-zip akzeptiert async iterables und gibt
-  // sofort eine Response zurueck, deren Body live gestreamt wird.
-  const zipResponse = downloadZip(concurrentBlobFetcher(files));
+  const hasMore = batchEnd < allFiles.length;
+  const nextOffset = hasMore ? batchEnd : -1;
 
-  return new Response(zipResponse.body, {
+  return new Response(zipBytes, {
     status: 200,
     headers: {
       ...corsHeaders,
       "Content-Type": "application/zip",
+      "Content-Length": String(zipBytes.byteLength),
       "Content-Disposition": `attachment; filename="${zipName}"`,
       "Cache-Control": "no-store",
+      "X-Total-Files": String(allFiles.length),
+      "X-Batch-From": String(offset),
+      "X-Batch-To": String(batchEnd),
+      "X-Next-Offset": String(nextOffset),
     },
   });
 });
@@ -211,27 +278,18 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
-// Wandelt einen Documents-file_url-Eintrag in den Storage-Pfad innerhalb
-// des project-photos Buckets um. Akzeptiert:
-//   - voller Public-URL (".../storage/v1/object/public/project-photos/<projectId>/<file>")
-//   - bereits ein reiner Pfad ("<projectId>/<file>")
-//   - leer/null → Fallback auf "<projectId>/<documents.name>"
 function toStoragePath(
   fileUrl: string | null,
   projectId: string,
   docName: string,
 ): string | null {
   if (fileUrl) {
-    // Public-URL Pattern: .../object/public/project-photos/<rest>
     const m = fileUrl.match(/object\/public\/project-photos\/(.+)$/);
     if (m) return decodeURIComponent(m[1]);
-    // Signed-URL Pattern (selten bei photos, aber sicher ist sicher)
     const m2 = fileUrl.match(/object\/sign\/project-photos\/([^?]+)/);
     if (m2) return decodeURIComponent(m2[1]);
-    // Schon ein Pfad?
     if (!fileUrl.startsWith("http")) return fileUrl;
   }
-  // Letzter Versuch: Konvention "<projectId>/<dateiname>"
   if (docName) return `${projectId}/${docName}`;
   return null;
 }

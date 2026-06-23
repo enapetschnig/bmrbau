@@ -1,16 +1,15 @@
-// Server-seitiger Foto-ZIP-Download. Triggert einen NATIVEN Browser-
-// Download via <a href download>. Vorteile gegenueber dem alten
-// fetch+blob+save-button-Pfad:
-//   - iOS Safari / Android Chrome / Desktop bekommen den Download genau
-//     so wie jede andere Datei (Download-Manager / Dateien-App)
-//   - kein blob im Speicher
-//   - kein "ZIP speichern"-Button noetig
-//   - keine Edge-Function-Streaming-Buffer-Probleme (Browser zieht die
-//     Bytes direkt entgegen, statt sie erst in JS zu sammeln)
+// Server-seitiger Foto-ZIP-Download mit Batch-Support.
+//
+// Supabase Edge Function RAM ist klein (~150 MB Peak); deshalb teilt sie
+// grosse Projekte in mehrere ZIPs. Frontend macht zuerst einen Meta-Call,
+// erfaehrt die Anzahl Fotos, und triggert pro Batch eine separate native
+// Browser-Navigation (<a download>). Jeder Klick == ein User-Gesture
+// (iOS-safe).
 
 import { supabase } from "@/integrations/supabase/client";
 
 const FUNCTION_NAME = "download-project-photos-zip";
+const DEFAULT_BATCH_LIMIT = 8;
 
 const asciiize = (s: string): string =>
   s
@@ -22,13 +21,6 @@ const asciiize = (s: string): string =>
     .replace(/[/\\:*?"<>|]+/g, "_")
     .slice(0, 200);
 
-const buildZipName = (projectName: string, subType?: string | null): string => {
-  const date = new Date().toISOString().slice(0, 10);
-  const project = asciiize(projectName) || "projekt";
-  const suffix = subType ? `_${asciiize(subType)}` : "";
-  return `${project}_fotos${suffix}_${date}.zip`;
-};
-
 const functionUrl = (): string =>
   `${(supabase as unknown as { supabaseUrl: string }).supabaseUrl}/functions/v1/${FUNCTION_NAME}`;
 
@@ -38,29 +30,56 @@ export type ServerZipParams = {
   subType?: string | null;
 };
 
-/**
- * Triggert einen nativen Browser-Download des Projekt-Foto-ZIPs. Muss
- * synchron aus einem User-Gesture (z.B. Button-onClick) aufgerufen werden.
- *
- * Der Server braucht je nach Projekt-Groesse ein paar Sekunden bis die
- * ersten Bytes kommen — waehrenddessen zeigt der Browser-Download-Manager
- * "wartet auf Server", danach den normalen Fortschritt.
- */
-export function triggerProjectPhotosZipDownload(params: ServerZipParams): void {
-  const { projectId, projectName, subType = null } = params;
+export type ProjectPhotoMeta = {
+  totalFiles: number;
+  batchLimit: number;
+  batchCount: number;
+};
+
+export async function getProjectPhotoMeta(
+  params: ServerZipParams,
+): Promise<ProjectPhotoMeta> {
   const url = new URL(functionUrl());
-  url.searchParams.set("projectId", projectId);
-  if (subType) url.searchParams.set("subType", subType);
+  url.searchParams.set("projectId", params.projectId);
+  if (params.subType) url.searchParams.set("subType", params.subType);
+  url.searchParams.set("meta", "1");
 
-  const filename = buildZipName(projectName, subType);
+  const resp = await fetch(url.toString(), { method: "GET" });
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`;
+    try {
+      const j = await resp.json();
+      if (j?.error) detail = j.error;
+    } catch {/* noop */}
+    throw new Error(detail);
+  }
+  const data = await resp.json() as { totalFiles: number; defaultBatchLimit: number };
+  const batchLimit = data.defaultBatchLimit || DEFAULT_BATCH_LIMIT;
+  const totalFiles = data.totalFiles || 0;
+  const batchCount = Math.max(1, Math.ceil(totalFiles / batchLimit));
+  return { totalFiles, batchLimit, batchCount };
+}
 
+/**
+ * Triggert einen nativen Browser-Download fuer einen einzelnen Batch.
+ * MUSS synchron aus einem User-Gesture (Button-onClick) gerufen werden,
+ * damit iOS Safari den Download akzeptiert.
+ */
+export function triggerBatchDownload(
+  params: ServerZipParams & { offset: number; limit: number },
+): void {
+  const url = new URL(functionUrl());
+  url.searchParams.set("projectId", params.projectId);
+  if (params.subType) url.searchParams.set("subType", params.subType);
+  url.searchParams.set("offset", String(params.offset));
+  url.searchParams.set("limit", String(params.limit));
+
+  // download-Attribut ist nur ein Hinweis — der Server schickt seinen
+  // eigenen Content-Disposition-filename inklusive "_teil-N-von-M".
   const a = document.createElement("a");
   a.href = url.toString();
-  a.download = filename;
+  a.download = `${asciiize(params.projectName) || "projekt"}_fotos.zip`;
   a.rel = "noopener";
-  // KEIN target="_blank" — der Content-Disposition-Header sorgt dafuer,
-  // dass der Browser den Download anstoesst statt zu navigieren. Mit
-  // _blank wuerde Safari einen Popup-Block triggern.
   document.body.appendChild(a);
   a.click();
   a.remove();

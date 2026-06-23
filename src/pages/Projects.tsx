@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { ArrowLeft, FolderOpen, Plus, FileText, Image, Lock, Search, Upload, Camera, Trash2, ChevronDown, Home, MapPin, Star, X, Download, FileArchive } from "lucide-react";
 import { useZipDownload } from "@/hooks/useZipDownload";
+import { ZipBatchesDialog } from "@/components/ZipBatchesDialog";
 import * as XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1210,6 +1211,12 @@ const Projects = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Multi-Batch ZIP Dialog (grosse Projekte) */}
+      <ZipBatchesDialog
+        batches={zip.batches}
+        onNext={zip.downloadNextBatch}
+        onCancel={zip.cancelBatches}
+      />
     </div>
   );
 };
