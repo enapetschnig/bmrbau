@@ -182,6 +182,9 @@ const TimeTracking = () => {
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedules>({ lang: null, kurz: null });
   const [employeeSchwellenwert, setEmployeeSchwellenwert] = useState<import("@/lib/workingHours").Schwellenwert | null>(null);
   const [isExternalUser, setIsExternalUser] = useState(false);
+  // ZA-Tracking-Stichtag des aktuellen Users (NULL = ZA-Feature noch nicht
+  // konfiguriert; Default in DB: 2026-06-24)
+  const [zaTrackingStart, setZaTrackingStart] = useState<string | null>(null);
 
   // BUAK-Wochentyp fuer das gewaehlte Datum – read-only hier, Einstellung
   // nur fuer Admin im /buak-kalender. Damit bleibt Mo-Fr konsistent.
@@ -212,9 +215,20 @@ const TimeTracking = () => {
       setEmployeeSchwellenwert(data.schwellenwert as unknown as import("@/lib/workingHours").Schwellenwert);
     }
     setIsExternalUser(data?.is_external === true || data?.kategorie === "extern");
+
+    // Tracking-Stichtag laden (separate Abfrage gegen time_accounts).
+    const { data: ta } = await supabase
+      .from("time_accounts")
+      .select("za_tracking_start_date")
+      .eq("user_id", userId)
+      .maybeSingle();
+    setZaTrackingStart((ta as { za_tracking_start_date?: string } | null)?.za_tracking_start_date ?? null);
   }, [targetUserId]);
 
   useEffect(() => { fetchEmployeeSchedule(); }, [fetchEmployeeSchedule]);
+
+  // Liegt der gewaehlte Tag VOR dem Stichtag? Dann: kein ZA-Split.
+  const isBeforeZaCutoff = !!zaTrackingStart && selectedDate < zaTrackingStart;
 
   // Auto-fill project from Plantafel when no entries exist for the day
   useEffect(() => {
@@ -745,14 +759,16 @@ const TimeTracking = () => {
         return;
       }
 
-      if (Number(timeAccount.balance_hours) < totalWorkingHours) {
-        toast({ variant: "destructive", title: "Nicht genügend ZA-Stunden", description: `Verfügbar: ${timeAccount.balance_hours}h, benötigt: ${totalWorkingHours}h` });
-        setSubmittingAbsence(false);
-        return;
-      }
-
       const balanceBefore = Number(timeAccount.balance_hours);
       const balanceAfter = balanceBefore - totalWorkingHours;
+
+      // Minus ist erlaubt — nur Warnung anzeigen, kein Hard-Stop.
+      if (balanceAfter < 0) {
+        toast({
+          title: "Saldo wird negativ",
+          description: `ZA-Saldo geht auf ${balanceAfter.toFixed(2)}h. Buchung läuft trotzdem durch.`,
+        });
+      }
 
       const { error: updateErr } = await supabase
         .from("time_accounts")
@@ -981,7 +997,11 @@ const TimeTracking = () => {
     );
     const dayTotalHours = allBlockHours.reduce((sum, h) => sum + h, 0);
     const dateObj = new Date(selectedDate);
-    const daySplit = splitHours(dayTotalHours, dateObj, employeeSchedule, employeeSchwellenwert);
+    // CUTOFF-GATE: vor dem ZA-Tracking-Stichtag zaehlen ZA-Stunden nicht.
+    // Alle Stunden landen als Lohnstunden — splitHours wird umgangen.
+    const daySplit = isBeforeZaCutoff
+      ? { lohnstunden: dayTotalHours, zeitausgleich: 0 }
+      : splitHours(dayTotalHours, dateObj, employeeSchedule, employeeSchwellenwert);
 
     // Baustellen-Anfahrtspauschale: greift einmal pro Tag, wenn das erste Baustellen-Projekt
     // das Flag `anfahrt_ueber_100km` gesetzt hat. Dafuer Projekt-Infos vor Insert laden.
@@ -1350,6 +1370,11 @@ const TimeTracking = () => {
                   {activeWeekType === "kurz" && new Date(selectedDate).getDay() === 5 && (
                     <p className="text-xs text-amber-700 dark:text-amber-500">
                       ⚠ Freitag in einer Kurzen Woche — normalerweise frei. Erfassung wird als Kurze-Woche-Eintrag gespeichert.
+                    </p>
+                  )}
+                  {isBeforeZaCutoff && (
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      ℹ Vor ZA-Tracking-Stichtag ({zaTrackingStart}). Stunden zählen voll als Lohnstunden, ZA wird nicht aufgebaut.
                     </p>
                   )}
                 </div>

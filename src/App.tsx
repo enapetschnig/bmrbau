@@ -61,6 +61,7 @@ import SafetyEvaluationDetail from "./pages/SafetyEvaluationDetail";
 import BuakCalendarAdmin from "./pages/BuakCalendarAdmin";
 // MySafety entfernt - ersetzt durch SafetyNachweise
 import NotFound from "./pages/NotFound";
+import MyTimeAccount from "./pages/MyTimeAccount";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { usePushNotifications } from "./hooks/usePushNotifications";
 
@@ -168,6 +169,7 @@ function AppContent() {
           <Route path="/company-chat" element={<CompanyChatPage />} />
           <Route path="/my-hours" element={<MyHours />} />
           <Route path="/my-documents" element={<MyDocuments />} />
+          <Route path="/my-time-account" element={<MyTimeAccount />} />
           {/* /my-safety entfernt - nutze /safety/nachweise */}
           {/* Ab Vorarbeiter */}
           <Route path="/reports" element={<ProtectedRoute minRole="vorarbeiter"><Reports /></ProtectedRoute>} />

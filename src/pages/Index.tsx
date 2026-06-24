@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WeeklyAssignmentWidget } from "@/components/dashboard/WeeklyAssignmentWidget";
+import { MyZaWidget } from "@/components/za/MyZaWidget";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type Project = {
@@ -1183,6 +1184,9 @@ export default function Index() {
             </CardContent>
           </Card>
           )}
+
+          {/* Mein Zeitausgleich */}
+          {!isAdmin && <MyZaWidget />}
 
           {/* Tagesberichte */}
           {menuVisible("tagesberichte") && (
