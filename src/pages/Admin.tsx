@@ -1225,25 +1225,22 @@ export default function Admin() {
           </Card>
         </section>
 
-        {/* ===== URLAUBSVERWALTUNG ===== */}
-        <section>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        {/* ===== URLAUBSVERWALTUNG + ZA-KONTO ===== */}
+        <section className="space-y-8">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
             <Calendar className="h-6 w-6" />
             Urlaubsverwaltung
           </h2>
           <LeaveManagement profiles={profiles.filter(p => p.is_active)} />
-        </section>
 
-        {/* Zeitkonto vorerst deaktiviert */}
-        {false && (
-        <section>
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <Clock className="h-6 w-6" />
-            Zeitkonten & Zeitausgleich
-          </h2>
-          <TimeAccountManagement profiles={profiles.filter(p => p.is_active)} />
+          <div className="pt-4 border-t">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              ZA-Konto (Zeitausgleich)
+            </h3>
+            <TimeAccountManagement profiles={profiles.filter(p => p.is_active)} />
+          </div>
         </section>
-        )}
 
         {/* ===== BUAK-KALENDER ===== */}
         <section>
